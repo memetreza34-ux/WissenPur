@@ -1,0 +1,98 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - uid: string (required)
+    //   - displayName: string (optional)
+    //   - photoURL: string (optional)
+    //   - totalPoints: int (required, >= 0)
+    //   - currentStreak: int (required, >= 0)
+    //   - bestStreak: int (required, >= 0)
+    //   - roundsPlayed: int (required, >= 0)
+    //   - correctAnswers: int (required, >= 0)
+    //   - totalQuestionsAnswered: int (required, >= 0)
+    //   - lastPlayedDate: string (optional, ISO 8601)
+    //   - achievements: list (optional, strings)
+    //
+    // Collection: leaderboard
+    // Document ID: {userId}
+    // Fields:
+    //   - uid: string (required)
+    //   - displayName: string (required)
+    //   - photoURL: string (optional)
+    //   - totalPoints: int (required, >= 0)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "song75099@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function isValidUser(data) {
+      return data.uid is string &&
+             data.totalPoints is int && data.totalPoints >= 0 &&
+             data.currentStreak is int && data.currentStreak >= 0 &&
+             data.bestStreak is int && data.bestStreak >= 0 &&
+             data.roundsPlayed is int && data.roundsPlayed >= 0 &&
+             data.correctAnswers is int && data.correctAnswers >= 0 &&
+             data.totalQuestionsAnswered is int && data.totalQuestionsAnswered >= 0 &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() < 100)) &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() < 500)) &&
+             (!('achievements' in data) || (data.achievements is list && data.achievements.size() < 100));
+    }
+
+    function isValidLeaderboardEntry(data) {
+      return data.uid is string &&
+             data.displayName is string && data.displayName.size() < 100 &&
+             data.totalPoints is int && data.totalPoints >= 0 &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() < 500));
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isOwner(userId) && isValidUser(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /leaderboard/{userId} {
+      allow read: if true; // Publicly readable
+      allow create: if isOwner(userId) && isValidLeaderboardEntry(request.resource.data);
+      allow update: if isOwner(userId) && isValidLeaderboardEntry(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // Default deny
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
