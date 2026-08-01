@@ -64,7 +64,8 @@ import {
   FolderOpen,
   Edit2,
   Trash2,
-  HelpCircle
+  HelpCircle,
+  Brain
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CATEGORIES, QUESTIONS } from './data';
@@ -72,12 +73,13 @@ import { CategoryId, Question, UserStats, LeaderboardEntry, ACHIEVEMENTS, getLev
 import { getStats, updateStatsAfterRound, saveStats, saveWrongQuestion, removeWrongQuestion, saveCustomPhoto, saveUserDetails, claimDailyReward, buyPowerUp, usePowerUp, buyAvatar, buyTitle, equipAvatar, equipTitle } from './storage';
 import { getLeagueForRating, getNextLeague } from './lib/ranking';
 import { Button, Card, ProgressBar, Badge } from './components/UI';
+import { BrainVisualizer } from './components/BrainVisualizer';
 import { auth, signInWithGoogle, logout } from './firebase';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { syncUserStats, getLeaderboard, testConnection } from './services/firebaseService';
 import { generateQuestions } from './services/geminiService';
 
-type Screen = 'home' | 'categories' | 'difficultySelection' | 'customTopicSelection' | 'quiz' | 'daily' | 'result' | 'profile' | 'leaderboard' | 'review' | 'blitzIntro' | 'blitzQuiz' | 'duelSelection' | 'createLobby' | 'joinLobby' | 'lobbyRoom' | 'matchmaking' | 'rankings' | 'settings' | 'howToPlay' | 'projects' | 'createQuizMenu' | 'createManualQuiz' | 'shop' | 'impressum' | 'privacy' | 'terms';
+type Screen = 'home' | 'categories' | 'brain' | 'difficultySelection' | 'customTopicSelection' | 'quiz' | 'daily' | 'result' | 'profile' | 'leaderboard' | 'review' | 'blitzIntro' | 'blitzQuiz' | 'duelSelection' | 'createLobby' | 'joinLobby' | 'lobbyRoom' | 'matchmaking' | 'rankings' | 'settings' | 'howToPlay' | 'projects' | 'createQuizMenu' | 'createManualQuiz' | 'shop' | 'impressum' | 'privacy' | 'terms';
 
 // Error Boundary Component
 interface ErrorBoundaryProps {
@@ -1090,6 +1092,24 @@ export default function App() {
     );
   };
 
+  const renderBrain = () => (
+    <motion.div 
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      className="flex flex-col h-full bg-white dark:bg-slate-950 overflow-y-auto no-scrollbar px-4 pt-8 pb-32"
+    >
+      <BrainVisualizer
+        userStats={stats}
+        onSelectCategory={(categoryId) => {
+          setSelectedCategory(categoryId);
+          setSelectedDifficulty('all');
+          setScreen('difficultySelection');
+        }}
+      />
+    </motion.div>
+  );
+
   const renderHome = () => (
     <motion.div 
       variants={containerVariants}
@@ -1198,6 +1218,18 @@ export default function App() {
 
         {/* Game Modes Grid */}
         <div className="grid grid-cols-2 gap-4">
+          <motion.button 
+            variants={itemVariants}
+            onClick={() => setScreen('brain')}
+            className="card-minimal p-6 text-left group border border-indigo-200 dark:border-indigo-800/60 bg-gradient-to-br from-indigo-50/60 to-purple-50/60 dark:from-indigo-950/30 dark:to-purple-950/30"
+          >
+            <div className="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg shadow-indigo-500/30">
+              <Brain size={20} />
+            </div>
+            <h3 className="font-black text-sm uppercase tracking-widest mb-1 text-slate-900 dark:text-white">Gehirn Map</h3>
+            <p className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold">Wissens-Visualisierer</p>
+          </motion.button>
+
           <motion.button 
             variants={itemVariants}
             onClick={() => setScreen('duelSelection')}
@@ -4861,6 +4893,7 @@ export default function App() {
             className="h-full bg-white dark:bg-slate-950 text-slate-900 dark:text-white"
           >
             {screen === 'home' && renderHome()}
+            {screen === 'brain' && renderBrain()}
             {screen === 'howToPlay' && renderHowToPlay()}
             {screen === 'customTopicSelection' && renderCustomTopicSelection()}
             {screen === 'createQuizMenu' && renderCreateQuizMenu()}
@@ -4902,11 +4935,13 @@ export default function App() {
               {[
                 { id: 'home', icon: Play, label: 'Home' },
                 { id: 'categories', icon: LayoutGrid, label: 'Themen' },
+                { id: 'brain', icon: Brain, label: 'Gehirn' },
                 { id: 'duelSelection', icon: Swords, label: 'Online' },
                 { id: 'profile', icon: User, label: 'Profil' }
               ].map((tab) => {
                 const isActive = tab.id === 'home' ? screen === 'home' : 
                                 tab.id === 'categories' ? screen === 'categories' : 
+                                tab.id === 'brain' ? screen === 'brain' :
                                 tab.id === 'duelSelection' ? screen === 'duelSelection' :
                                 (screen === 'profile' || screen === 'shop');
                 const Icon = tab.icon;
