@@ -15,7 +15,6 @@ class SoundManager {
 
   public init() {
     if (!this.initialized) {
-      // Create context on first user interaction
       this.getContext();
       this.initialized = true;
     }
@@ -60,16 +59,17 @@ class SoundManager {
     this.playTone(600, 'sine', 0.05, 0.02, 800);
   }
 
-  playCorrect() {
+  playCorrect(streakMultiplier: number = 1) {
     if (!this.isEnabled) return;
     try {
       const ctx = this.getContext();
-      
+      const pitchFactor = Math.min(1.8, 1 + (streakMultiplier - 1) * 0.08);
+
       const playNote = (freq: number, delay: number) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = 'sine';
-        osc.frequency.value = freq;
+        osc.frequency.value = freq * pitchFactor;
         
         gain.gain.setValueAtTime(0, ctx.currentTime + delay);
         gain.gain.linearRampToValueAtTime(0.1, ctx.currentTime + delay + 0.02);
@@ -83,8 +83,8 @@ class SoundManager {
       };
 
       playNote(523.25, 0);    // C5
-      playNote(659.25, 0.1);  // E5
-      playNote(783.99, 0.2);  // G5
+      playNote(659.25, 0.08);  // E5
+      playNote(783.99, 0.16);  // G5
     } catch (e) {
       console.error("Audio playback failed", e);
     }
@@ -92,6 +92,10 @@ class SoundManager {
 
   playIncorrect() {
     this.playTone(150, 'sawtooth', 0.3, 0.05, 100);
+  }
+
+  playSpin() {
+    this.playTone(400, 'sine', 0.04, 0.03, 600);
   }
 
   playLevelUp() {

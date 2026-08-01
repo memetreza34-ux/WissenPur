@@ -1,35 +1,7 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // ===============================================================
-    // Assumed Data Model
-    // ===============================================================
-    //
-    // Collection: users
-    // Document ID: {userId}
-    // Fields:
-    //   - uid: string (required)
-    //   - displayName: string (optional)
-    //   - photoURL: string (optional)
-    //   - totalPoints: int (required, >= 0)
-    //   - currentStreak: int (required, >= 0)
-    //   - bestStreak: int (required, >= 0)
-    //   - roundsPlayed: int (required, >= 0)
-    //   - correctAnswers: int (required, >= 0)
-    //   - totalQuestionsAnswered: int (required, >= 0)
-    //   - lastPlayedDate: string (optional, ISO 8601)
-    //   - achievements: list (optional, strings)
-    //
-    // Collection: leaderboard
-    // Document ID: {userId}
-    // Fields:
-    //   - uid: string (required)
-    //   - displayName: string (required)
-    //   - photoURL: string (optional)
-    //   - totalPoints: int (required, >= 0)
-    //
-    // ===============================================================
-
+    
     // ===============================================================
     // Helper Functions
     // ===============================================================
@@ -48,10 +20,6 @@ service cloud.firestore {
           (request.auth.token.email == "song75099@gmail.com" && request.auth.token.email_verified == true));
     }
 
-    function hasRequiredFields(fields) {
-      return request.resource.data.keys().hasAll(fields);
-    }
-
     function isValidUser(data) {
       return data.uid is string &&
              data.totalPoints is int && data.totalPoints >= 0 &&
@@ -60,22 +28,37 @@ service cloud.firestore {
              data.roundsPlayed is int && data.roundsPlayed >= 0 &&
              data.correctAnswers is int && data.correctAnswers >= 0 &&
              data.totalQuestionsAnswered is int && data.totalQuestionsAnswered >= 0 &&
-             (!('displayName' in data) || (data.displayName is string && data.displayName.size() < 100)) &&
-             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() < 500)) &&
-             (!('achievements' in data) || (data.achievements is list && data.achievements.size() < 100));
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 100)) &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500)) &&
+             (!('achievements' in data) || (data.achievements is list && data.achievements.size() <= 100));
     }
 
     function isValidLeaderboardEntry(data) {
       return data.uid is string &&
-             data.displayName is string && data.displayName.size() < 100 &&
+             data.displayName is string && data.displayName.size() <= 100 &&
              data.totalPoints is int && data.totalPoints >= 0 &&
-             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() < 500));
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500));
+    }
+
+    function isValidLobby(data) {
+      return data.hostUid is string &&
+             data.status in ['waiting', 'starting', 'playing', 'finished'] &&
+             data.players is list && data.players.size() <= 4;
+    }
+
+    function isValidDuel(data) {
+      return data.player1Uid is string &&
+             data.player2Uid is string &&
+             data.status in ['active', 'finished'] &&
+             data.player1Score is int && data.player1Score >= 0 &&
+             data.player2Score is int && data.player2Score >= 0;
     }
 
     // ===============================================================
-    // Rules
+    // Rules Definition
     // ===============================================================
 
+    // Users Collection
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
       allow create: if isOwner(userId) && isValidUser(request.resource.data);
@@ -83,14 +66,31 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Leaderboard Collection (Publicly readable)
     match /leaderboard/{userId} {
-      allow read: if true; // Publicly readable
+      allow read: if true;
       allow create: if isOwner(userId) && isValidLeaderboardEntry(request.resource.data);
       allow update: if isOwner(userId) && isValidLeaderboardEntry(request.resource.data);
       allow delete: if isAdmin();
     }
 
-    // Default deny
+    // Lobbies Collection (Multiplayer Rooms)
+    match /lobbies/{lobbyId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidLobby(request.resource.data);
+      allow update: if isAuthenticated() && isValidLobby(request.resource.data);
+      allow delete: if isAuthenticated() && (request.auth.uid == resource.data.hostUid || isAdmin());
+    }
+
+    // Duels Collection (1v1 Matches)
+    match /duels/{duelId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.player1Uid || request.auth.uid == resource.data.player2Uid || isAdmin());
+      allow create: if isAuthenticated() && isValidDuel(request.resource.data);
+      allow update: if isAuthenticated() && isValidDuel(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // Default Deny
     match /{allPaths=**} {
       allow read, write: if false;
     }

@@ -74,6 +74,8 @@ import { getStats, updateStatsAfterRound, saveStats, saveWrongQuestion, removeWr
 import { getLeagueForRating, getNextLeague } from './lib/ranking';
 import { Button, Card, ProgressBar, Badge } from './components/UI';
 import { BrainVisualizer } from './components/BrainVisualizer';
+import { DailySpinWheel } from './components/DailySpinWheel';
+import { sanitizeInput } from './lib/security';
 import { auth, signInWithGoogle, logout } from './firebase';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { syncUserStats, getLeaderboard, testConnection } from './services/firebaseService';
@@ -1141,6 +1143,26 @@ export default function App() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <DailySpinWheel
+            onClaimReward={(reward) => {
+              if (reward.type === 'coins') {
+                const newStats = { ...stats, coins: (stats.coins || 0) + reward.amount };
+                setStats(newStats);
+                saveStats(newStats);
+                if (user) syncUserStats(newStats);
+              } else {
+                const currentPU = stats.powerUps || { fiftyFifty: 0, timeFreeze: 0, secondChance: 0 };
+                const updatedPU = {
+                  ...currentPU,
+                  [reward.type]: (currentPU[reward.type as keyof typeof currentPU] || 0) + reward.amount
+                };
+                const newStats = { ...stats, powerUps: updatedPU };
+                setStats(newStats);
+                saveStats(newStats);
+                if (user) syncUserStats(newStats);
+              }
+            }}
+          />
           <div className="bg-orange-50 dark:bg-orange-900/30 px-3 py-1.5 rounded-xl border border-orange-100 dark:border-orange-800 flex items-center gap-1.5">
             <Flame size={14} className="text-orange-500" fill="currentColor" />
             <span className="text-xs font-black text-orange-600 dark:text-orange-400 tabular-nums">{stats.currentStreak}</span>
