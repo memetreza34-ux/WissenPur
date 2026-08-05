@@ -26,9 +26,10 @@ export const generateQuestions = async (
   const difficultyName = difficulty === 'all' ? 'gemischt' : difficulty;
   const seed = Math.floor(Math.random() * 1000000);
 
-  let prompt = `Erstelle GENAU ${count} Quizfragen auf Deutsch für das Thema "${category}" mit dem Schwierigkeitsgrad "${difficultyName}".
+  let prompt = `Erstelle GENAU ${count} Karteikarten/Quizfragen auf Deutsch für das Thema "${category}" mit dem Schwierigkeitsgrad "${difficultyName}".
 Jede Frage muss 4 Optionen haben und einen korrekten Index (0-3). Antworte NUR mit dem JSON-Array.
-WICHTIG: Erstelle abwechslungsreiche, interessante und auch ungewöhnliche Fragen. Vermeide Standardfragen, die jeder kennt. 
+WICHTIG: Erstelle abwechslungsreiche, interessante Fragen.
+ZUSÄTZLICH: Erstelle für JEDE Frage ein Feld 'imagePrompt'. Das muss ein kurzer, prägnanter englischer Prompt sein, der das Thema der Frage beschreibt (z.B. "A photorealistic image of a golden retriever", "A colorful 3d illustration of a human brain").
 Jede Frage muss absolut einzigartig und faktisch korrekt sein. Sei kreativ!
 Zufalls-Seed für Variation: ${seed}`;
 
@@ -67,8 +68,11 @@ Zufalls-Seed für Variation: ${seed}`;
               countryCode: {
                 type: Type.STRING,
               },
+              imagePrompt: {
+                type: Type.STRING,
+              },
             },
-            required: ["question", "options", "correctAnswer"],
+            required: ["question", "options", "correctAnswer", "imagePrompt"],
           },
         },
       },
@@ -88,7 +92,10 @@ Zufalls-Seed für Variation: ${seed}`;
       category: category === 'all' ? 'allgemein' : category,
       difficulty: difficulty === 'all' ? 'mittel' : difficulty,
       explanation: q.explanation || "Keine Erklärung verfügbar.",
-      imageUrl: q.countryCode ? `https://flagcdn.com/w320/${q.countryCode.toLowerCase()}.png` : undefined,
+      imagePrompt: q.imagePrompt,
+      imageUrl: q.countryCode 
+        ? `https://flagcdn.com/w320/${q.countryCode.toLowerCase()}.png` 
+        : (q.imagePrompt ? `https://image.pollinations.ai/prompt/${encodeURIComponent(q.imagePrompt)}?width=800&height=600&nologo=true` : undefined),
     }));
   } catch (error) {
     console.error("Error generating questions:", error);

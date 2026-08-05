@@ -1,3 +1,5 @@
+import { SRSData } from './services/srsService';
+
 export type Difficulty = 'leicht' | 'mittel' | 'schwer';
 
 export interface Question {
@@ -9,6 +11,8 @@ export interface Question {
   explanation: string;
   difficulty?: Difficulty;
   imageUrl?: string;
+  imagePrompt?: string;
+  srsData?: SRSData;
 }
 
 export interface CategoryStats {

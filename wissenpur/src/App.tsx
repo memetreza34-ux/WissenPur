@@ -81,7 +81,7 @@ import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { syncUserStats, getLeaderboard, testConnection } from './services/firebaseService';
 import { generateQuestions } from './services/geminiService';
 
-type Screen = 'home' | 'categories' | 'brain' | 'difficultySelection' | 'customTopicSelection' | 'quiz' | 'daily' | 'result' | 'profile' | 'leaderboard' | 'review' | 'blitzIntro' | 'blitzQuiz' | 'duelSelection' | 'createLobby' | 'joinLobby' | 'lobbyRoom' | 'matchmaking' | 'rankings' | 'settings' | 'howToPlay' | 'projects' | 'createQuizMenu' | 'createManualQuiz' | 'shop' | 'impressum' | 'privacy' | 'terms';
+type Screen = 'home' | 'categories' | 'brain' | 'difficultySelection' | 'customTopicSelection' | 'quiz' | 'daily' | 'result' | 'profile' | 'leaderboard' | 'review' | 'blitzIntro' | 'blitzQuiz' | 'duelSelection' | 'createLobby' | 'joinLobby' | 'lobbyRoom' | 'matchmaking' | 'rankings' | 'settings' | 'howToPlay' | 'projects' | 'createQuizMenu' | 'createManualQuiz' | 'shop' | 'impressum' | 'privacy' | 'terms' | 'flashcards';
 
 // Error Boundary Component
 interface ErrorBoundaryProps {
@@ -398,6 +398,8 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState<CategoryId | 'all' | 'daily' | 'review' | 'blitz' | 'custom'>('all');
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty | 'all'>('all');
   const [customTopic, setCustomTopic] = useState('');
+  const [gameMode, setGameMode] = useState<'quiz' | 'flashcards'>('quiz');
+  const [isFlipped, setIsFlipped] = useState(false);
   const [customQuestionCount, setCustomQuestionCount] = useState(10);
   const [customTimeLimit, setCustomTimeLimit] = useState(15);
   
@@ -1057,7 +1059,7 @@ export default function App() {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 overflow-y-auto no-scrollbar"
+        className="flex flex-col h-full bg-transparent overflow-y-auto no-scrollbar"
       >
         <header className="shrink-0 px-6 pt-12 pb-6 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center gap-4 relative z-10">
           <button 
@@ -1117,9 +1119,9 @@ export default function App() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="flex flex-col h-full bg-white dark:bg-slate-950 overflow-y-auto no-scrollbar"
+      className="flex flex-col h-full bg-transparent overflow-y-auto no-scrollbar"
     >
-      <header className="shrink-0 px-6 pt-12 pb-6 flex justify-between items-center sticky top-0 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md z-50">
+      <header className="shrink-0 px-6 pt-12 pb-6 flex justify-between items-center sticky top-0 glass-panel z-50">
         <div className="flex items-center gap-3">
           {user ? (
             <button onClick={() => setScreen('profile')} className="flex items-center gap-3 group">
@@ -1222,7 +1224,7 @@ export default function App() {
               setScreen('difficultySelection');
               setSelectedCategory('all');
             }}
-            className="w-full text-left bg-slate-900 dark:bg-blue-600 rounded-[2.5rem] p-8 text-white relative overflow-hidden group transition-transform active:scale-[0.98]"
+            className="w-full text-left bg-gradient-to-br from-blue-600 to-indigo-700 rounded-[2.5rem] p-8 text-white relative overflow-hidden group transition-all duration-300 active:scale-[0.98] hover:shadow-[0_0_40px_-10px_rgba(59,130,246,0.5)] hover:-translate-y-1"
           >
             <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-20 -mt-20 blur-3xl group-hover:bg-white/10 transition-colors" />
             <div className="relative z-10">
@@ -1243,7 +1245,7 @@ export default function App() {
           <motion.button 
             variants={itemVariants}
             onClick={() => setScreen('brain')}
-            className="card-minimal p-6 text-left group border border-indigo-200 dark:border-indigo-800/60 bg-gradient-to-br from-indigo-50/60 to-purple-50/60 dark:from-indigo-950/30 dark:to-purple-950/30"
+            className="glass-card p-6 text-left group border border-indigo-200 dark:border-indigo-800/60 bg-gradient-to-br from-indigo-50/60 to-purple-50/60 dark:from-indigo-950/30 dark:to-purple-950/30"
           >
             <div className="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg shadow-indigo-500/30">
               <Brain size={20} />
@@ -1255,7 +1257,7 @@ export default function App() {
           <motion.button 
             variants={itemVariants}
             onClick={() => setScreen('duelSelection')}
-            className="card-minimal p-6 text-left group"
+            className="glass-card p-6 text-left group"
           >
             <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
               <Swords size={20} />
@@ -1267,7 +1269,7 @@ export default function App() {
           <motion.button 
             variants={itemVariants}
             onClick={() => setScreen('blitzIntro')}
-            className="card-minimal p-6 text-left group"
+            className="glass-card p-6 text-left group"
           >
             <div className="w-10 h-10 bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
               <Zap size={20} />
@@ -1283,7 +1285,7 @@ export default function App() {
               setSelectedDifficulty('all');
               startQuiz('daily');
             }}
-            className="card-minimal p-6 text-left group"
+            className="glass-card p-6 text-left group"
           >
             <div className="w-10 h-10 bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
               <Calendar size={20} />
@@ -1295,7 +1297,7 @@ export default function App() {
           <motion.button 
             variants={itemVariants}
             onClick={() => setScreen('categories')}
-            className="card-minimal p-6 text-left group"
+            className="glass-card p-6 text-left group"
           >
             <div className="w-10 h-10 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
               <LayoutGrid size={20} />
@@ -1310,7 +1312,7 @@ export default function App() {
           <motion.button 
             variants={itemVariants}
             onClick={() => setScreen('review')}
-            className="w-full card-minimal p-5 flex items-center justify-between group"
+            className="w-full glass-card p-5 flex items-center justify-between group"
           >
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 rounded-2xl flex items-center justify-center">
@@ -1341,7 +1343,7 @@ export default function App() {
                     setSelectedCategory(cat.id);
                     setScreen('difficultySelection');
                   }}
-                  className="w-full card-minimal p-4 flex items-center justify-between group hover:bg-slate-100 dark:hover:bg-slate-800"
+                  className="w-full glass-card p-4 flex items-center justify-between group hover:bg-slate-100 dark:hover:bg-slate-800"
                 >
                   <div className="flex items-center gap-4">
                     <div className={`w-12 h-12 ${cat.color} text-white rounded-2xl flex items-center justify-center shadow-lg shadow-slate-200 dark:shadow-none`}>
@@ -1368,9 +1370,9 @@ export default function App() {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 overflow-y-auto no-scrollbar"
+        className="flex flex-col h-full bg-transparent overflow-y-auto no-scrollbar"
       >
-        <header className="shrink-0 px-6 pt-12 pb-6 flex items-center gap-4 sticky top-0 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-md z-50">
+        <header className="shrink-0 px-6 pt-12 pb-6 flex items-center gap-4 sticky top-0 glass-panel z-50">
           <button onClick={() => setScreen('categories')} className="p-2.5 -ml-2 text-slate-400 hover:text-purple-500 transition-colors">
             <ChevronLeft size={24} strokeWidth={2.5} />
           </button>
@@ -1500,9 +1502,9 @@ export default function App() {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 overflow-y-auto no-scrollbar pb-32"
+        className="flex flex-col h-full bg-transparent overflow-y-auto no-scrollbar pb-32"
       >
-        <header className="shrink-0 px-6 pt-12 pb-6 flex items-center justify-between sticky top-0 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-md z-50 border-b border-slate-200 dark:border-slate-800">
+        <header className="shrink-0 px-6 pt-12 pb-6 flex items-center justify-between sticky top-0 glass-panel z-50 border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center gap-4">
             <button onClick={() => setScreen('createQuizMenu')} className="p-2.5 -ml-2 text-slate-400 hover:text-blue-500 transition-colors">
               <ChevronLeft size={24} strokeWidth={2.5} />
@@ -1669,9 +1671,9 @@ export default function App() {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 overflow-y-auto no-scrollbar"
+        className="flex flex-col h-full bg-transparent overflow-y-auto no-scrollbar"
       >
-        <header className="shrink-0 px-6 pt-12 pb-6 flex items-center justify-between sticky top-0 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-md z-50 border-b border-slate-200 dark:border-slate-800">
+        <header className="shrink-0 px-6 pt-12 pb-6 flex items-center justify-between sticky top-0 glass-panel z-50 border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center gap-4">
             <button onClick={() => setScreen('categories')} className="p-2.5 -ml-2 text-slate-400 hover:text-blue-500 transition-colors">
               <ChevronLeft size={24} strokeWidth={2.5} />
@@ -1734,9 +1736,9 @@ export default function App() {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 overflow-y-auto no-scrollbar"
+        className="flex flex-col h-full bg-transparent overflow-y-auto no-scrollbar"
       >
-        <header className="shrink-0 px-6 pt-12 pb-6 flex items-center gap-4 sticky top-0 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-md z-50">
+        <header className="shrink-0 px-6 pt-12 pb-6 flex items-center gap-4 sticky top-0 glass-panel z-50">
           <button onClick={() => setScreen('createQuizMenu')} className="p-2.5 -ml-2 text-slate-400 hover:text-purple-500 transition-colors">
             <ChevronLeft size={24} strokeWidth={2.5} />
           </button>
@@ -1827,9 +1829,9 @@ export default function App() {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 overflow-y-auto no-scrollbar"
+        className="flex flex-col h-full bg-transparent overflow-y-auto no-scrollbar"
       >
-        <header className="shrink-0 px-6 pt-12 pb-6 flex items-center gap-4 sticky top-0 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-md z-50">
+        <header className="shrink-0 px-6 pt-12 pb-6 flex items-center gap-4 sticky top-0 glass-panel z-50">
           <button onClick={() => setScreen(selectedCategory === 'all' ? 'home' : (selectedCategory === 'custom' ? 'customTopicSelection' : 'categories'))} className="p-2.5 -ml-2 text-slate-400 hover:text-blue-500 transition-colors">
             <ChevronLeft size={24} strokeWidth={2.5} />
           </button>
@@ -1842,6 +1844,26 @@ export default function App() {
         </header>
         
         <main className="flex-1 px-6 pb-32 space-y-8 max-w-2xl mx-auto w-full">
+
+          {/* Game Mode Selection */}
+          <section className="mt-8 mb-4">
+            <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-4 uppercase tracking-wider">Spielmodus</h2>
+            <div className="flex gap-4">
+              <button
+                onClick={() => setGameMode('quiz')}
+                className={`flex-1 p-4 rounded-2xl border-2 transition-all font-bold ${gameMode === 'quiz' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' : 'border-transparent bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400'}`}
+              >
+                Quiz
+              </button>
+              <button
+                onClick={() => setGameMode('flashcards')}
+                className={`flex-1 p-4 rounded-2xl border-2 transition-all font-bold ${gameMode === 'flashcards' ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400' : 'border-transparent bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400'}`}
+              >
+                Karteikarten
+              </button>
+            </div>
+          </section>
+
           {/* Difficulty Selection */}
           <section>
             <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-4 uppercase tracking-wider">Schwierigkeit</h2>
@@ -1971,9 +1993,9 @@ export default function App() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="flex flex-col h-full bg-white dark:bg-slate-950 overflow-y-auto no-scrollbar"
+      className="flex flex-col h-full bg-transparent overflow-y-auto no-scrollbar"
     >
-      <header className="shrink-0 px-6 pt-12 pb-8 flex items-center gap-4 sticky top-0 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md z-50">
+      <header className="shrink-0 px-6 pt-12 pb-8 flex items-center gap-4 sticky top-0 glass-panel z-50">
         <button onClick={() => setScreen('home')} className="p-2.5 -ml-2 text-slate-400 hover:text-blue-500 transition-colors">
           <ChevronLeft size={24} strokeWidth={2.5} />
         </button>
@@ -1987,7 +2009,7 @@ export default function App() {
             setSelectedCategory('custom');
             setScreen('projects');
           }}
-          className="w-full card-minimal p-5 text-left group flex items-center justify-between border-2 border-transparent hover:border-purple-500/30 bg-gradient-to-br from-purple-50 to-fuchsia-50 dark:from-purple-900/10 dark:to-fuchsia-900/10"
+          className="w-full glass-card p-5 text-left group flex items-center justify-between border-2 border-transparent hover:border-purple-500/30 bg-gradient-to-br from-purple-50 to-fuchsia-50 dark:from-purple-900/10 dark:to-fuchsia-900/10"
         >
           <div className="flex items-center gap-5">
             <div className="w-14 h-14 bg-gradient-to-br from-purple-500 to-fuchsia-500 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-purple-500/20 group-hover:scale-110 transition-transform">
@@ -2021,7 +2043,7 @@ export default function App() {
                 setSelectedCategory(cat.id);
                 setScreen('difficultySelection');
               }}
-              className="w-full card-minimal p-5 text-left group flex items-center justify-between"
+              className="w-full glass-card p-5 text-left group flex items-center justify-between"
             >
               <div className="flex items-center gap-5">
                 <div className={`w-14 h-14 ${cat.color} text-white rounded-2xl flex items-center justify-center shadow-lg shadow-slate-200 dark:shadow-none group-hover:scale-110 transition-transform`}>
@@ -2057,9 +2079,9 @@ export default function App() {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="flex flex-col h-full bg-white dark:bg-slate-950 overflow-y-auto no-scrollbar"
+        className="flex flex-col h-full bg-transparent overflow-y-auto no-scrollbar"
       >
-        <header className="shrink-0 px-6 pt-12 pb-8 flex items-center justify-between sticky top-0 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md z-50">
+        <header className="shrink-0 px-6 pt-12 pb-8 flex items-center justify-between sticky top-0 glass-panel z-50">
           <button onClick={() => setScreen('home')} className="p-2.5 -ml-2 text-slate-400 hover:text-blue-500 transition-colors">
             <ChevronLeft size={24} strokeWidth={2.5} />
           </button>
@@ -2085,14 +2107,14 @@ export default function App() {
           </motion.div>
 
           <motion.div variants={itemVariants} className="w-full grid grid-cols-2 gap-4 mb-12">
-            <div className="card-minimal p-6 flex flex-col items-center">
+            <div className="glass-card p-6 flex flex-col items-center">
               <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-3">
                 <Zap size={20} fill="currentColor" />
               </div>
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Belohnung</span>
               <span className="text-xl font-black text-slate-800 dark:text-slate-100">+50 Pkt</span>
             </div>
-            <div className="card-minimal p-6 flex flex-col items-center">
+            <div className="glass-card p-6 flex flex-col items-center">
               <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-3">
                 <Target size={20} />
               </div>
@@ -2132,7 +2154,7 @@ export default function App() {
       animate="visible"
       className="flex flex-col h-full bg-slate-950 text-white overflow-y-auto no-scrollbar"
     >
-      <header className="shrink-0 px-6 pt-12 pb-8 flex items-center justify-between sticky top-0 bg-slate-950/80 backdrop-blur-md z-50">
+      <header className="shrink-0 px-6 pt-12 pb-8 flex items-center justify-between sticky top-0 glass-panel z-50">
         <button onClick={() => setScreen('home')} className="p-2.5 -ml-2 text-slate-400 hover:text-white transition-colors">
           <ChevronLeft size={24} strokeWidth={2.5} />
         </button>
@@ -2317,7 +2339,7 @@ export default function App() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 overflow-y-auto no-scrollbar"
+      className="flex flex-col h-full bg-transparent overflow-y-auto no-scrollbar"
     >
       <header className="shrink-0 px-6 pt-12 pb-6 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center gap-4 relative z-10">
         <button 
@@ -2343,7 +2365,7 @@ export default function App() {
             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl group-hover:scale-150 transition-transform duration-700" />
             <div className="relative z-10 flex items-center justify-between">
               <div>
-                <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center mb-4 border border-white/20">
+                <div className="w-12 h-12 rounded-2xl glass-panel bg-white/20 flex items-center justify-center mb-4 border border-white/20">
                   <Crosshair size={24} className="text-white" />
                 </div>
                 <h3 className="text-xl font-display font-black mb-1 tracking-tight">Gegner finden</h3>
@@ -2431,7 +2453,7 @@ export default function App() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 overflow-y-auto no-scrollbar"
+      className="flex flex-col h-full bg-transparent overflow-y-auto no-scrollbar"
     >
       <header className="shrink-0 px-6 pt-12 pb-6 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center gap-4 relative z-10">
         <button 
@@ -2553,7 +2575,7 @@ export default function App() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 overflow-y-auto no-scrollbar"
+      className="flex flex-col h-full bg-transparent overflow-y-auto no-scrollbar"
     >
       <header className="shrink-0 px-6 pt-12 pb-6 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center gap-4 relative z-10">
         <button 
@@ -2641,7 +2663,7 @@ export default function App() {
         animate="visible"
         className="flex flex-col h-full bg-slate-900 text-white overflow-y-auto no-scrollbar"
       >
-        <header className="shrink-0 px-6 pt-12 pb-6 border-b border-white/10 flex justify-between items-center relative z-10 bg-slate-900/80 backdrop-blur-md">
+        <header className="shrink-0 px-6 pt-12 pb-6 border-b border-white/10 flex justify-between items-center relative z-10 glass-panel">
           <div className="flex flex-col">
             <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-1">Privates Duell</span>
             <h1 className="text-2xl font-display font-black tracking-tight">Warteraum</h1>
@@ -2778,7 +2800,7 @@ export default function App() {
       animate="visible"
       className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white overflow-y-auto no-scrollbar"
     >
-      <header className="shrink-0 px-6 pt-12 pb-6 border-b border-slate-200 dark:border-white/10 flex items-center gap-4 relative z-10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md">
+      <header className="shrink-0 px-6 pt-12 pb-6 border-b border-slate-200 dark:border-white/10 flex items-center gap-4 relative z-10 bg-white/80 dark:glass-panel">
         <button 
           onClick={() => {
             setIsSearching(false);
@@ -2916,7 +2938,7 @@ export default function App() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 overflow-y-auto no-scrollbar"
+      className="flex flex-col h-full bg-transparent overflow-y-auto no-scrollbar"
     >
       <header className="shrink-0 px-6 pt-12 pb-6 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center gap-4 relative z-10">
         <button 
@@ -3013,6 +3035,7 @@ export default function App() {
   );
   };
 
+  
   const renderQuiz = () => {
     const currentQuestion = quizQuestions[currentQuestionIndex];
     if (!currentQuestion) return null;
@@ -3043,7 +3066,7 @@ export default function App() {
           </div>
         )}
 
-        <header className="shrink-0 px-6 py-6 flex justify-between items-center bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-100 dark:border-slate-900 z-40">
+        <header className="shrink-0 px-6 py-6 flex justify-between items-center glass-panel border-b border-slate-100 dark:border-slate-900 z-40">
           <div className="flex items-center gap-4">
             <button 
               onClick={() => setScreen('home')}
@@ -3948,7 +3971,7 @@ export default function App() {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="flex flex-col h-full bg-white dark:bg-slate-950 overflow-y-auto no-scrollbar"
+        className="flex flex-col h-full bg-transparent overflow-y-auto no-scrollbar"
       >
         <header className="shrink-0 px-6 pt-12 pb-12 flex flex-col items-center text-center bg-slate-50 dark:bg-slate-900 rounded-b-[3rem]">
           <div className="w-full flex justify-between mb-8">
@@ -4007,19 +4030,19 @@ export default function App() {
 
         <main className="flex-1 px-6 py-10 pb-32 space-y-8 max-w-md mx-auto w-full">
           <div className="grid grid-cols-2 gap-4">
-            <div className="card-minimal p-6 flex flex-col items-center">
+            <div className="glass-card p-6 flex flex-col items-center">
               <Trophy size={24} className="text-amber-500 mb-2" fill="currentColor" />
               <span className="text-xl font-black text-slate-800 dark:text-slate-100">{stats.totalPoints}</span>
               <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Punkte</span>
             </div>
-            <div className="card-minimal p-6 flex flex-col items-center">
+            <div className="glass-card p-6 flex flex-col items-center">
               <Target size={24} className="text-blue-500 mb-2" />
               <span className="text-xl font-black text-slate-800 dark:text-slate-100">{successRate}%</span>
               <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Erfolg</span>
             </div>
           </div>
 
-          <div className="card-minimal p-6">
+          <div className="glass-card p-6">
             <div className="flex justify-between items-center mb-4">
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Level Fortschritt</span>
               <span className="text-[10px] font-black text-blue-600">{Math.round(levelInfo.progress)}%</span>
@@ -4130,7 +4153,7 @@ export default function App() {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 scroll-smooth overflow-y-auto no-scrollbar"
+        className="flex flex-col h-full bg-transparent scroll-smooth overflow-y-auto no-scrollbar"
       >
         <motion.header variants={itemVariants} className="shrink-0 px-6 pt-12 pb-8 flex items-center justify-between bg-white dark:bg-slate-900 rounded-b-[3rem] shadow-sm dark:shadow-none border-b border-slate-100 dark:border-slate-800 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-rose-50/50 dark:bg-rose-900/10 rounded-full blur-2xl -mr-16 -mt-16" />
@@ -4188,7 +4211,7 @@ export default function App() {
                   
                   <div className="relative z-10">
                     <div className="flex items-center gap-4 mb-8">
-                      <div className="w-14 h-14 bg-white/20 backdrop-blur-md text-white rounded-2xl flex items-center justify-center shadow-lg group-hover:rotate-12 transition-transform">
+                      <div className="w-14 h-14 glass-panel bg-white/20 text-white rounded-2xl flex items-center justify-center shadow-lg group-hover:rotate-12 transition-transform">
                         <Play size={28} fill="currentColor" className="ml-1" />
                       </div>
                       <div className="text-left">
@@ -4246,7 +4269,7 @@ export default function App() {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 overflow-y-auto no-scrollbar"
+        className="flex flex-col h-full bg-transparent overflow-y-auto no-scrollbar"
       >
         <header className="shrink-0 px-6 pt-12 pb-6 flex items-center justify-between relative z-10 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800">
           <button 
@@ -4394,7 +4417,7 @@ export default function App() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 overflow-y-auto no-scrollbar"
+      className="flex flex-col h-full bg-transparent overflow-y-auto no-scrollbar"
     >
       <header className="shrink-0 px-6 pt-12 pb-6 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center relative z-10">
         <button 
@@ -4437,7 +4460,7 @@ export default function App() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 overflow-y-auto no-scrollbar"
+      className="flex flex-col h-full bg-transparent overflow-y-auto no-scrollbar"
     >
       <header className="shrink-0 px-6 pt-12 pb-6 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center relative z-10">
         <button 
@@ -4475,7 +4498,7 @@ export default function App() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 overflow-y-auto no-scrollbar"
+      className="flex flex-col h-full bg-transparent overflow-y-auto no-scrollbar"
     >
       <header className="shrink-0 px-6 pt-12 pb-6 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center relative z-10">
         <button 
@@ -4523,7 +4546,7 @@ export default function App() {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 overflow-y-auto no-scrollbar"
+      className="flex flex-col h-full bg-transparent overflow-y-auto no-scrollbar"
     >
       <header className="shrink-0 px-6 pt-12 pb-6 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center relative z-10">
         <button 
@@ -4736,7 +4759,13 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className={`w-full max-w-md md:max-w-2xl lg:max-w-4xl mx-auto h-[100dvh] md:h-[95vh] md:my-[2.5vh] md:rounded-[2.5rem] bg-white dark:bg-slate-950 font-sans selection:bg-blue-100 dark:selection:bg-blue-900/50 relative overflow-hidden md:shadow-2xl md:border md:border-slate-200 dark:md:border-slate-800 ${stats.darkMode ? 'dark' : ''}`}>
+      <div className={`w-full max-w-md md:max-w-2xl lg:max-w-4xl mx-auto h-[100dvh] md:h-[95vh] md:my-[2.5vh] md:rounded-[2.5rem] bg-[conic-gradient(at_top_right,_var(--tw-gradient-stops))] from-blue-100 via-purple-50 to-pink-100 dark:bg-slate-950 font-sans selection:bg-blue-100 dark:selection:bg-blue-900/50 relative overflow-hidden md:shadow-2xl md:border md:border-slate-200 dark:md:border-slate-800 ${stats.darkMode ? 'dark' : ''}`}>
+        
+        {/* Animated Background Blobs */}
+        <div className="absolute top-[-20%] left-[-10%] w-[70%] h-[70%] bg-blue-400/50 dark:bg-blue-600/40 rounded-full blur-[80px] pointer-events-none mix-blend-multiply dark:mix-blend-screen animate-pulse" style={{ animationDuration: "8s" }} />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[70%] h-[70%] bg-purple-400/50 dark:bg-purple-600/40 rounded-full blur-[80px] pointer-events-none mix-blend-multiply dark:mix-blend-screen animate-pulse" style={{ animationDuration: "10s" }} />
+        <div className="absolute top-[20%] left-[20%] w-[60%] h-[60%] bg-pink-400/50 dark:bg-pink-600/30 rounded-full blur-[80px] pointer-events-none mix-blend-multiply dark:mix-blend-screen animate-pulse" style={{ animationDuration: "12s" }} />
+
         <AnimatePresence>
           {showIntro && (
             <motion.div 
@@ -4750,7 +4779,7 @@ export default function App() {
                 initial={{ scale: 0, rotate: -180 }}
                 animate={{ scale: 1, rotate: 0 }}
                 transition={{ type: "spring", damping: 15, stiffness: 100, delay: 0.2 }}
-                className="w-28 h-28 bg-white/20 backdrop-blur-md rounded-[2rem] flex items-center justify-center mb-8 shadow-2xl ring-4 ring-white/30"
+                className="w-28 h-28 glass-panel bg-white/20 rounded-[2rem] flex items-center justify-center mb-8 shadow-2xl ring-4 ring-white/30"
               >
                 <Zap size={56} className="text-white" fill="currentColor" />
               </motion.div>
@@ -4912,7 +4941,7 @@ export default function App() {
             initial="initial"
             animate="animate"
             exit="exit"
-            className="h-full bg-white dark:bg-slate-950 text-slate-900 dark:text-white"
+            className="h-full bg-transparent text-slate-900 dark:text-white relative z-10"
           >
             {screen === 'home' && renderHome()}
             {screen === 'brain' && renderBrain()}
@@ -4933,6 +4962,7 @@ export default function App() {
             {screen === 'matchmaking' && renderMatchmaking()}
             {screen === 'rankings' && renderRankings()}
             {screen === 'quiz' && renderQuiz()}
+            {screen === 'flashcards' && <Flashcards questions={questions} onClose={() => setScreen('home')} onQuestionsUpdated={setQuestions} />}
             {screen === 'result' && renderResult()}
             {screen === 'profile' && renderProfile()}
             {screen === 'shop' && renderShop()}
@@ -4946,7 +4976,7 @@ export default function App() {
         </AnimatePresence>
 
         <AnimatePresence>
-          {screen !== 'quiz' && screen !== 'daily' && screen !== 'blitzQuiz' && screen !== 'createLobby' && screen !== 'joinLobby' && screen !== 'lobbyRoom' && screen !== 'matchmaking' && screen !== 'rankings' && screen !== 'settings' && screen !== 'howToPlay' && screen !== 'impressum' && screen !== 'privacy' && screen !== 'terms' && (
+          {screen !== 'quiz' && screen !== 'daily' && screen !== 'blitzQuiz' && screen !== 'createLobby' && screen !== 'joinLobby' && screen !== 'lobbyRoom' && screen !== 'matchmaking' && screen !== 'rankings' && screen !== 'settings' && screen !== 'howToPlay' && screen !== 'flashcards' && screen !== 'impressum' && screen !== 'privacy' && screen !== 'terms' && (
             <motion.nav 
               initial={{ y: 100, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}

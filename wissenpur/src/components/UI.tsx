@@ -16,14 +16,14 @@ export const Button: React.FC<ButtonProps> = ({
   className = '',
   ...props
 }) => {
-  const baseStyles = 'inline-flex items-center justify-center font-extrabold rounded-2xl transition-all disabled:opacity-50 cursor-pointer select-none';
+  const baseStyles = 'group relative overflow-hidden inline-flex items-center justify-center font-extrabold rounded-2xl transition-all duration-300 disabled:opacity-50 cursor-pointer select-none border border-transparent';
   
   const variants = {
-    primary: 'bg-blue-600 text-white shadow-[0_10px_25px_-8px_rgba(37,99,235,0.4)] hover:bg-blue-700 hover:shadow-[0_15px_30px_-10px_rgba(37,99,235,0.5)] active:scale-[0.98]',
-    secondary: 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700 shadow-[0_4px_12px_-4px_rgba(0,0,0,0.08)] border border-slate-100 dark:border-slate-700 active:scale-[0.98]',
-    outline: 'border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-600 active:scale-[0.98]',
-    ghost: 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-[0.98]',
-    danger: 'bg-rose-500 text-white hover:bg-rose-600 shadow-[0_10px_25px_-8px_rgba(244,63,94,0.4)] active:scale-[0.98]'
+    primary: 'bg-blue-600 text-white shadow-[0_10px_25px_-8px_rgba(37,99,235,0.4)] hover:bg-blue-700 hover:shadow-[0_15px_30px_-10px_rgba(37,99,235,0.8)] hover:border-blue-400 active:translate-y-1',
+    secondary: 'glass-card text-slate-900 dark:text-white hover:bg-slate-50/80 dark:hover:bg-slate-800/80 hover:shadow-xl active:translate-y-1',
+    outline: 'border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-500 hover:shadow-lg active:translate-y-1',
+    ghost: 'text-slate-600 dark:text-slate-400 hover:bg-slate-100/50 dark:hover:bg-slate-800/50 active:translate-y-1',
+    danger: 'bg-rose-500 text-white shadow-[0_10px_25px_-8px_rgba(244,63,94,0.4)] hover:bg-rose-600 hover:shadow-[0_15px_30px_-10px_rgba(244,63,94,0.8)] hover:border-rose-400 active:translate-y-1'
   };
 
   const sizes = {
@@ -45,7 +45,8 @@ export const Button: React.FC<ButtonProps> = ({
       }}
       {...props}
     >
-      {children}
+      <div className="absolute inset-0 w-[200%] h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shimmer pointer-events-none" />
+      <span className="relative z-10 flex items-center gap-2">{children}</span>
     </motion.button>
   );
 };
@@ -59,9 +60,9 @@ export const Card: React.FC<{ children: React.ReactNode; className?: string; onC
         onClick();
       }
     }}
-    whileTap={onClick ? { scale: 0.98, y: 1 } : undefined}
+    whileTap={onClick ? { scale: 0.98, y: 2 } : undefined}
     transition={{ type: "spring", stiffness: 400, damping: 25 }}
-    className={`bg-white dark:bg-slate-900 rounded-[2rem] p-6 shadow-[0_8px_30px_-4px_rgba(0,0,0,0.04)] border border-slate-100/60 dark:border-slate-800/60 ${onClick ? 'cursor-pointer hover:shadow-[0_15px_40px_-10px_rgba(0,0,0,0.08)] transition-all duration-500 active:bg-slate-50/50 dark:active:bg-slate-800/50' : ''} ${className}`}
+    className={`glass-panel rounded-[2rem] p-6 ${onClick ? 'cursor-pointer hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 active:bg-slate-50/50 dark:active:bg-slate-800/50' : ''} ${className}`}
   >
     {children}
   </motion.div>
@@ -69,11 +70,11 @@ export const Card: React.FC<{ children: React.ReactNode; className?: string; onC
 
 export const Badge: React.FC<{ icon: React.ReactNode; label: string | number; color: 'amber' | 'blue' | 'emerald' | 'rose' | 'slate' }> = ({ icon, label, color }) => {
   const colors = {
-    amber: 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border-amber-100/50 dark:border-amber-900/30 shadow-amber-100/20',
-    blue: 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-100/50 dark:border-blue-900/30 shadow-blue-100/20',
-    emerald: 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border-emerald-100/50 dark:border-emerald-900/30 shadow-emerald-100/20',
-    rose: 'bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 border-rose-100/50 dark:border-rose-900/30 shadow-rose-100/20',
-    slate: 'bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 border-slate-100/50 dark:border-slate-700/50 shadow-slate-100/20'
+    amber: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 glow-amber backdrop-blur-md',
+    blue: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 glow-blue backdrop-blur-md',
+    emerald: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 glow-emerald backdrop-blur-md',
+    rose: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30 shadow-[0_0_15px_-3px_rgba(244,63,94,0.5)] backdrop-blur-md',
+    slate: 'bg-slate-500/10 text-slate-600 dark:text-slate-300 border-slate-500/30 backdrop-blur-md shadow-lg'
   };
 
   return (
@@ -96,16 +97,16 @@ export const Badge: React.FC<{ icon: React.ReactNode; label: string | number; co
   );
 };
 
-export const ProgressBar: React.FC<{ progress: number; color?: string }> = ({ progress, color = 'bg-gradient-to-r from-blue-500 to-indigo-600' }) => (
-  <div className="w-full h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden relative shadow-inner dark:shadow-none">
+export const ProgressBar: React.FC<{ progress: number; color?: string; glow?: boolean }> = ({ progress, color = 'bg-gradient-to-r from-blue-500 to-indigo-600', glow = true }) => (
+  <div className="w-full h-3 bg-slate-900/10 dark:bg-slate-100/10 rounded-full overflow-hidden relative shadow-inner backdrop-blur-sm">
     <motion.div 
       initial={{ width: 0 }}
       animate={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
       transition={{ type: "spring", stiffness: 100, damping: 20 }}
-      className={`h-full ${color} relative z-10 rounded-full`}
+      className={`h-full ${color} relative z-10 rounded-full ${glow ? 'shadow-[0_0_15px_rgba(59,130,246,0.6)]' : ''}`}
     >
-      <div className="absolute top-0 right-0 w-4 h-full bg-white/30 blur-sm" />
+      <div className="absolute top-0 right-0 w-8 h-full bg-gradient-to-l from-white/60 to-transparent blur-sm pointer-events-none" />
+      <div className="absolute inset-0 w-[200%] bg-[linear-gradient(45deg,rgba(255,255,255,0.2)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.2)_50%,rgba(255,255,255,0.2)_75%,transparent_75%,transparent)] bg-[length:20px_20px] animate-shimmer opacity-40 pointer-events-none" />
     </motion.div>
-    <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(255,255,255,0.1)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.1)_50%,rgba(255,255,255,0.1)_75%,transparent_75%,transparent)] bg-[length:20px_20px] animate-[progress-stripe_1s_linear_infinite] opacity-30" />
   </div>
 );
