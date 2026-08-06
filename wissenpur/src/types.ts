@@ -36,6 +36,7 @@ export interface UserStats {
   age?: number;
   photoURL?: string;
   customPhotoURL?: string;
+  economyVersion?: number;
   totalPoints: number;
   currentStreak: number;
   bestStreak: number;
@@ -46,7 +47,9 @@ export interface UserStats {
   lastDailyQuestionsDate?: string | null;
   dailyRewardClaimed?: boolean;
   lastPlayedDate: string | null;
+  lastDailyChallengeDate?: string | null;
   lastDailyRewardDate?: string | null;
+  lastSpinDate?: string | null;
   lastCategory?: CategoryId | 'all' | 'daily' | 'review' | 'blitz' | 'custom' | 'project';
   achievements?: string[];
   coins: number;
@@ -174,8 +177,8 @@ export interface MultiplayerPlayer {
   photoURL?: string;
   status: PlayerStatus;
   score: number;
-  currentAnswer?: number | null; // index of the selected option, null if not answered
-  answerTime?: number; // time taken to answer
+  currentAnswer?: number | null;
+  answerTime?: number;
 }
 
 export type GameState = 'waiting' | 'starting' | 'playing' | 'round_end' | 'finished';
@@ -222,7 +225,7 @@ export interface Lobby {
   categoryId: CategoryId | 'all';
   numberOfQuestions: number;
   timePerQuestion: number;
-  players: Record<string, MultiplayerPlayer>; // Keyed by uid
+  players: Record<string, MultiplayerPlayer>;
   state: GameState;
   currentRound: number;
   totalRounds: number;
