@@ -106,12 +106,14 @@ export const exportMyData = onCall(
   async (request) => {
     const uid = requireUid(request);
     const userRef = db.collection('users').doc(uid);
-    const leaderboardRef = db.collection('leaderboard').doc(uid);
+    const trustedLeaderboardRef = db.collection('trustedLeaderboard').doc(uid);
+    const legacyLeaderboardRef = db.collection('leaderboard').doc(uid);
     const rateLimitRef = db.collection('serverRateLimits').doc(uid);
 
     const [
       userSnapshot,
-      leaderboardSnapshot,
+      trustedLeaderboardSnapshot,
+      legacyLeaderboardSnapshot,
       rateLimitSnapshot,
       quizSessions,
       roundReceipts,
@@ -121,7 +123,8 @@ export const exportMyData = onCall(
       playerTwoDuels,
     ] = await Promise.all([
       userRef.get(),
-      leaderboardRef.get(),
+      trustedLeaderboardRef.get(),
+      legacyLeaderboardRef.get(),
       rateLimitRef.get(),
       readOwnedDocuments('quizSessions', 'uid', uid),
       readOwnedDocuments('roundReceipts', 'uid', uid),
@@ -137,7 +140,7 @@ export const exportMyData = onCall(
       : undefined;
 
     return {
-      schemaVersion: 1,
+      schemaVersion: 2,
       exportedAt: new Date().toISOString(),
       account: {
         uid,
@@ -148,7 +151,12 @@ export const exportMyData = onCall(
       },
       firestore: {
         user: userSnapshot.exists ? serializeFirestoreValue(userSnapshot.data()) : null,
-        leaderboard: leaderboardSnapshot.exists ? serializeFirestoreValue(leaderboardSnapshot.data()) : null,
+        trustedLeaderboard: trustedLeaderboardSnapshot.exists
+          ? serializeFirestoreValue(trustedLeaderboardSnapshot.data())
+          : null,
+        legacyLeaderboard: legacyLeaderboardSnapshot.exists
+          ? serializeFirestoreValue(legacyLeaderboardSnapshot.data())
+          : null,
         serverRateLimit: rateLimitSnapshot.exists
           ? serializeFirestoreValue(rateLimitSnapshot.data())
           : null,
@@ -187,6 +195,7 @@ export const deleteMyAccount = onCall(
 
     const batch = db.batch();
     batch.delete(db.collection('users').doc(uid));
+    batch.delete(db.collection('trustedLeaderboard').doc(uid));
     batch.delete(db.collection('leaderboard').doc(uid));
     batch.delete(db.collection('serverRateLimits').doc(uid));
     await batch.commit();
