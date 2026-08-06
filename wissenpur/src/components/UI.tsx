@@ -14,10 +14,12 @@ export const Button: React.FC<ButtonProps> = ({
   size = 'md',
   fullWidth = false,
   className = '',
+  onClick,
+  type = 'button',
   ...props
 }) => {
-  const baseStyles = 'group relative overflow-hidden inline-flex items-center justify-center font-extrabold rounded-2xl transition-all duration-300 disabled:opacity-50 cursor-pointer select-none border border-transparent';
-  
+  const baseStyles = 'group relative overflow-hidden inline-flex items-center justify-center font-extrabold rounded-2xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer select-none border border-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950';
+
   const variants = {
     primary: 'bg-blue-600 text-white shadow-[0_10px_25px_-8px_rgba(37,99,235,0.4)] hover:bg-blue-700 hover:shadow-[0_15px_30px_-10px_rgba(37,99,235,0.8)] hover:border-blue-400 active:translate-y-1',
     secondary: 'glass-card text-slate-900 dark:text-white hover:bg-slate-50/80 dark:hover:bg-slate-800/80 hover:shadow-xl active:translate-y-1',
@@ -35,24 +37,37 @@ export const Button: React.FC<ButtonProps> = ({
 
   return (
     <motion.button
-      whileTap={{ scale: 0.96 }}
-      transition={{ type: "spring", stiffness: 400, damping: 17 }}
-      className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${fullWidth ? 'w-full' : ''} ${className}`}
-      onClick={(e) => {
-        soundManager.init();
-        soundManager.playClick();
-        if (props.onClick) props.onClick(e);
-      }}
       {...props}
+      type={type}
+      whileTap={props.disabled ? undefined : { scale: 0.96 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+      className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${fullWidth ? 'w-full' : ''} ${className}`}
+      onClick={(event) => {
+        if (!props.disabled) {
+          soundManager.init();
+          soundManager.playClick();
+        }
+        onClick?.(event);
+      }}
     >
-      <div className="absolute inset-0 w-[200%] h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shimmer pointer-events-none" />
+      <div className="pointer-events-none absolute inset-0 h-full w-[200%] -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent group-hover:animate-shimmer" />
       <span className="relative z-10 flex items-center gap-2">{children}</span>
     </motion.button>
   );
 };
 
-export const Card: React.FC<{ children: React.ReactNode; className?: string; onClick?: () => void }> = ({ children, className = '', onClick }) => (
-  <motion.div 
+interface CardProps {
+  children: React.ReactNode;
+  className?: string;
+  onClick?: () => void;
+  ariaLabel?: string;
+}
+
+export const Card: React.FC<CardProps> = ({ children, className = '', onClick, ariaLabel }) => (
+  <motion.div
+    role={onClick ? 'button' : undefined}
+    tabIndex={onClick ? 0 : undefined}
+    aria-label={onClick ? ariaLabel : undefined}
     onClick={() => {
       if (onClick) {
         soundManager.init();
@@ -60,9 +75,16 @@ export const Card: React.FC<{ children: React.ReactNode; className?: string; onC
         onClick();
       }
     }}
+    onKeyDown={(event) => {
+      if (!onClick || (event.key !== 'Enter' && event.key !== ' ')) return;
+      event.preventDefault();
+      soundManager.init();
+      soundManager.playClick();
+      onClick();
+    }}
     whileTap={onClick ? { scale: 0.98, y: 2 } : undefined}
-    transition={{ type: "spring", stiffness: 400, damping: 25 }}
-    className={`glass-panel rounded-[2rem] p-6 ${onClick ? 'cursor-pointer hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 active:bg-slate-50/50 dark:active:bg-slate-800/50' : ''} ${className}`}
+    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+    className={`glass-panel rounded-[2rem] p-6 ${onClick ? 'cursor-pointer transition-all duration-500 hover:-translate-y-1 hover:shadow-2xl active:bg-slate-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:active:bg-slate-800/50' : ''} ${className}`}
   >
     {children}
   </motion.div>
@@ -78,17 +100,18 @@ export const Badge: React.FC<{ icon: React.ReactNode; label: string | number; co
   };
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, scale: 0.8, y: 5 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
       whileHover={{ scale: 1.05, y: -1 }}
-      transition={{ type: "spring", stiffness: 300, damping: 15 }}
-      className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-2xl font-black text-xs border shadow-sm ${colors[color]}`}
+      transition={{ type: 'spring', stiffness: 300, damping: 15 }}
+      className={`flex items-center gap-1.5 rounded-2xl border px-3.5 py-1.5 text-xs font-black shadow-sm ${colors[color]}`}
     >
-      <motion.span 
+      <motion.span
         animate={{ scale: [1, 1.15, 1] }}
-        transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+        transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
         className="shrink-0"
+        aria-hidden="true"
       >
         {icon}
       </motion.span>
@@ -97,16 +120,27 @@ export const Badge: React.FC<{ icon: React.ReactNode; label: string | number; co
   );
 };
 
-export const ProgressBar: React.FC<{ progress: number; color?: string; glow?: boolean }> = ({ progress, color = 'bg-gradient-to-r from-blue-500 to-indigo-600', glow = true }) => (
-  <div className="w-full h-3 bg-slate-900/10 dark:bg-slate-100/10 rounded-full overflow-hidden relative shadow-inner backdrop-blur-sm">
-    <motion.div 
-      initial={{ width: 0 }}
-      animate={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
-      transition={{ type: "spring", stiffness: 100, damping: 20 }}
-      className={`h-full ${color} relative z-10 rounded-full ${glow ? 'shadow-[0_0_15px_rgba(59,130,246,0.6)]' : ''}`}
+export const ProgressBar: React.FC<{ progress: number; color?: string; glow?: boolean; label?: string }> = ({ progress, color = 'bg-gradient-to-r from-blue-500 to-indigo-600', glow = true, label = 'Fortschritt' }) => {
+  const normalizedProgress = Math.min(100, Math.max(0, progress));
+
+  return (
+    <div
+      role="progressbar"
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(normalizedProgress)}
+      className="relative h-3 w-full overflow-hidden rounded-full bg-slate-900/10 shadow-inner backdrop-blur-sm dark:bg-slate-100/10"
     >
-      <div className="absolute top-0 right-0 w-8 h-full bg-gradient-to-l from-white/60 to-transparent blur-sm pointer-events-none" />
-      <div className="absolute inset-0 w-[200%] bg-[linear-gradient(45deg,rgba(255,255,255,0.2)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.2)_50%,rgba(255,255,255,0.2)_75%,transparent_75%,transparent)] bg-[length:20px_20px] animate-shimmer opacity-40 pointer-events-none" />
-    </motion.div>
-  </div>
-);
+      <motion.div
+        initial={{ width: 0 }}
+        animate={{ width: `${normalizedProgress}%` }}
+        transition={{ type: 'spring', stiffness: 100, damping: 20 }}
+        className={`relative z-10 h-full rounded-full ${color} ${glow ? 'shadow-[0_0_15px_rgba(59,130,246,0.6)]' : ''}`}
+      >
+        <div className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-gradient-to-l from-white/60 to-transparent blur-sm" />
+        <div className="pointer-events-none absolute inset-0 w-[200%] animate-shimmer bg-[linear-gradient(45deg,rgba(255,255,255,0.2)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.2)_50%,rgba(255,255,255,0.2)_75%,transparent_75%,transparent)] bg-[length:20px_20px] opacity-40" />
+      </motion.div>
+    </div>
+  );
+};
