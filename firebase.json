@@ -16,12 +16,9 @@
       ]
     }
   ],
-  "firestore": [
-    {
-      "database": "ai-studio-e6a56a0b-5009-48b4-ab34-e5fc5f5b781b",
-      "rules": "wissenpur/firestore.rules"
-    }
-  ],
+  "firestore": {
+    "rules": "wissenpur/firestore.rules"
+  },
   "hosting": {
     "public": "wissenpur/dist",
     "ignore": [
