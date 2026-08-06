@@ -6,6 +6,7 @@ import {
   type Query,
 } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import { sanitizeQuizSessionForExport } from './accountExportCore.js';
 import { db, enforceAppCheck, firebaseApp } from './database.js';
 
 const adminAuth = getAuth(firebaseApp);
@@ -18,6 +19,10 @@ interface AuthenticatedRequest {
     token?: Record<string, unknown>;
   };
 }
+
+type ExportTransform = (
+  data: Record<string, unknown>,
+) => Record<string, unknown>;
 
 function requireUid(request: AuthenticatedRequest): string {
   const uid = request.auth?.uid;
@@ -60,6 +65,7 @@ async function readOwnedDocuments(
   field: string,
   uid: string,
   maxDocuments = 500,
+  transform?: ExportTransform,
 ): Promise<Array<{ id: string; data: unknown }>> {
   const snapshot = await db
     .collection(collectionName)
@@ -68,10 +74,14 @@ async function readOwnedDocuments(
     .limit(maxDocuments)
     .get();
 
-  return snapshot.docs.map((document) => ({
-    id: document.id,
-    data: serializeFirestoreValue(document.data()),
-  }));
+  return snapshot.docs.map((document) => {
+    const source = document.data() as Record<string, unknown>;
+    const exportData = transform ? transform(source) : source;
+    return {
+      id: document.id,
+      data: serializeFirestoreValue(exportData),
+    };
+  });
 }
 
 async function deleteQueryDocuments(initialQuery: Query<DocumentData>): Promise<number> {
@@ -126,7 +136,13 @@ export const exportMyData = onCall(
       trustedLeaderboardRef.get(),
       legacyLeaderboardRef.get(),
       rateLimitRef.get(),
-      readOwnedDocuments('quizSessions', 'uid', uid),
+      readOwnedDocuments(
+        'quizSessions',
+        'uid',
+        uid,
+        500,
+        sanitizeQuizSessionForExport,
+      ),
       readOwnedDocuments('roundReceipts', 'uid', uid),
       readOwnedDocuments('lobbies', 'hostId', uid),
       readOwnedDocuments('lobbies', 'hostUid', uid),
@@ -140,7 +156,7 @@ export const exportMyData = onCall(
       : undefined;
 
     return {
-      schemaVersion: 2,
+      schemaVersion: 3,
       exportedAt: new Date().toISOString(),
       account: {
         uid,
@@ -166,6 +182,9 @@ export const exportMyData = onCall(
         hostedLegacyLobbies,
         playerOneDuels,
         playerTwoDuels,
+      },
+      redactions: {
+        quizSessionAnswerKeys: 'excluded-security-secret',
       },
       limits: {
         documentsPerExportedCollection: 500,
