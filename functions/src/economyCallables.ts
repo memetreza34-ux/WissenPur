@@ -23,14 +23,18 @@ import {
   type QuizMode,
 } from './economyCore.js';
 import { QUESTION_BANK } from './generated/questionBank.js';
+import {
+  readSessionAnswerKey,
+  type SessionAnswerKeyEntry,
+} from './sessionAnswerKey.js';
 
 const maxQuestionsPerSession = 30;
 
 interface BankQuestion {
   id: string;
-  category: string;
   correctAnswer: number;
   optionCount: number;
+  explanation: string;
 }
 
 interface SubmitQuizRequest {
@@ -51,9 +55,9 @@ const questionById = new Map<string, BankQuestion>(
     question.id,
     {
       id: question.id,
-      category: question.category,
       correctAnswer: question.correctAnswer,
       optionCount: question.optionCount,
+      explanation: question.explanation,
     },
   ]),
 );
@@ -101,7 +105,7 @@ function parseAnswers(value: unknown): Map<string, number> {
       throw new HttpsError('invalid-argument', 'Eine Frage wurde mehrfach beantwortet.');
     }
     const answer = entry.answer;
-    if (typeof answer !== 'number' || !Number.isInteger(answer) || answer < -1 || answer > 3) {
+    if (typeof answer !== 'number' || !Number.isInteger(answer) || answer < -1 || answer > 9) {
       throw new HttpsError('invalid-argument', 'Ein Antwortindex ist ungültig.');
     }
     answers.set(questionId, answer);
@@ -116,6 +120,24 @@ function toHttpsError(error: unknown): HttpsError {
   }
   logger.error('Unexpected economy error', error);
   return new HttpsError('internal', 'Die Aktion konnte nicht sicher verarbeitet werden.');
+}
+
+function fallbackAnswerKey(questionIds: readonly string[]): SessionAnswerKeyEntry[] {
+  return questionIds.map((questionId) => {
+    const question = questionById.get(questionId);
+    if (!question) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Der Fragenkatalog wurde aktualisiert. Bitte starte eine neue Runde.',
+      );
+    }
+    return {
+      questionId,
+      correctAnswer: question.correctAnswer,
+      optionCount: question.optionCount,
+      explanation: question.explanation,
+    };
+  });
 }
 
 function leaderboardProfile(
@@ -193,6 +215,9 @@ export const submitRankedQuiz = onCall<SubmitQuizRequest>(
         if (questionIds.length < 1 || questionIds.length > maxQuestionsPerSession) {
           throw new HttpsError('failed-precondition', 'Die Quizrunde enthält ungültige Fragen.');
         }
+        if (new Set(questionIds).size !== questionIds.length) {
+          throw new HttpsError('failed-precondition', 'Die Quizrunde enthält doppelte Fragen.');
+        }
         if (answers.size !== questionIds.length) {
           throw new HttpsError(
             'invalid-argument',
@@ -210,20 +235,15 @@ export const submitRankedQuiz = onCall<SubmitQuizRequest>(
           }
         }
 
+        const answerKey = readSessionAnswerKey(session.answerKey, questionIds)
+          || fallbackAnswerKey(questionIds);
         let correct = 0;
-        for (const questionId of questionIds) {
-          const question = questionById.get(questionId);
-          if (!question) {
-            throw new HttpsError(
-              'failed-precondition',
-              'Der Fragenkatalog wurde aktualisiert. Bitte starte eine neue Runde.',
-            );
-          }
-          const answer = answers.get(questionId);
-          if (answer !== -1 && (answer === undefined || answer >= question.optionCount)) {
+        for (const key of answerKey) {
+          const answer = answers.get(key.questionId);
+          if (answer !== -1 && (answer === undefined || answer >= key.optionCount)) {
             throw new HttpsError('invalid-argument', 'Ein Antwortindex passt nicht zur Frage.');
           }
-          if (answer === question.correctAnswer) correct += 1;
+          if (answer === key.correctAnswer) correct += 1;
         }
 
         const total = questionIds.length;
