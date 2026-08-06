@@ -11,8 +11,10 @@
     "check:content": "tsx scripts/check-content-boundary.ts",
     "sync:questions": "tsx scripts/sync-question-bank.ts",
     "prepare:questions": "npm run check:content && npm run sync:questions",
-    "build": "npm run prepare:questions && tsc",
-    "lint": "npm run prepare:questions && tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "verify": "npm run prepare:questions && npm test && tsc --noEmit",
+    "build": "npm run prepare:questions && npm test && tsc",
+    "lint": "npm run verify",
     "serve": "npm run build && firebase emulators:start --only auth,functions,firestore",
     "deploy": "firebase deploy --only functions"
   },
