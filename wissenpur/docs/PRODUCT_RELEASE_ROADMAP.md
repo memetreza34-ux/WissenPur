@@ -145,11 +145,13 @@ Erst nach sicherem Backend:
 - [x] Cloud-Functions-Grundlage für Punkte, Münzen, Shop und Belohnungen
 - [x] serverseitiges tägliches Glücksrad und einmalige Daily Quest
 - [x] statischen Fragenkatalog für verifizierbare Ranglisten-Sitzungen erzeugen
-- [x] Übergangsendpunkt für die aktuelle Quizoberfläche anbinden
+- [x] begrenzten Übergangsendpunkt für die aktuelle Quizoberfläche anbinden
 - [ ] komplette Quizoberfläche auf `startRankedQuiz` und `submitRankedQuiz` umstellen
 - [ ] App Check, AI Logic, Functions, Quotas und Monitoring im Produktionsprojekt aktivieren
 - [ ] Firestore-Regeln mit Emulator-Tests absichern
 - [ ] Fehlerüberwachung und Datenschutzkonzept
+
+**Vertrauensgrenze:** `recordRoundResult` berechnet Punkte und Coins selbst und verhindert einfache Doppelbuchungen. Der Client meldet dort jedoch noch `correct` und `total`. Erst der vollständige Sitzungsmodus prüft jede Antwort gegen den Server-Fragenkatalog und ist für eine kompetitive Rangliste vorgesehen.
 
 ### Release 1.0 – verlässliche Kern-Lernapp
 
