@@ -56,26 +56,12 @@ export interface SubmitRankedQuizResponse extends EconomyResponse {
   achievementsUnlocked: number;
 }
 
-interface TransitionalRoundResponse extends EconomyResponse {
-  roundId: string;
-  correct: number;
-  total: number;
-  pointsEarned: number;
-  coinsEarned: number;
-  trustedLevel: 'bounded-client-result';
-}
-
 export interface SpinResponse extends EconomyResponse {
   reward: {
     type: 'coins' | PowerUpId;
     amount: number;
   };
 }
-
-const startRankedQuizCallable = httpsCallable<
-  { questionIds: string[]; mode: RankedQuizMode; category: string },
-  StartRankedQuizResponse
->(functions, 'startRankedQuiz');
 
 const startSecureRankedQuizCallable = httpsCallable<
   { mode: RankedQuizMode; category: string; difficulty: RankedDifficulty; count: number },
@@ -91,17 +77,6 @@ const revealSecureRankedQuizCallable = httpsCallable<
   { sessionId: string },
   { sessionId: string; answers: RevealedRankedAnswer[] }
 >(functions, 'revealSecureRankedQuiz');
-
-const recordRoundResultCallable = httpsCallable<
-  {
-    roundId: string;
-    correct: number;
-    total: number;
-    mode: RankedQuizMode;
-    category: string;
-  },
-  TransitionalRoundResponse
->(functions, 'recordRoundResult');
 
 const claimDailyQuestRewardCallable = httpsCallable<Record<string, never>, EconomyResponse>(
   functions,
@@ -122,15 +97,6 @@ const consumePowerUpCallable = httpsCallable<
   { powerUp: PowerUpId },
   EconomyResponse & { powerUp: PowerUpId }
 >(functions, 'consumePowerUp');
-
-export const startRankedQuizSession = async (
-  questionIds: string[],
-  mode: RankedQuizMode,
-  category: string,
-): Promise<StartRankedQuizResponse> => {
-  const result = await startRankedQuizCallable({ questionIds, mode, category });
-  return result.data;
-};
 
 export const startSecureRankedQuizSession = async (
   mode: RankedQuizMode,
@@ -155,23 +121,6 @@ export const revealSecureRankedQuizSession = async (
 ): Promise<RevealedRankedAnswer[]> => {
   const result = await revealSecureRankedQuizCallable({ sessionId });
   return result.data.answers;
-};
-
-export const recordServerRoundResult = async (
-  roundId: string,
-  correct: number,
-  total: number,
-  mode: RankedQuizMode,
-  category: string,
-): Promise<TransitionalRoundResponse> => {
-  const result = await recordRoundResultCallable({
-    roundId,
-    correct,
-    total,
-    mode,
-    category,
-  });
-  return result.data;
 };
 
 export const claimServerDailyReward = async (): Promise<EconomyResponse> => {
