@@ -64,6 +64,7 @@ export const AccountPrivacyPanel = () => {
     try {
       await deleteCurrentAccount();
       localStorage.removeItem('wissenpur_user_stats');
+      localStorage.removeItem('wissenpur_learning_plan');
       sessionStorage.clear();
       window.location.replace('/');
     } catch (error) {
