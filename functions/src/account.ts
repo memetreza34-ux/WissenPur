@@ -15,6 +15,7 @@ const db = getFirestore(firebaseApp, databaseId);
 const adminAuth = getAuth(firebaseApp);
 const enforceAppCheck = process.env.ENFORCE_APP_CHECK !== 'false';
 const pageSize = 200;
+const recentAuthenticationSeconds = 10 * 60;
 
 interface AuthenticatedRequest {
   auth?: {
@@ -29,6 +30,20 @@ function requireUid(request: AuthenticatedRequest): string {
     throw new HttpsError('unauthenticated', 'Bitte melde dich an, um Kontodaten zu verwalten.');
   }
   return uid;
+}
+
+function requireRecentAuthentication(request: AuthenticatedRequest): void {
+  const authTime = request.auth?.token?.auth_time;
+  const ageSeconds = typeof authTime === 'number'
+    ? Math.floor(Date.now() / 1000) - authTime
+    : Number.POSITIVE_INFINITY;
+
+  if (ageSeconds < 0 || ageSeconds > recentAuthenticationSeconds) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Melde dich aus Sicherheitsgründen erneut an und starte die Kontolöschung innerhalb von zehn Minuten.',
+    );
+  }
 }
 
 function serializeFirestoreValue(value: unknown): unknown {
@@ -146,6 +161,7 @@ export const deleteMyAccount = onCall(
   { enforceAppCheck, timeoutSeconds: 120, memory: '256MiB' },
   async (request) => {
     const uid = requireUid(request);
+    requireRecentAuthentication(request);
 
     // Delete queryable user-owned documents first. This is intentionally
     // privacy-first: a retry remains safe if a previous attempt stopped after
