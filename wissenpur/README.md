@@ -6,9 +6,10 @@ WissenPur ist eine deutschsprachige Lern-App mit Quizzen, Karteikarten, Wiederho
 
 Die Anwendung befindet sich in aktiver Entwicklung. Quiz, Daily Challenge, Blitzmodus, Fehlertraining, eigene Quizprojekte, Google-Anmeldung, Rangliste, Karteikarten und verschiedene Fortschrittsfunktionen sind bereits vorhanden.
 
-Vor einer öffentlichen Version müssen insbesondere folgende Punkte abgeschlossen werden:
+Die KI-Fragenerstellung verwendet Firebase AI Logic. Dadurch wird kein eigener Gemini-Schlüssel mehr in das Browser-Bundle eingebaut. Vor einer öffentlichen Version müssen weiterhin insbesondere folgende Punkte abgeschlossen werden:
 
-- Gemini-Anfragen über ein geschütztes Backend ausführen
+- Firebase AI Logic und App Check im Produktionsprojekt aktivieren und testen
+- nutzerbezogene KI-Kontingente und Kostenlimits einstellen
 - Punkte, Münzen und Belohnungen serverseitig berechnen
 - Firestore-Regeln und Cloud-Synchronisierung absichern
 - rechtliche Texte vervollständigen
@@ -23,7 +24,8 @@ Die detaillierte Planung befindet sich in [`docs/PRODUCT_RELEASE_ROADMAP.md`](do
 - Vite
 - Tailwind CSS
 - Firebase Authentication und Firestore
-- Google Gemini
+- Firebase AI Logic mit Gemini
+- Firebase App Check
 - Motion
 - Progressive Web App
 
@@ -34,21 +36,35 @@ Die detaillierte Planung befindet sich in [`docs/PRODUCT_RELEASE_ROADMAP.md`](do
 - Node.js 22 oder neuer
 - npm
 - ein Firebase-Projekt
-- für die aktuelle Entwicklungsimplementierung ein Gemini-API-Schlüssel
+- aktiviertes Firebase AI Logic
+- eine registrierte Web-App in Firebase App Check
 
 ### Installation
 
 ```bash
 npm ci
+cp .env.example .env.local
 ```
 
-Erstelle anschließend eine `.env.local`:
+Trage in `.env.local` den reCAPTCHA-Enterprise-Websiteschlüssel ein:
 
 ```env
-GEMINI_API_KEY=dein_lokaler_entwicklungsschluessel
+VITE_RECAPTCHA_ENTERPRISE_SITE_KEY=dein_recaptcha_enterprise_site_key
+VITE_ENABLE_APPCHECK_DEBUG=true
 ```
 
-> Der aktuelle Browser-Aufruf von Gemini ist nur für lokale Entwicklung vorgesehen. Vor einer öffentlichen Bereitstellung muss die Anfrage über eine geschützte Serverfunktion laufen.
+`VITE_ENABLE_APPCHECK_DEBUG=true` darf ausschließlich lokal verwendet werden. Beim ersten lokalen Start erscheint in der Browserkonsole ein App-Check-Debugtoken. Dieses Token muss in der Firebase-Konsole für die Web-App freigegeben werden.
+
+### Erforderliche Firebase-Konfiguration
+
+1. Firebase AI Logic für das Projekt aktivieren und den Gemini-Developer-API-Backenddienst auswählen.
+2. Unter **Security → App Check** die Web-App mit reCAPTCHA Enterprise registrieren.
+3. App Check für **Firebase AI Logic** erzwingen.
+4. Den lokalen Debugtoken für Entwicklungsgeräte freigeben.
+5. In Google Cloud das nutzerbezogene Limit für Generate-Content-Anfragen deutlich unter dem Standardwert setzen.
+6. Budgetwarnungen, Monitoring und gegebenenfalls ein Ausgabenlimit konfigurieren.
+
+Ohne gültige App-Check-Konfiguration fällt die KI-Fragenerstellung kontrolliert auf die lokalen Fragen zurück.
 
 ### Entwicklung
 
@@ -74,7 +90,7 @@ src/
 ├── components/     Gemeinsame UI und größere Visualisierungen
 ├── lib/            Hilfslogik für Ranking, Sicherheit und Sound
 ├── pages/          Ausgelagerte Seiten
-├── services/       Firebase-, Gemini- und SRS-Dienste
+├── services/       Firebase-AI-, Firestore- und SRS-Dienste
 ├── App.tsx         Aktuelle Hauptanwendung
 ├── data.ts         Lokale Kategorien und Fragen
 ├── storage.ts      Lokale Statistik- und Profildaten
@@ -85,7 +101,7 @@ src/
 
 ## Firebase
 
-Die Datei `firebase-applet-config.json` enthält die öffentliche Firebase-Webkonfiguration. Sensible Server-Schlüssel gehören nicht in das Repository.
+Die Datei `firebase-applet-config.json` enthält die öffentliche Firebase-Webkonfiguration. Ein Firebase-Web-API-Key ist kein Servergeheimnis; der Zugriff wird über Security Rules, App Check, Authentifizierung und Quotas geschützt. Private Server-Schlüssel dürfen nicht in das Repository gelangen.
 
 Firestore-Regeln liegen in `firestore.rules`. Änderungen an Datenmodell und Regeln müssen immer gemeinsam getestet werden.
 
