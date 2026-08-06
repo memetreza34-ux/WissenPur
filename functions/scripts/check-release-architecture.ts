@@ -1,10 +1,12 @@
+import { existsSync } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
 import { extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const currentDir = resolve(fileURLToPath(new URL('.', import.meta.url)));
 const repoRoot = resolve(currentDir, '../..');
-const functionsSource = resolve(repoRoot, 'functions/src');
+const functionsRoot = resolve(repoRoot, 'functions');
+const functionsSource = resolve(functionsRoot, 'src');
 const webSource = resolve(repoRoot, 'wissenpur/src');
 
 const textExtensions = new Set(['.ts', '.tsx', '.js', '.mjs', '.json']);
@@ -40,6 +42,35 @@ const assertIncludes = (
 ) => {
   if (!content.includes(expected)) failures.push(`${relative(file)}: ${explanation}`);
 };
+
+for (const forbiddenEnvironmentFile of [
+  '.env',
+  '.env.local',
+  '.env.production',
+  '.env.production.local',
+]) {
+  const path = resolve(functionsRoot, forbiddenEnvironmentFile);
+  if (existsSync(path)) {
+    failures.push(
+      `${relative(path)}: Functions-Umgebungsdateien dürfen nicht versioniert sein; verwende Secret Manager oder lokale, ignorierte Dateien.`,
+    );
+  }
+}
+
+const functionsGitignorePath = resolve(functionsRoot, '.gitignore');
+const functionsGitignore = await readFile(functionsGitignorePath, 'utf8');
+assertIncludes(
+  functionsGitignorePath,
+  functionsGitignore,
+  '.env.*',
+  'Functions-Umgebungsvarianten müssen vollständig ignoriert werden.',
+);
+assertIncludes(
+  functionsGitignorePath,
+  functionsGitignore,
+  '!.env.example',
+  'Die dokumentierte Functions-Beispieldatei muss trotz Env-Sperre versionierbar bleiben.',
+);
 
 const webFiles = await walk(webSource);
 for (const file of webFiles) {
