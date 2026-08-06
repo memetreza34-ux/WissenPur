@@ -8,10 +8,11 @@
     "node": "22"
   },
   "scripts": {
+    "check:hosting": "tsx scripts/check-hosting-config.ts",
     "check:architecture": "tsx scripts/check-release-architecture.ts",
     "check:content": "tsx scripts/check-content-boundary.ts",
     "sync:questions": "tsx scripts/sync-question-bank.ts",
-    "prepare:questions": "npm run check:architecture && npm run check:content && npm run sync:questions",
+    "prepare:questions": "npm run check:hosting && npm run check:architecture && npm run check:content && npm run sync:questions",
     "test:typecheck": "tsc -p tsconfig.tests.json --noEmit",
     "test": "npm run test:typecheck && tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",
