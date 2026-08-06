@@ -223,6 +223,18 @@ assertIncludes(
   'disabled={isBusy}',
   'Der Prüfungsabbruch muss während einer laufenden Serverabgabe gesperrt sein.',
 );
+assertIncludes(
+  releaseAppPath,
+  releaseApp,
+  "const autoAdvance = activeQuiz.mode === 'blitz' || Boolean(activeQuiz.globalSeconds);",
+  'Zeitbasierte Modi müssen als automatische Weiterleitung gekennzeichnet sein.',
+);
+assertIncludes(
+  releaseAppPath,
+  releaseApp,
+  'selectedAnswer !== null && !autoAdvance',
+  'Automatische Modi dürfen keinen konkurrierenden manuellen Weiter-Button anzeigen.',
+);
 assertMissing(
   releaseAppPath,
   releaseApp,
