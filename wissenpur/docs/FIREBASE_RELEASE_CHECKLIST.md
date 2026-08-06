@@ -87,6 +87,7 @@ Die Functions verwalten:
 - Ranglistenpunkte
 - Münzen
 - Streaks
+- Erfolge und Erfolgs-Münzen
 - Daily Quest
 - Glücksrad
 - Shopkäufe
@@ -181,10 +182,13 @@ Ein privater Gemini-Schlüssel darf weder als Vite-Variable noch über `define` 
 - bestehender Cloud-Spielstand auf einem zweiten Gerät
 - erste Migration auf `economyVersion: 1`
 - dieselbe Runde zweimal einreichen
+- zwei verschiedene Runden innerhalb von 15 Sekunden einreichen
 - abgelaufene Ranglisten-Sitzung einreichen
 - fremde oder manipulierte Frage-ID senden
+- Erfolgsschwelle erreichen und Bonus genau einmal erhalten
 - Daily Quest zweimal abholen
 - Glücksrad zweimal am selben Tag drehen
+- bestätigtes Glücksrad-Ergebnis nach Neuladen kontrollieren
 - Shopkauf mit zu wenigen Münzen
 - Power-up ohne Bestand verwenden
 - Offline-Start mit lokalen Fragen
