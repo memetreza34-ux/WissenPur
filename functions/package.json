@@ -8,9 +8,11 @@
     "node": "22"
   },
   "scripts": {
+    "check:content": "tsx scripts/check-content-boundary.ts",
     "sync:questions": "tsx scripts/sync-question-bank.ts",
-    "build": "npm run sync:questions && tsc",
-    "lint": "npm run sync:questions && tsc --noEmit",
+    "prepare:questions": "npm run check:content && npm run sync:questions",
+    "build": "npm run prepare:questions && tsc",
+    "lint": "npm run prepare:questions && tsc --noEmit",
     "serve": "npm run build && firebase emulators:start --only auth,functions,firestore",
     "deploy": "firebase deploy --only functions"
   },
