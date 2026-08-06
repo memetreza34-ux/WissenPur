@@ -1,6 +1,6 @@
 import { getAI, getGenerativeModel, GoogleAIBackend, Schema } from 'firebase/ai';
 import { app } from '../firebase';
-import { Difficulty, Question } from '../types';
+import { CategoryId, Difficulty, Question } from '../types';
 
 const MODEL_NAME = 'gemini-3.5-flash-lite';
 const MAX_TOPIC_LENGTH = 120;
@@ -8,6 +8,30 @@ const MAX_QUESTION_COUNT = 30;
 const MAX_QUESTION_LENGTH = 300;
 const MAX_OPTION_LENGTH = 160;
 const MAX_EXPLANATION_LENGTH = 600;
+
+const CATEGORY_IDS = new Set<CategoryId>([
+  'allgemein',
+  'geschichte',
+  'geografie',
+  'wissenschaft',
+  'technik',
+  'sprache',
+  'deutschland',
+  'tiere',
+  'weltall',
+  'sport',
+  'kunst',
+  'musik',
+  'filme',
+  'literatur',
+  'medizin',
+  'natur',
+  'wirtschaft',
+  'politik',
+  'mythologie',
+  'videospiele',
+  'flaggen',
+]);
 
 const ai = getAI(app, { backend: new GoogleAIBackend() });
 
@@ -27,6 +51,13 @@ const cleanText = (value: string, maxLength: number) =>
     .slice(0, maxLength);
 
 const normalizeTopic = (topic: string) => cleanText(topic, MAX_TOPIC_LENGTH) || 'Allgemeinwissen';
+
+const resolveQuestionCategory = (topic: string): CategoryId => {
+  const normalized = topic.toLocaleLowerCase('de-DE').trim();
+  if (CATEGORY_IDS.has(normalized as CategoryId)) return normalized as CategoryId;
+  if (normalized === 'flaggen erraten') return 'flaggen';
+  return 'allgemein';
+};
 
 const countryCodeToFlag = (countryCode: string): string =>
   [...countryCode.toUpperCase()]
@@ -93,6 +124,7 @@ export const generateQuestions = async (
   count: number = 10
 ): Promise<Question[] | null> => {
   const safeCategory = normalizeTopic(category);
+  const questionCategory = resolveQuestionCategory(safeCategory);
   const safeCount = Math.min(MAX_QUESTION_COUNT, Math.max(1, Math.trunc(count) || 10));
   const difficultyName = difficulty === 'all' ? 'gemischt' : difficulty;
   const seed = Math.floor(Math.random() * 1_000_000);
@@ -147,7 +179,7 @@ Variations-Seed: ${seed}`;
         : question.question,
       options: question.options,
       correctAnswer: question.correctAnswer,
-      category: safeCategory === 'all' ? 'allgemein' : safeCategory,
+      category: questionCategory,
       difficulty: difficulty === 'all' ? 'mittel' : difficulty,
       explanation: question.explanation,
     }));
