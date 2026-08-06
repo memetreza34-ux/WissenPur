@@ -39,6 +39,14 @@ const deleteMyAccountCallable = httpsCallable<Record<string, never>, AccountDele
   'deleteMyAccount',
 );
 
+const clearDeletedAccountCache = () => {
+  localStorage.removeItem('wissenpur_user_stats');
+  localStorage.removeItem('wissenpur_user_stats_owner');
+  localStorage.removeItem('wissenpur_learning_plan');
+  sessionStorage.clear();
+  window.dispatchEvent(new CustomEvent('wissenpur:account-storage-reset'));
+};
+
 const isRecentAuthenticationRequired = (error: unknown): boolean => {
   if (!error || typeof error !== 'object') return false;
   const candidate = error as { code?: unknown; message?: unknown };
@@ -63,6 +71,7 @@ export const deleteCurrentAccount = async (): Promise<AccountDeletionResult> => 
 
   try {
     const response = await deleteMyAccountCallable({});
+    clearDeletedAccountCache();
     return response.data;
   } catch (error) {
     if (!isRecentAuthenticationRequired(error)) throw error;
@@ -71,6 +80,7 @@ export const deleteCurrentAccount = async (): Promise<AccountDeletionResult> => 
     await getIdToken(currentUser, true);
 
     const retry = await deleteMyAccountCallable({});
+    clearDeletedAccountCache();
     return retry.data;
   }
 };
