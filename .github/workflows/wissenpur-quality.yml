@@ -48,7 +48,7 @@ jobs:
       - name: Build production bundle
         run: npm run build
 
-  functions-typecheck-and-build:
+  functions-verify-and-build:
     runs-on: ubuntu-latest
 
     steps:
@@ -60,11 +60,11 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install Functions dependencies
+      - name: Install pinned Functions dependencies
         run: npm install --prefix functions --no-audit --no-fund
 
-      - name: Type-check Functions
-        run: npm --prefix functions run lint
+      - name: Verify content, economy tests and TypeScript
+        run: npm --prefix functions run verify
 
-      - name: Build Functions
-        run: npm --prefix functions run build
+      - name: Compile Cloud Functions
+        run: npm --prefix functions run compile
