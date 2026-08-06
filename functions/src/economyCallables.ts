@@ -159,6 +159,7 @@ function leaderboardProfile(
     displayName,
     photoURL,
     totalPoints: state.totalPoints,
+    economyVersion: state.economyVersion,
     updatedAt: FieldValue.serverTimestamp(),
   };
 }
@@ -172,7 +173,7 @@ export const submitRankedQuiz = onCall<SubmitQuizRequest>(
       const answers = parseAnswers(request.data.answers);
       const sessionRef = db.collection('quizSessions').doc(sessionId);
       const userRef = db.collection('users').doc(uid);
-      const leaderboardRef = db.collection('leaderboard').doc(uid);
+      const leaderboardRef = db.collection('trustedLeaderboard').doc(uid);
       const today = berlinDateKey();
 
       const result = await db.runTransaction(async (transaction) => {
@@ -304,7 +305,7 @@ export const claimDailyQuestReward = onCall(
     try {
       const uid = requireUser(request);
       const userRef = db.collection('users').doc(uid);
-      const leaderboardRef = db.collection('leaderboard').doc(uid);
+      const leaderboardRef = db.collection('trustedLeaderboard').doc(uid);
       const today = berlinDateKey();
 
       return await db.runTransaction(async (transaction) => {
