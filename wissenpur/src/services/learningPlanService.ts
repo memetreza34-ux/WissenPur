@@ -1,6 +1,10 @@
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
-import { getStats } from '../storage';
+import {
+  getStats,
+  isLocalAccountDataReadable,
+  prepareLocalAccountDataForWrite,
+} from '../storage';
 import { CategoryId } from '../types';
 import { syncUserStats } from './firebaseService';
 
@@ -44,8 +48,12 @@ const isCategory = (value: unknown): value is CategoryId | 'all' =>
 const normalizePlan = (value: unknown): LearningPlan | null => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const candidate = value as Record<string, unknown>;
-  const title = typeof candidate.examTitle === 'string' ? candidate.examTitle.trim().slice(0, 100) : '';
-  const examDate = typeof candidate.examDate === 'string' ? candidate.examDate.slice(0, 10) : '';
+  const title = typeof candidate.examTitle === 'string'
+    ? candidate.examTitle.trim().slice(0, 100)
+    : '';
+  const examDate = typeof candidate.examDate === 'string'
+    ? candidate.examDate.slice(0, 10)
+    : '';
   const dailyMinutes = [10, 20, 30, 45].includes(Number(candidate.dailyMinutes))
     ? Number(candidate.dailyMinutes) as LearningPlan['dailyMinutes']
     : 20;
@@ -53,7 +61,9 @@ const normalizePlan = (value: unknown): LearningPlan | null => {
     ? Number(candidate.weeklyDays) as LearningPlan['weeklyDays']
     : 5;
 
-  if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(examDate) || !isCategory(candidate.category)) return null;
+  if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(examDate) || !isCategory(candidate.category)) {
+    return null;
+  }
 
   return {
     version: 1,
@@ -79,11 +89,14 @@ const ensureCloudProfile = async () => {
 };
 
 export const getLocalLearningPlan = (): LearningPlan | null => {
+  if (!isLocalAccountDataReadable()) return null;
+
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return null;
   try {
     return normalizePlan(JSON.parse(raw));
   } catch {
+    localStorage.removeItem(STORAGE_KEY);
     return null;
   }
 };
@@ -92,7 +105,9 @@ export const saveLearningPlan = async (plan: LearningPlan): Promise<LearningPlan
   const normalized = normalizePlan(plan);
   if (!normalized) throw new Error('Der Lernplan enthält ungültige Angaben.');
 
+  prepareLocalAccountDataForWrite();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+
   if (auth.currentUser) {
     await ensureCloudProfile();
     await setDoc(
@@ -105,6 +120,7 @@ export const saveLearningPlan = async (plan: LearningPlan): Promise<LearningPlan
 };
 
 export const loadLearningPlan = async (): Promise<LearningPlan | null> => {
+  if (auth.currentUser) prepareLocalAccountDataForWrite();
   const local = getLocalLearningPlan();
   if (!auth.currentUser) return local;
 
@@ -112,11 +128,16 @@ export const loadLearningPlan = async (): Promise<LearningPlan | null> => {
   const cloud = snapshot.exists() ? normalizePlan(snapshot.data().learningPlan) : null;
   const selected = cloud && (!local || cloud.updatedAt >= local.updatedAt) ? cloud : local;
 
-  if (selected) localStorage.setItem(STORAGE_KEY, JSON.stringify(selected));
+  if (selected) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(selected));
+  } else {
+    localStorage.removeItem(STORAGE_KEY);
+  }
   return selected;
 };
 
 export const removeLearningPlan = async (): Promise<void> => {
+  prepareLocalAccountDataForWrite();
   localStorage.removeItem(STORAGE_KEY);
   if (auth.currentUser) {
     await ensureCloudProfile();
@@ -136,22 +157,31 @@ export const buildLearningRecommendation = (
   const todayStart = new Date(today);
   todayStart.setHours(0, 0, 0, 0);
   const exam = new Date(`${plan.examDate}T00:00:00`);
-  const daysRemaining = Math.max(0, Math.ceil((exam.getTime() - todayStart.getTime()) / 86_400_000));
-  const plannedSessions = Math.max(1, Math.ceil((Math.max(1, daysRemaining) / 7) * plan.weeklyDays));
+  const daysRemaining = Math.max(
+    0,
+    Math.ceil((exam.getTime() - todayStart.getTime()) / 86_400_000),
+  );
+  const plannedSessions = Math.max(
+    1,
+    Math.ceil((Math.max(1, daysRemaining) / 7) * plan.weeklyDays),
+  );
   const remainingSessions = Math.max(0, plannedSessions - plan.completedSessions);
   const phase: LearningPlanPhase = daysRemaining <= 3
     ? 'exam'
     : daysRemaining <= 14
-    ? 'consolidation'
-    : 'foundation';
+      ? 'consolidation'
+      : 'foundation';
   const questionsToday = plan.dailyMinutes <= 10
     ? 8
     : plan.dailyMinutes <= 20
-    ? 12
-    : plan.dailyMinutes <= 30
-    ? 18
-    : 25;
-  const cardsToday = Math.min(Math.max(5, Math.round(plan.dailyMinutes / 2)), Math.max(5, dueCards));
+      ? 12
+      : plan.dailyMinutes <= 30
+        ? 18
+        : 25;
+  const cardsToday = Math.min(
+    Math.max(5, Math.round(plan.dailyMinutes / 2)),
+    Math.max(5, Math.max(0, Math.trunc(dueCards))),
+  );
 
   return {
     daysRemaining,
@@ -164,12 +194,12 @@ export const buildLearningRecommendation = (
     phaseLabel: phase === 'exam'
       ? 'Prüfungsphase'
       : phase === 'consolidation'
-      ? 'Festigungsphase'
-      : 'Grundlagenphase',
+        ? 'Festigungsphase'
+        : 'Grundlagenphase',
     focus: phase === 'exam'
       ? 'Probeklausur, Fehlerfragen und kurze Wiederholungen'
       : phase === 'consolidation'
-      ? 'Gemischte Prüfungsfragen und gezielte Lücken schließen'
-      : 'Grundlagen aufbauen und Karteikarten regelmäßig wiederholen',
+        ? 'Gemischte Prüfungsfragen und gezielte Lücken schließen'
+        : 'Grundlagen aufbauen und Karteikarten regelmäßig wiederholen',
   };
 };
