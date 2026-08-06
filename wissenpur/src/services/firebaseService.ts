@@ -25,12 +25,6 @@ interface FirestoreErrorInfo {
   userId?: string;
 }
 
-type ServerAuthoritativeStats = UserStats & {
-  economyVersion?: number;
-  lastDailyChallengeDate?: string | null;
-  lastSpinDate?: string | null;
-};
-
 let hydratedUserId: string | null = null;
 
 function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
@@ -58,8 +52,7 @@ const mergeCloudStats = (localStats: UserStats, cloudStats: UserStats): UserStat
   achievements: cloudStats.achievements ?? localStats.achievements ?? [],
 });
 
-const isServerAuthoritative = (stats: UserStats): boolean =>
-  (stats as ServerAuthoritativeStats).economyVersion === 1;
+const isServerAuthoritative = (stats: UserStats): boolean => stats.economyVersion === 1;
 
 const getProfileUpdate = (stats: UserStats): Partial<UserStats> => {
   const currentUser = auth.currentUser;
@@ -79,6 +72,15 @@ const getProfileUpdate = (stats: UserStats): Partial<UserStats> => {
   });
 };
 
+const persistProfileOnly = async (stats: UserStats): Promise<UserStats> => {
+  const currentUser = auth.currentUser;
+  if (!currentUser) return stats;
+
+  const profileUpdate = getProfileUpdate(stats);
+  await setDoc(doc(db, 'users', currentUser.uid), profileUpdate, { merge: true });
+  return { ...stats, ...profileUpdate } as UserStats;
+};
+
 /**
  * Hydrates cloud data before the first write. Legacy accounts still use the
  * former full-document sync until a trusted callable function adds
@@ -90,11 +92,12 @@ export const syncUserStats = async (stats: UserStats): Promise<UserStats | undef
   const currentUser = auth.currentUser;
   if (!currentUser) return undefined;
 
+  const userRef = doc(db, 'users', currentUser.uid);
   const userPath = `users/${currentUser.uid}`;
 
   try {
     if (hydratedUserId !== currentUser.uid) {
-      const existingSnapshot = await getDoc(doc(db, 'users', currentUser.uid));
+      const existingSnapshot = await getDoc(userRef);
       hydratedUserId = currentUser.uid;
 
       if (existingSnapshot.exists()) {
@@ -103,9 +106,19 @@ export const syncUserStats = async (stats: UserStats): Promise<UserStats | undef
     }
 
     if (isServerAuthoritative(stats)) {
-      const profileUpdate = getProfileUpdate(stats);
-      await setDoc(doc(db, 'users', currentUser.uid), profileUpdate, { merge: true });
-      return { ...stats, ...profileUpdate } as UserStats;
+      return persistProfileOnly(stats);
+    }
+
+    // A callable mutation can migrate the cloud document while React still
+    // holds a legacy render snapshot. Re-check before any full legacy write so
+    // stale points or coins can never overwrite the newly trusted economy.
+    const latestSnapshot = await getDoc(userRef);
+    if (latestSnapshot.exists()) {
+      const latestCloudStats = latestSnapshot.data() as UserStats;
+      if (isServerAuthoritative(latestCloudStats)) {
+        const mergedStats = mergeCloudStats(stats, latestCloudStats);
+        return persistProfileOnly(mergedStats);
+      }
     }
 
     const unlockedAchievements = stats.achievements || [];
@@ -125,7 +138,7 @@ export const syncUserStats = async (stats: UserStats): Promise<UserStats | undef
       achievements: Array.from(new Set([...unlockedAchievements, ...newAchievements])),
     };
 
-    await setDoc(doc(db, 'users', currentUser.uid), sanitizeForFirestore(updatedStats));
+    await setDoc(userRef, sanitizeForFirestore(updatedStats));
 
     await setDoc(doc(db, 'leaderboard', currentUser.uid), {
       uid: currentUser.uid,
