@@ -136,27 +136,31 @@ Erst nach sicherem Backend:
 - [x] zentrale Button-Interaktion korrigieren
 - [x] PWA-Metadaten und Icon reparieren
 - [x] Service-Worker-Lebenszyklus verbessern
-- [x] automatische Typecheck- und Build-Prüfung hinzufügen
+- [x] automatische Frontend- und Functions-Prüfungen hinzufügen
 - [x] Gemini-Schlüssel aus dem Browser entfernen
 - [x] KI-Zugriff auf Firebase AI Logic und App Check umstellen
 - [x] KI-Antworten und Nutzereingaben zur Laufzeit validieren
 - [x] vorhandenen Cloud-Spielstand vor lokalen Schreibvorgängen laden
-- [x] erste gehärtete Firestore-Regeln und Custom-Claim-Adminzugriff
-- [ ] App Check, AI Logic, Quotas und Monitoring im Produktionsprojekt aktivieren
-- [ ] serverseitige Punkte, Münzen und Belohnungen
+- [x] gehärtete Firestore-Regeln und Custom-Claim-Adminzugriff
+- [x] Cloud-Functions-Grundlage für Punkte, Münzen, Shop und Belohnungen
+- [x] serverseitiges tägliches Glücksrad und einmalige Daily Quest
+- [x] statischen Fragenkatalog für verifizierbare Ranglisten-Sitzungen erzeugen
+- [x] Übergangsendpunkt für die aktuelle Quizoberfläche anbinden
+- [ ] komplette Quizoberfläche auf `startRankedQuiz` und `submitRankedQuiz` umstellen
+- [ ] App Check, AI Logic, Functions, Quotas und Monitoring im Produktionsprojekt aktivieren
 - [ ] Firestore-Regeln mit Emulator-Tests absichern
 - [ ] Fehlerüberwachung und Datenschutzkonzept
 
 ### Release 1.0 – verlässliche Kern-Lernapp
 
 - [ ] stabiles Login und Gerätesynchronisierung
-- [ ] Quiz, Daily, Blitz und Fehlertraining
+- [ ] Quiz, Daily, Blitz und Fehlertraining vollständig über die neue Wirtschaft
 - [ ] vollständige Karteikarten mit fälligen Wiederholungen
 - [ ] Lernsets und Bibliothek
 - [ ] Wissens-Gehirn und Fortschrittsübersicht
-- [ ] eigene manuelle Quizze
+- [ ] eigene manuelle Quizze als klarer Übungsmodus
 - [ ] echtes Impressum und vollständige Datenschutzerklärung
-- [ ] installierbare PWA mit Offline-Grundfunktionen
+- [x] installierbare PWA mit Offline-Grundfunktionen
 - [ ] mobile und Desktop-End-to-End-Tests
 
 ### Release 1.1 – konkurrenzfähige KI-Lernwerkzeuge
@@ -205,5 +209,5 @@ Nicht für Version 1.0:
 - Anteil korrekt beantworteter Wiederholungen steigt
 - mindestens ein eigenes Lernset pro aktivem Nutzer
 - geringe KI-Kosten pro aktivem Nutzer
-- keine clientseitig manipulierbaren Ranglistenwerte
+- keine clientseitig frei wählbaren Ranglistenwerte
 - stabile Build-, Typecheck- und End-to-End-Prüfungen
