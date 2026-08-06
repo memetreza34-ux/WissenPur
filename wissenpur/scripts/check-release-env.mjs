@@ -27,6 +27,15 @@ const requireText = (key, label, minLength = 2) => {
   return value;
 };
 
+const requireInteger = (key, label, min, max) => {
+  const raw = requireText(key, label, 1);
+  const value = Number(raw);
+  if (raw && (!Number.isInteger(value) || value < min || value > max)) {
+    errors.push(`${label} muss eine ganze Zahl zwischen ${min} und ${max} sein.`);
+  }
+  return value;
+};
+
 const appUrl = requireText('VITE_PUBLIC_APP_URL', 'Öffentliche App-URL', 8);
 const operatorName = requireText('VITE_LEGAL_OPERATOR_NAME', 'Betreibername');
 const street = requireText('VITE_LEGAL_STREET', 'Straße und Hausnummer');
@@ -36,9 +45,13 @@ const legalEmail = requireText('VITE_LEGAL_EMAIL', 'Impressums-E-Mail', 5);
 const privacyEmail = requireText('VITE_PRIVACY_EMAIL', 'Datenschutzkontakt', 5);
 const supportEmail = requireText('VITE_SUPPORT_EMAIL', 'Supportkontakt', 5);
 const effectiveDate = requireText('VITE_LEGAL_EFFECTIVE_DATE', 'Datenschutz-Stichtag', 10);
-const minimumAge = requireText('VITE_MINIMUM_AGE', 'Mindestalter', 1);
+const minimumAge = requireInteger('VITE_MINIMUM_AGE', 'Mindestalter', 13, 18);
+const logRetentionDays = requireInteger('VITE_LOG_RETENTION_DAYS', 'Log-Speicherdauer', 1, 730);
+const sessionRetentionDays = requireInteger('VITE_SESSION_RETENTION_DAYS', 'Sitzungs-Speicherdauer', 1, 365);
+const supportRetentionDays = requireInteger('VITE_SUPPORT_RETENTION_DAYS', 'Support-Speicherdauer', 1, 3650);
 const appCheckKey = requireText('VITE_RECAPTCHA_ENTERPRISE_SITE_KEY', 'App-Check-Websiteschlüssel', 10);
 const firestoreDatabase = requireText('VITE_FIRESTORE_DATABASE_ID', 'Firestore-Datenbank', 1);
+const legalReviewConfirmed = String(process.env.VITE_LEGAL_REVIEW_CONFIRMED || '').trim().toLowerCase();
 
 if (appUrl && !/^https:\/\//i.test(appUrl)) errors.push('Die öffentliche App-URL muss HTTPS verwenden.');
 for (const [label, email] of [['Impressums-E-Mail', legalEmail], ['Datenschutzkontakt', privacyEmail], ['Supportkontakt', supportEmail]]) {
@@ -47,12 +60,11 @@ for (const [label, email] of [['Impressums-E-Mail', legalEmail], ['Datenschutzko
 if (effectiveDate && !/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate)) {
   errors.push('Der Datenschutz-Stichtag muss YYYY-MM-DD verwenden.');
 }
-const parsedAge = Number(minimumAge);
-if (minimumAge && (!Number.isInteger(parsedAge) || parsedAge < 13 || parsedAge > 18)) {
-  errors.push('Das Mindestalter muss als ganze Zahl zwischen 13 und 18 festgelegt werden.');
-}
 if (firestoreDatabase && firestoreDatabase !== '(default)') {
   errors.push('Produktions-Releases müssen VITE_FIRESTORE_DATABASE_ID=(default) verwenden.');
+}
+if (legalReviewConfirmed !== 'true') {
+  errors.push('Die rechtliche Prüfung muss ausdrücklich mit VITE_LEGAL_REVIEW_CONFIRMED=true bestätigt werden.');
 }
 if (String(process.env.VITE_ENABLE_APPCHECK_DEBUG || '').toLowerCase() === 'true') {
   errors.push('App-Check-Debugmodus darf in Produktion nicht aktiviert sein.');
@@ -70,3 +82,4 @@ if (errors.length > 0) {
 
 console.log(`Release-Konfiguration geprüft für ${operatorName}, ${street}, ${postalCity}, ${country}.`);
 console.log(`App: ${appUrl} | Datenschutz: ${privacyEmail} | App Check: ${appCheckKey.slice(0, 6)}…`);
+console.log(`Mindestalter: ${minimumAge} | Logs: ${logRetentionDays} Tage | Sitzungen: ${sessionRetentionDays} Tage | Support: ${supportRetentionDays} Tage`);
