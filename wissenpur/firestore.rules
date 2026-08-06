@@ -84,7 +84,6 @@ service cloud.firestore {
              hasValidOptionalString(data, 'displayName', 100) &&
              hasValidOptionalString(data, 'customName', 100) &&
              hasValidOptionalString(data, 'photoURL', 1000) &&
-             hasValidOptionalString(data, 'customPhotoURL', 350000) &&
              hasValidOptionalAge(data) &&
              hasValidOptionalList(data, 'wrongQuestions', 300) &&
              hasValidOptionalDifficultyTimes(data) &&
@@ -100,7 +99,6 @@ service cloud.firestore {
         'customName',
         'age',
         'photoURL',
-        'customPhotoURL',
         'wrongQuestions',
         'customDifficultyTimes',
         'darkMode',
@@ -115,7 +113,6 @@ service cloud.firestore {
         'customName',
         'age',
         'photoURL',
-        'customPhotoURL',
         'wrongQuestions',
         'customDifficultyTimes',
         'darkMode',
@@ -128,7 +125,8 @@ service cloud.firestore {
       allow read: if isOwner(userId) || isAdmin();
 
       // New browser-created documents contain profile and learning content
-      // only. Economy fields are added exclusively by Cloud Functions.
+      // only. Economy fields, inventory and shop avatars are added exclusively
+      // by Cloud Functions.
       allow create: if isOwner(userId) &&
                        request.resource.data.keys().hasOnly(clientProfileKeys()) &&
                        isValidClientProfile(userId, request.resource.data);
