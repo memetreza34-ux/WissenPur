@@ -1,16 +1,27 @@
 import { initializeApp } from 'firebase/app';
-import { initializeAuth, GoogleAuthProvider, signInWithPopup, signOut, browserSessionPersistence, browserPopupRedirectResolver } from 'firebase/auth';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
+import {
+  browserPopupRedirectResolver,
+  browserSessionPersistence,
+  GoogleAuthProvider,
+  initializeAuth,
+  signInWithPopup,
+  signOut,
+} from 'firebase/auth';
 import { initializeFirestore, memoryLocalCache } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
-// Global error handler for IndexedDB to prevent crashes in restricted environments
+// Global error handler for IndexedDB to prevent crashes in restricted environments.
 if (typeof window !== 'undefined') {
-  const handleIndexedDBError = (error: any) => {
-    const message = error?.message || String(error);
-    if (message.includes('Indexed Database') || message.includes('IndexedDB') || (error?.name === 'IndexedDBError')) {
+  const handleIndexedDBError = (error: unknown) => {
+    const candidate = error as { message?: string; name?: string } | undefined;
+    const message = candidate?.message || String(error);
+
+    if (message.includes('Indexed Database') || message.includes('IndexedDB') || candidate?.name === 'IndexedDBError') {
       console.warn('Caught IndexedDB error, preventing crash:', message);
       return true;
     }
+
     return false;
   };
 
@@ -27,29 +38,61 @@ if (typeof window !== 'undefined') {
   });
 }
 
-const app = initializeApp(firebaseConfig);
+export const app = initializeApp(firebaseConfig);
 
-// Use initializeAuth with browserSessionPersistence (sessionStorage) to strictly avoid IndexedDB
+const appCheckSiteKey = import.meta.env.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY?.trim();
+
+if (appCheckSiteKey) {
+  if (import.meta.env.DEV && import.meta.env.VITE_ENABLE_APPCHECK_DEBUG === 'true') {
+    const debugGlobal = self as typeof self & {
+      FIREBASE_APPCHECK_DEBUG_TOKEN?: boolean | string;
+    };
+    debugGlobal.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+  }
+
+  initializeAppCheck(app, {
+    provider: new ReCaptchaEnterpriseProvider(appCheckSiteKey),
+    isTokenAutoRefreshEnabled: true,
+  });
+} else if (import.meta.env.PROD) {
+  console.error(
+    'Firebase App Check is not configured. Set VITE_RECAPTCHA_ENTERPRISE_SITE_KEY before releasing AI features.'
+  );
+}
+
+// Use session persistence and an in-memory Firestore cache to avoid IndexedDB failures
+// in restricted browsers and embedded preview environments.
 export const auth = initializeAuth(app, {
   persistence: browserSessionPersistence,
-  popupRedirectResolver: browserPopupRedirectResolver
+  popupRedirectResolver: browserPopupRedirectResolver,
 });
 
-export const db = initializeFirestore(app, {
-  localCache: memoryLocalCache()
-}, firebaseConfig.firestoreDatabaseId);
+export const db = initializeFirestore(
+  app,
+  {
+    localCache: memoryLocalCache(),
+  },
+  firebaseConfig.firestoreDatabaseId
+);
 
 export const googleProvider = new GoogleAuthProvider();
+
+googleProvider.setCustomParameters({
+  prompt: 'select_account',
+});
 
 export const signInWithGoogle = async () => {
   try {
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
-  } catch (error: any) {
-    if (error.code === 'auth/popup-closed-by-user') {
-      console.log('Sign-in popup closed by user.');
+  } catch (error: unknown) {
+    const authError = error as { code?: string };
+
+    if (authError.code === 'auth/popup-closed-by-user') {
+      console.info('Sign-in popup closed by user.');
       return null;
     }
+
     console.error('Error signing in with Google:', error);
     throw error;
   }
