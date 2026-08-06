@@ -1,19 +1,14 @@
-import { getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import {
   FieldPath,
   Timestamp,
-  getFirestore,
   type DocumentData,
   type Query,
 } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import { db, enforceAppCheck, firebaseApp } from './database.js';
 
-const firebaseApp = getApps()[0] ?? initializeApp();
-const databaseId = process.env.FIRESTORE_DATABASE_ID || 'ai-studio-e6a56a0b-5009-48b4-ab34-e5fc5f5b781b';
-const db = getFirestore(firebaseApp, databaseId);
 const adminAuth = getAuth(firebaseApp);
-const enforceAppCheck = process.env.ENFORCE_APP_CHECK !== 'false';
 const pageSize = 200;
 const recentAuthenticationSeconds = 10 * 60;
 
