@@ -20,6 +20,9 @@
     "rules": "wissenpur/firestore.rules"
   },
   "hosting": {
+    "predeploy": [
+      "npm --prefix wissenpur run build:release"
+    ],
     "public": "wissenpur/dist",
     "ignore": [
       "firebase.json",
