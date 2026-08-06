@@ -640,7 +640,7 @@ export default function ReleaseApp() {
           <div className="grid grid-cols-3 gap-3">
             <Card className="p-4 text-center"><Flame className="mx-auto text-orange-500" size={22} /><p className="mt-2 text-xl font-black">{stats.currentStreak}</p><p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Streak</p></Card>
             <Card className="p-4 text-center"><Trophy className="mx-auto text-blue-500" size={22} /><p className="mt-2 text-xl font-black">{stats.totalPoints}</p><p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Punkte</p></Card>
-            <Card className="p-4 text-center"><Star className="mx-auto text-amber-500" size={22} /><p className="mt-2 text-xl font-black">{getLevelInfo(stats.totalPoints).level}</p><p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Level</p></Card>
+            <Card className="p-4 text-center"><Star className="mx-auto text-amber-500" size={22} /><p className="mt-2 text-xl font-black">{level.level}</p><p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Level</p></Card>
           </div>
 
           <section>
@@ -814,6 +814,7 @@ export default function ReleaseApp() {
     if (!question) return null;
     const progress = (questionIndex + 1) / activeQuiz.questions.length * 100;
     const practiceCorrect = !activeQuiz.ranked && question.correctAnswer !== undefined;
+    const autoAdvance = activeQuiz.mode === 'blitz' || Boolean(activeQuiz.globalSeconds);
 
     return (
       <div className="flex min-h-full flex-col">
@@ -835,7 +836,7 @@ export default function ReleaseApp() {
           {selectedAnswer !== null && !activeQuiz.ranked && question.correctAnswer !== undefined && (
             <div className={`mt-5 rounded-2xl p-5 ${selectedAnswer === question.correctAnswer ? 'bg-emerald-50 text-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100' : 'bg-rose-50 text-rose-900 dark:bg-rose-950/30 dark:text-rose-100'}`}><p className="font-black">{selectedAnswer === question.correctAnswer ? 'Richtig' : 'Noch nicht richtig'}</p><p className="mt-2 text-sm font-medium">{question.explanation}</p></div>
           )}
-          {selectedAnswer !== null && (
+          {selectedAnswer !== null && !autoAdvance && (
             <Button fullWidth size="lg" className="mt-auto" disabled={isBusy} onClick={advanceQuestion}>{questionIndex + 1 === activeQuiz.questions.length ? 'Prüfung abgeben' : 'Nächste Frage'} <ArrowRight size={18} /></Button>
           )}
         </main>
