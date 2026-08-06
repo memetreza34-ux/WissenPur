@@ -90,13 +90,17 @@ test('a user can create and read only their own profile document', async () => {
   await assertFails(deleteDoc(aliceRef));
 });
 
-test('the browser cannot create or update economy fields', async () => {
+test('the browser cannot create or update economy and shop-avatar fields', async () => {
   const alice = testEnv.authenticatedContext('alice').firestore();
 
   await assertFails(setDoc(doc(alice, 'users/alice'), {
     ...profile('alice'),
     totalPoints: 9_999_999,
     coins: 1_000_000,
+  }));
+  await assertFails(setDoc(doc(alice, 'users/alice'), {
+    ...profile('alice'),
+    customPhotoURL: 'https://tracker.example/avatar.png',
   }));
 
   await seed('users/alice', serverEconomy('alice'));
@@ -112,6 +116,9 @@ test('the browser cannot create or update economy fields', async () => {
   }));
   await assertFails(updateDoc(doc(alice, 'users/alice'), {
     achievements: ['legend'],
+  }));
+  await assertFails(updateDoc(doc(alice, 'users/alice'), {
+    customPhotoURL: 'https://tracker.example/avatar.png',
   }));
 });
 
@@ -151,7 +158,7 @@ test('valid learning plans are allowed and malformed plans are rejected', async 
   }));
 });
 
-test('trusted leaderboard is public-read and client-write protected', async () => {
+test('trusted leaderboard is public-read and browser-write protected', async () => {
   await seed('trustedLeaderboard/alice', {
     uid: 'alice',
     displayName: 'Alice',
@@ -162,6 +169,7 @@ test('trusted leaderboard is public-read and client-write protected', async () =
 
   const anonymous = testEnv.unauthenticatedContext().firestore();
   const alice = testEnv.authenticatedContext('alice').firestore();
+  const admin = testEnv.authenticatedContext('admin', { admin: true }).firestore();
 
   await assertSucceeds(getDoc(doc(anonymous, 'trustedLeaderboard/alice')));
   await assertFails(setDoc(doc(alice, 'trustedLeaderboard/alice'), {
@@ -170,6 +178,12 @@ test('trusted leaderboard is public-read and client-write protected', async () =
     totalPoints: 999_999,
   }));
   await assertFails(deleteDoc(doc(alice, 'trustedLeaderboard/alice')));
+  await assertFails(setDoc(doc(admin, 'trustedLeaderboard/alice'), {
+    uid: 'alice',
+    displayName: 'Admin manipulation',
+    totalPoints: 999_999,
+  }));
+  await assertFails(deleteDoc(doc(admin, 'trustedLeaderboard/alice')));
 });
 
 test('quiz answer snapshots and server rate limits stay completely private', async () => {
