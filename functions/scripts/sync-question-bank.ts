@@ -10,7 +10,12 @@ const outputFile = resolve(outputDir, 'questionBank.ts');
 const questionBank = QUESTIONS.map((question) => ({
   id: question.id,
   category: question.category,
+  question: question.question,
+  options: question.options,
   correctAnswer: question.correctAnswer,
+  explanation: question.explanation,
+  difficulty: question.difficulty || 'mittel',
+  imageUrl: question.imageUrl || null,
   optionCount: question.options.length,
 }));
 
@@ -25,6 +30,14 @@ if (duplicateIds.length > 0) {
 for (const question of questionBank) {
   if (!question.id || typeof question.id !== 'string') {
     throw new Error('Every ranked question needs a stable string ID.');
+  }
+
+  if (!question.question || typeof question.question !== 'string') {
+    throw new Error(`Ranked question ${question.id} needs question text.`);
+  }
+
+  if (!Array.isArray(question.options) || question.options.some((option) => typeof option !== 'string' || !option.trim())) {
+    throw new Error(`Ranked question ${question.id} has invalid options.`);
   }
 
   if (
