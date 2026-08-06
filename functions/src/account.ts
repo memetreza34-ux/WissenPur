@@ -107,10 +107,22 @@ export const exportMyData = onCall(
     const uid = requireUid(request);
     const userRef = db.collection('users').doc(uid);
     const leaderboardRef = db.collection('leaderboard').doc(uid);
+    const rateLimitRef = db.collection('serverRateLimits').doc(uid);
 
-    const [userSnapshot, leaderboardSnapshot, quizSessions, roundReceipts, hostedLobbies, hostedLegacyLobbies, playerOneDuels, playerTwoDuels] = await Promise.all([
+    const [
+      userSnapshot,
+      leaderboardSnapshot,
+      rateLimitSnapshot,
+      quizSessions,
+      roundReceipts,
+      hostedLobbies,
+      hostedLegacyLobbies,
+      playerOneDuels,
+      playerTwoDuels,
+    ] = await Promise.all([
       userRef.get(),
       leaderboardRef.get(),
+      rateLimitRef.get(),
       readOwnedDocuments('quizSessions', 'uid', uid),
       readOwnedDocuments('roundReceipts', 'uid', uid),
       readOwnedDocuments('lobbies', 'hostId', uid),
@@ -137,6 +149,9 @@ export const exportMyData = onCall(
       firestore: {
         user: userSnapshot.exists ? serializeFirestoreValue(userSnapshot.data()) : null,
         leaderboard: leaderboardSnapshot.exists ? serializeFirestoreValue(leaderboardSnapshot.data()) : null,
+        serverRateLimit: rateLimitSnapshot.exists
+          ? serializeFirestoreValue(rateLimitSnapshot.data())
+          : null,
         quizSessions,
         roundReceipts,
         hostedLobbies,
@@ -173,6 +188,7 @@ export const deleteMyAccount = onCall(
     const batch = db.batch();
     batch.delete(db.collection('users').doc(uid));
     batch.delete(db.collection('leaderboard').doc(uid));
+    batch.delete(db.collection('serverRateLimits').doc(uid));
     await batch.commit();
 
     try {
