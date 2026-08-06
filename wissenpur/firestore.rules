@@ -140,11 +140,12 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Only Cloud Functions write this collection. Public reads contain the
-    // minimum display profile and server-verified point total.
+    // Public reads contain the minimum display profile and server-verified
+    // point total. Every browser write is denied, including admin claims;
+    // Cloud Functions use the Admin SDK and bypass client rules.
     match /trustedLeaderboard/{userId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if false;
     }
 
     // Historical client-writable leaderboard. It is hidden from release
