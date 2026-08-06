@@ -13,11 +13,11 @@ export const firebaseApp = getApps()[0] ?? initializeApp();
 
 const isFunctionsEmulator = process.env.FUNCTIONS_EMULATOR === 'true';
 const configuredDatabaseId = process.env.FIRESTORE_DATABASE_ID?.trim();
-const usesNamedDatabase = Boolean(
-  configuredDatabaseId && configuredDatabaseId !== '(default)',
-);
+const namedDatabaseId = configuredDatabaseId && configuredDatabaseId !== '(default)'
+  ? configuredDatabaseId
+  : null;
 
-if (!isFunctionsEmulator && usesNamedDatabase) {
+if (!isFunctionsEmulator && namedDatabaseId) {
   throw new Error(
     'Production Functions must use Firestore (default). Named databases are allowed only in the local emulator.',
   );
@@ -27,8 +27,8 @@ if (!isFunctionsEmulator && usesNamedDatabase) {
  * Production always uses Firestore `(default)`. A named database can be
  * selected only while the Functions emulator is running for isolated tests.
  */
-export const db = isFunctionsEmulator && usesNamedDatabase
-  ? getFirestore(firebaseApp, configuredDatabaseId)
+export const db = isFunctionsEmulator && namedDatabaseId
+  ? getFirestore(firebaseApp, namedDatabaseId)
   : getFirestore(firebaseApp);
 
 /**
