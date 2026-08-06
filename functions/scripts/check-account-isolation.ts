@@ -27,11 +27,13 @@ const assertMissing = (
   if (pattern.test(content)) failures.push(`${file}: ${explanation}`);
 };
 
-const [storage, learningPlan, firebase, accountService] = await Promise.all([
+const [storage, learningPlan, firebase, accountService, sessionBoundary, main] = await Promise.all([
   readWebFile('storage.ts'),
   readWebFile('services/learningPlanService.ts'),
   readWebFile('firebase.ts'),
   readWebFile('services/accountService.ts'),
+  readWebFile('components/AccountSessionBoundary.tsx'),
+  readWebFile('main.tsx'),
 ]);
 
 assertMissing(
@@ -108,6 +110,24 @@ assertIncludes(
   "window.location.replace('/');",
   'Nach dem Logout muss der laufende React-Zustand durch eine saubere Navigation verworfen werden.',
 );
+assertIncludes(
+  'wissenpur/src/components/AccountSessionBoundary.tsx',
+  sessionBoundary,
+  'previous !== undefined && previous !== nextUid',
+  'Ein Konto- oder Authwechsel muss lokale Kontodaten verwerfen.',
+);
+assertIncludes(
+  'wissenpur/src/components/AccountSessionBoundary.tsx',
+  sessionBoundary,
+  '<Fragment key={sessionKey}>',
+  'Die vollständige Produktoberfläche muss bei einem Authwechsel neu gemountet werden.',
+);
+assertIncludes(
+  'wissenpur/src/main.tsx',
+  main,
+  '<AccountSessionBoundary>',
+  'Die Produktionsoberfläche muss innerhalb der zentralen Kontositzungsgrenze laufen.',
+);
 
 if (failures.length > 0) {
   console.error('\nWissenPur-Kontoisolationsprüfung fehlgeschlagen:\n');
@@ -116,4 +136,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('Lokale Konto-Isolation, Logout und Löschung geprüft.');
+console.log('Lokale Konto-Isolation, Authwechsel, Logout und Löschung geprüft.');
