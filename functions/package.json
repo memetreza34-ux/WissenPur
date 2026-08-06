@@ -10,7 +10,7 @@
   "scripts": {
     "sync:questions": "tsx scripts/sync-question-bank.ts",
     "build": "npm run sync:questions && tsc",
-    "lint": "tsc --noEmit",
+    "lint": "npm run sync:questions && tsc --noEmit",
     "serve": "npm run build && firebase emulators:start --only auth,functions,firestore",
     "deploy": "firebase deploy --only functions"
   },
