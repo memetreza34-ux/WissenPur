@@ -142,7 +142,7 @@ Erst nach sicherem Backend:
 - [x] KI-Antworten und Nutzereingaben zur Laufzeit validieren
 - [x] vorhandenen Cloud-Spielstand vor lokalen Schreibvorgängen laden
 - [x] gehärtete Firestore-Regeln und Custom-Claim-Adminzugriff
-- [x] Cloud-Functions-Grundlage für Punkte, Münzen, Shop und Belohnungen
+- [x] Cloud-Functions-Grundlage für Punkte, Münzen, Erfolge, Shop und Belohnungen
 - [x] serverseitiges tägliches Glücksrad und einmalige Daily Quest
 - [x] statischen Fragenkatalog für verifizierbare Ranglisten-Sitzungen erzeugen
 - [x] begrenzten Übergangsendpunkt für die aktuelle Quizoberfläche anbinden
@@ -151,7 +151,7 @@ Erst nach sicherem Backend:
 - [ ] Firestore-Regeln mit Emulator-Tests absichern
 - [ ] Fehlerüberwachung und Datenschutzkonzept
 
-**Vertrauensgrenze:** `recordRoundResult` berechnet Punkte und Coins selbst und verhindert einfache Doppelbuchungen. Der Client meldet dort jedoch noch `correct` und `total`. Erst der vollständige Sitzungsmodus prüft jede Antwort gegen den Server-Fragenkatalog und ist für eine kompetitive Rangliste vorgesehen.
+**Vertrauensgrenze:** `recordRoundResult` berechnet Punkte, Coins und Erfolge selbst und verhindert einfache Doppelbuchungen. Der Client meldet dort jedoch noch `correct` und `total`. Erst der vollständige Sitzungsmodus prüft jede Antwort gegen den Server-Fragenkatalog und ist für eine kompetitive Rangliste vorgesehen.
 
 ### Release 1.0 – verlässliche Kern-Lernapp
 
