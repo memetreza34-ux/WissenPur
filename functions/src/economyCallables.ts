@@ -140,6 +140,17 @@ function fallbackAnswerKey(questionIds: readonly string[]): SessionAnswerKeyEntr
   });
 }
 
+function safeHttpsImage(value: unknown): string {
+  const candidate = stringOrNull(value, 1_000);
+  if (!candidate) return '';
+  try {
+    const parsed = new URL(candidate);
+    return parsed.protocol === 'https:' ? parsed.toString() : '';
+  } catch {
+    return '';
+  }
+}
+
 function leaderboardProfile(
   uid: string,
   userData: Record<string, unknown> | undefined,
@@ -151,8 +162,10 @@ function leaderboardProfile(
   const tokenName = stringOrNull(authToken?.name, 100);
   const displayName = customName || storedName || tokenName || 'WissenPur-Nutzer';
 
-  const storedPhoto = stringOrNull(userData?.photoURL, 1_000);
-  const photoURL = state.customPhotoURL || storedPhoto || '';
+  // Shop avatars are server-owned economy state. The only other public image
+  // source is the identity-provider picture embedded in the verified ID token.
+  const providerPhoto = safeHttpsImage(authToken?.picture);
+  const photoURL = safeHttpsImage(state.customPhotoURL) || providerPhoto;
 
   return {
     uid,
