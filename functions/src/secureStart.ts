@@ -112,7 +112,7 @@ export const startSecureRankedQuiz = onCall<StartSecureQuizRequest>(
         category: question.category,
         question: question.question,
         options: [...question.options],
-        explanation: question.explanation,
+        explanation: '',
         difficulty: question.difficulty,
         imageUrl: question.imageUrl || undefined,
       })),
