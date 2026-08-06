@@ -9,8 +9,9 @@ import {
   query,
   setDoc,
 } from 'firebase/firestore';
+import type { User } from 'firebase/auth';
 import { auth, db } from '../firebase';
-import { ACHIEVEMENTS, LeaderboardEntry, UserStats } from '../types';
+import { LeaderboardEntry, UserStats } from '../types';
 
 enum OperationType {
   LIST = 'list',
@@ -25,7 +26,7 @@ interface FirestoreErrorInfo {
   userId?: string;
 }
 
-let hydratedUserId: string | null = null;
+let hydratedAuthUser: User | null = null;
 
 function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
   const errorInfo: FirestoreErrorInfo = {
@@ -41,7 +42,7 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 
 const sanitizeForFirestore = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
-const mergeCloudStats = (localStats: UserStats, cloudStats: UserStats): UserStats => ({
+const mergeCloudStats = (localStats: UserStats, cloudStats: Partial<UserStats>): UserStats => ({
   ...localStats,
   ...cloudStats,
   wrongQuestions: cloudStats.wrongQuestions ?? localStats.wrongQuestions ?? [],
@@ -52,11 +53,9 @@ const mergeCloudStats = (localStats: UserStats, cloudStats: UserStats): UserStat
   achievements: cloudStats.achievements ?? localStats.achievements ?? [],
 });
 
-const isServerAuthoritative = (stats: UserStats): boolean => stats.economyVersion === 1;
-
-const getProfileUpdate = (stats: UserStats): Partial<UserStats> => {
+const getProfileUpdate = (stats: UserStats): Partial<UserStats> & { uid: string } => {
   const currentUser = auth.currentUser;
-  if (!currentUser) return {};
+  if (!currentUser) throw new Error('Profil-Synchronisierung erfordert eine Anmeldung.');
 
   return sanitizeForFirestore({
     uid: currentUser.uid,
@@ -82,72 +81,35 @@ const persistProfileOnly = async (stats: UserStats): Promise<UserStats> => {
 };
 
 /**
- * Hydrates cloud data before the first write. Legacy accounts still use the
- * former full-document sync until a trusted callable function adds
- * `economyVersion: 1`. From that point on this client only writes profile,
- * settings and user-created learning content. Economy and leaderboard fields
- * are owned exclusively by Cloud Functions.
+ * The browser only synchronizes profile settings and user-created learning
+ * content. Points, coins, streaks, achievements, server inventory and all
+ * leaderboard values are exclusively owned by callable Cloud Functions.
  */
 export const syncUserStats = async (stats: UserStats): Promise<UserStats | undefined> => {
   const currentUser = auth.currentUser;
-  if (!currentUser) return undefined;
+  if (!currentUser) {
+    hydratedAuthUser = null;
+    return undefined;
+  }
 
   const userRef = doc(db, 'users', currentUser.uid);
   const userPath = `users/${currentUser.uid}`;
 
   try {
-    if (hydratedUserId !== currentUser.uid) {
+    if (hydratedAuthUser !== currentUser) {
       const existingSnapshot = await getDoc(userRef);
-      hydratedUserId = currentUser.uid;
+      hydratedAuthUser = currentUser;
 
       if (existingSnapshot.exists()) {
-        return mergeCloudStats(stats, existingSnapshot.data() as UserStats);
-      }
-    }
-
-    if (isServerAuthoritative(stats)) {
-      return persistProfileOnly(stats);
-    }
-
-    // A callable mutation can migrate the cloud document while React still
-    // holds a legacy render snapshot. Re-check before any full legacy write so
-    // stale points or coins can never overwrite the newly trusted economy.
-    const latestSnapshot = await getDoc(userRef);
-    if (latestSnapshot.exists()) {
-      const latestCloudStats = latestSnapshot.data() as UserStats;
-      if (isServerAuthoritative(latestCloudStats)) {
-        const mergedStats = mergeCloudStats(stats, latestCloudStats);
+        const mergedStats = mergeCloudStats(
+          stats,
+          existingSnapshot.data() as Partial<UserStats>,
+        );
         return persistProfileOnly(mergedStats);
       }
     }
 
-    const unlockedAchievements = stats.achievements || [];
-    const newAchievements = ACHIEVEMENTS.filter((achievement) => {
-      if (unlockedAchievements.includes(achievement.id)) return false;
-      if (achievement.type === 'points' && stats.totalPoints >= achievement.threshold) return true;
-      if (achievement.type === 'streak' && stats.currentStreak >= achievement.threshold) return true;
-      if (achievement.type === 'rounds' && stats.roundsPlayed >= achievement.threshold) return true;
-      return false;
-    }).map((achievement) => achievement.id);
-
-    const updatedStats: UserStats = {
-      ...stats,
-      uid: currentUser.uid,
-      displayName: currentUser.displayName || 'Anonym',
-      photoURL: stats.customPhotoURL || currentUser.photoURL || '',
-      achievements: Array.from(new Set([...unlockedAchievements, ...newAchievements])),
-    };
-
-    await setDoc(userRef, sanitizeForFirestore(updatedStats));
-
-    await setDoc(doc(db, 'leaderboard', currentUser.uid), {
-      uid: currentUser.uid,
-      displayName: currentUser.displayName || 'Anonym',
-      photoURL: stats.customPhotoURL || currentUser.photoURL || '',
-      totalPoints: stats.totalPoints,
-    });
-
-    return updatedStats;
+    return persistProfileOnly(stats);
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, userPath);
   }
@@ -165,18 +127,20 @@ export const fetchUserStats = async (uid: string): Promise<UserStats | null> => 
 };
 
 export const getLeaderboard = async (limitCount: number = 10): Promise<LeaderboardEntry[]> => {
-  const path = 'leaderboard';
+  const path = 'trustedLeaderboard';
 
   try {
     const safeLimit = Math.min(100, Math.max(1, Math.trunc(limitCount) || 10));
     const leaderboardQuery = query(
-      collection(db, 'leaderboard'),
+      collection(db, 'trustedLeaderboard'),
       orderBy('totalPoints', 'desc'),
-      limit(safeLimit)
+      limit(safeLimit),
     );
     const querySnapshot = await getDocs(leaderboardQuery);
 
-    return querySnapshot.docs.map((documentSnapshot) => documentSnapshot.data() as LeaderboardEntry);
+    return querySnapshot.docs.map((documentSnapshot) =>
+      documentSnapshot.data() as LeaderboardEntry,
+    );
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, path);
   }
