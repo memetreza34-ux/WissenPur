@@ -16,14 +16,5 @@
     <noscript>WissenPur benötigt JavaScript, um Quizze und Lernkarten auszuführen.</noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch((error) => {
-            console.warn('Service Worker konnte nicht registriert werden:', error);
-          });
-        });
-      }
-    </script>
   </body>
 </html>
