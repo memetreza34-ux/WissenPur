@@ -1,11 +1,7 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // ===============================================================
-    // Helper Functions
-    // ===============================================================
-    
+
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -15,82 +11,86 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isAuthenticated() &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-          (request.auth.token.email == "song75099@gmail.com" && request.auth.token.email_verified == true));
+      return isAuthenticated() && request.auth.token.admin == true;
     }
 
-    function isValidUser(data) {
-      return data.uid is string &&
-             data.totalPoints is int && data.totalPoints >= 0 &&
-             data.currentStreak is int && data.currentStreak >= 0 &&
-             data.bestStreak is int && data.bestStreak >= 0 &&
-             data.roundsPlayed is int && data.roundsPlayed >= 0 &&
-             data.correctAnswers is int && data.correctAnswers >= 0 &&
-             data.totalQuestionsAnswered is int && data.totalQuestionsAnswered >= 0 &&
-             (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 100)) &&
-             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500)) &&
-             (!('achievements' in data) || (data.achievements is list && data.achievements.size() <= 100));
+    function hasValidOptionalString(data, field, maxLength) {
+      return !(field in data) || (data[field] is string && data[field].size() <= maxLength);
     }
 
-    function isValidLeaderboardEntry(data) {
-      return data.uid is string &&
-             data.displayName is string && data.displayName.size() <= 100 &&
-             data.totalPoints is int && data.totalPoints >= 0 &&
-             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500));
+    function hasValidOptionalList(data, field, maxItems) {
+      return !(field in data) || (data[field] is list && data[field].size() <= maxItems);
     }
 
-    function isValidLobby(data) {
-      return data.hostUid is string &&
-             data.status in ['waiting', 'starting', 'playing', 'finished'] &&
-             data.players is list && data.players.size() <= 4;
+    function isValidUser(userId, data) {
+      return data.uid == userId &&
+             data.uid is string &&
+             data.totalPoints is int && data.totalPoints >= 0 && data.totalPoints <= 10000000 &&
+             data.coins is int && data.coins >= 0 && data.coins <= 1000000 &&
+             data.currentStreak is int && data.currentStreak >= 0 && data.currentStreak <= 10000 &&
+             data.bestStreak is int && data.bestStreak >= 0 && data.bestStreak <= 10000 &&
+             data.roundsPlayed is int && data.roundsPlayed >= 0 && data.roundsPlayed <= 1000000 &&
+             data.correctAnswers is int && data.correctAnswers >= 0 && data.correctAnswers <= 100000000 &&
+             data.totalQuestionsAnswered is int && data.totalQuestionsAnswered >= 0 && data.totalQuestionsAnswered <= 100000000 &&
+             hasValidOptionalString(data, 'displayName', 100) &&
+             hasValidOptionalString(data, 'customName', 100) &&
+             hasValidOptionalString(data, 'photoURL', 1000) &&
+             hasValidOptionalString(data, 'customPhotoURL', 350000) &&
+             hasValidOptionalList(data, 'achievements', 100) &&
+             hasValidOptionalList(data, 'wrongQuestions', 300) &&
+             hasValidOptionalList(data, 'customQuizzes', 100);
     }
 
-    function isValidDuel(data) {
-      return data.player1Uid is string &&
-             data.player2Uid is string &&
-             data.status in ['active', 'finished'] &&
-             data.player1Score is int && data.player1Score >= 0 &&
-             data.player2Score is int && data.player2Score >= 0;
+    function keepsCumulativeProgress(data) {
+      return data.totalPoints >= resource.data.totalPoints &&
+             data.roundsPlayed >= resource.data.roundsPlayed &&
+             data.correctAnswers >= resource.data.correctAnswers &&
+             data.totalQuestionsAnswered >= resource.data.totalQuestionsAnswered &&
+             data.bestStreak >= resource.data.bestStreak;
     }
 
-    // ===============================================================
-    // Rules Definition
-    // ===============================================================
+    function isValidLeaderboardEntry(userId, data) {
+      return data.uid == userId &&
+             data.uid is string &&
+             data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 100 &&
+             data.totalPoints is int && data.totalPoints >= 0 && data.totalPoints <= 10000000 &&
+             hasValidOptionalString(data, 'photoURL', 1000) &&
+             exists(/databases/$(database)/documents/users/$(userId)) &&
+             data.totalPoints == get(/databases/$(database)/documents/users/$(userId)).data.totalPoints;
+    }
 
-    // Users Collection
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId) && isValidUser(request.resource.data);
-      allow update: if isOwner(userId) && isValidUser(request.resource.data);
+      allow create: if isOwner(userId) && isValidUser(userId, request.resource.data);
+      allow update: if isOwner(userId) &&
+                       isValidUser(userId, request.resource.data) &&
+                       keepsCumulativeProgress(request.resource.data);
       allow delete: if isAdmin();
     }
 
-    // Leaderboard Collection (Publicly readable)
     match /leaderboard/{userId} {
       allow read: if true;
-      allow create: if isOwner(userId) && isValidLeaderboardEntry(request.resource.data);
-      allow update: if isOwner(userId) && isValidLeaderboardEntry(request.resource.data);
+      allow create, update: if isOwner(userId) &&
+                               isValidLeaderboardEntry(userId, request.resource.data);
       allow delete: if isAdmin();
     }
 
-    // Lobbies Collection (Multiplayer Rooms)
+    // Multiplayer is not yet server-authoritative. Client writes stay disabled
+    // until lobby membership, score calculation, reconnects and match results
+    // are validated by trusted backend code.
     match /lobbies/{lobbyId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidLobby(request.resource.data);
-      allow update: if isAuthenticated() && isValidLobby(request.resource.data);
-      allow delete: if isAuthenticated() && (request.auth.uid == resource.data.hostUid || isAdmin());
+      allow write: if isAdmin();
     }
 
-    // Duels Collection (1v1 Matches)
     match /duels/{duelId} {
-      allow read: if isAuthenticated() && (request.auth.uid == resource.data.player1Uid || request.auth.uid == resource.data.player2Uid || isAdmin());
-      allow create: if isAuthenticated() && isValidDuel(request.resource.data);
-      allow update: if isAuthenticated() && isValidDuel(request.resource.data);
-      allow delete: if isAdmin();
+      allow read: if isAuthenticated() &&
+                     (request.auth.uid == resource.data.player1Uid ||
+                      request.auth.uid == resource.data.player2Uid ||
+                      isAdmin());
+      allow write: if isAdmin();
     }
 
-    // Default Deny
     match /{allPaths=**} {
       allow read, write: if false;
     }
