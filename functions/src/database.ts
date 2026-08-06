@@ -11,15 +11,29 @@ setGlobalOptions({
 
 export const firebaseApp = getApps()[0] ?? initializeApp();
 
+const isFunctionsEmulator = process.env.FUNCTIONS_EMULATOR === 'true';
 const configuredDatabaseId = process.env.FIRESTORE_DATABASE_ID?.trim();
+const usesNamedDatabase = Boolean(
+  configuredDatabaseId && configuredDatabaseId !== '(default)',
+);
+
+if (!isFunctionsEmulator && usesNamedDatabase) {
+  throw new Error(
+    'Production Functions must use Firestore (default). Named databases are allowed only in the local emulator.',
+  );
+}
 
 /**
- * Production uses Firestore `(default)`. Named databases are only selected
- * when an explicit non-default ID is provided for isolated development or a
- * controlled migration.
+ * Production always uses Firestore `(default)`. A named database can be
+ * selected only while the Functions emulator is running for isolated tests.
  */
-export const db = configuredDatabaseId && configuredDatabaseId !== '(default)'
+export const db = isFunctionsEmulator && usesNamedDatabase
   ? getFirestore(firebaseApp, configuredDatabaseId)
   : getFirestore(firebaseApp);
 
-export const enforceAppCheck = process.env.ENFORCE_APP_CHECK !== 'false';
+/**
+ * App Check cannot be disabled in a deployed Cloud Functions runtime. Local
+ * emulator sessions may opt out explicitly when no debug token is available.
+ */
+export const enforceAppCheck = !isFunctionsEmulator ||
+  process.env.ENFORCE_APP_CHECK !== 'false';
