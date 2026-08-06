@@ -185,6 +185,51 @@ if (/from ['"]\.\/App['"]/.test(main)) {
   failures.push('wissenpur/src/main.tsx: Der archivierte App-Monolith darf nicht gestartet werden.');
 }
 
+const releaseAppPath = resolve(webSource, 'ReleaseApp.tsx');
+const releaseApp = await readFile(releaseAppPath, 'utf8');
+assertIncludes(
+  releaseAppPath,
+  releaseApp,
+  'const quizGenerationRef = useRef(0);',
+  'Quizstarts und Abbrüche benötigen eine Generations-ID gegen verspätete Timer.',
+);
+assertIncludes(
+  releaseAppPath,
+  releaseApp,
+  'quizGenerationRef.current += 1;',
+  'Quizabbrüche müssen alle verzögerten Aktionen invalidieren.',
+);
+assertIncludes(
+  releaseAppPath,
+  releaseApp,
+  'ranked: activeQuiz.ranked,',
+  'Eine fehlgeschlagene Ranglistenabgabe darf nicht als Übung markiert werden.',
+);
+assertIncludes(
+  releaseAppPath,
+  releaseApp,
+  'Gewertete Prüfung fehlgeschlagen',
+  'Fehlgeschlagene Ranglistenabgaben benötigen eine eindeutige Ergebniskennzeichnung.',
+);
+assertIncludes(
+  releaseAppPath,
+  releaseApp,
+  'Nicht gewertet',
+  'Serverfehler dürfen keine erfundene Null-Punkt-Auswertung anzeigen.',
+);
+assertIncludes(
+  releaseAppPath,
+  releaseApp,
+  'disabled={isBusy}',
+  'Der Prüfungsabbruch muss während einer laufenden Serverabgabe gesperrt sein.',
+);
+assertMissing(
+  releaseAppPath,
+  releaseApp,
+  /catch \(error\) \{[\s\S]{0,500}ranked:\s*false,[\s\S]{0,250}error:\s*message/,
+  'Der Fehlerpfad darf eine gewertete Runde nicht zu einem Übungsergebnis umdeklarieren.',
+);
+
 const firebaseServicePath = resolve(webSource, 'services/firebaseService.ts');
 const firebaseService = await readFile(firebaseServicePath, 'utf8');
 assertIncludes(
