@@ -1,22 +1,18 @@
-import { 
-  doc, 
-  setDoc, 
-  getDoc, 
-  collection, 
-  query, 
-  orderBy, 
-  limit, 
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocFromServer,
   getDocs,
-  onSnapshot,
-  getDocFromServer
+  limit,
+  orderBy,
+  query,
+  setDoc,
 } from 'firebase/firestore';
-import { db, auth } from '../firebase';
-import { UserStats, LeaderboardEntry, ACHIEVEMENTS } from '../types';
+import { auth, db } from '../firebase';
+import { ACHIEVEMENTS, LeaderboardEntry, UserStats } from '../types';
 
 enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
   LIST = 'list',
   GET = 'get',
   WRITE = 'write',
@@ -26,110 +22,122 @@ interface FirestoreErrorInfo {
   error: string;
   operationType: OperationType;
   path: string | null;
-  authInfo: {
-    userId: string | undefined;
-    email: string | null | undefined;
-    emailVerified: boolean | undefined;
-    isAnonymous: boolean | undefined;
-    tenantId: string | null | undefined;
-    providerInfo: {
-      providerId: string;
-      displayName: string | null;
-      email: string | null;
-      photoUrl: string | null;
-    }[];
-  }
+  userId?: string;
 }
 
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
+let hydratedUserId: string | null = null;
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
+  const errorInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
-        providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
-      })) || []
-    },
     operationType,
-    path
+    path,
+    userId: auth.currentUser?.uid,
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+
+  console.error('Firestore operation failed:', errorInfo);
+  throw new Error(`${operationType} failed for ${path || 'unknown path'}`);
 }
 
-export const syncUserStats = async (stats: UserStats) => {
-  if (!auth.currentUser) return;
-  const path = `users/${auth.currentUser.uid}`;
-  const leaderboardPath = `leaderboard/${auth.currentUser.uid}`;
+const sanitizeForFirestore = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
+const mergeCloudStats = (localStats: UserStats, cloudStats: UserStats): UserStats => ({
+  ...localStats,
+  ...cloudStats,
+  // Preserve local-only collections when an older cloud document does not contain them.
+  wrongQuestions: cloudStats.wrongQuestions ?? localStats.wrongQuestions ?? [],
+  customQuizzes: cloudStats.customQuizzes ?? localStats.customQuizzes ?? [],
+  powerUps: cloudStats.powerUps ?? localStats.powerUps,
+  unlockedAvatars: cloudStats.unlockedAvatars ?? localStats.unlockedAvatars,
+  unlockedTitles: cloudStats.unlockedTitles ?? localStats.unlockedTitles,
+  achievements: cloudStats.achievements ?? localStats.achievements ?? [],
+});
+
+/**
+ * Synchronizes a user's progress after the initial cloud hydration.
+ *
+ * On the first call for a signed-in user, an existing cloud document wins over
+ * the local browser copy. This prevents a fresh or cleared browser from
+ * overwriting established cloud progress with zeros. Later calls in the same
+ * authenticated session persist the updated local state.
+ *
+ * Points and rewards still need a server-authoritative write path before the
+ * public leaderboard can be considered cheat-resistant.
+ */
+export const syncUserStats = async (stats: UserStats): Promise<UserStats | undefined> => {
+  const currentUser = auth.currentUser;
+  if (!currentUser) return undefined;
+
+  const userPath = `users/${currentUser.uid}`;
 
   try {
-    // Check for new achievements
-    const unlockedAchievements = stats.achievements || [];
-    const newAchievements = ACHIEVEMENTS.filter(a => {
-      if (unlockedAchievements.includes(a.id)) return false;
-      if (a.type === 'points' && stats.totalPoints >= a.threshold) return true;
-      if (a.type === 'streak' && stats.currentStreak >= a.threshold) return true;
-      if (a.type === 'rounds' && stats.roundsPlayed >= a.threshold) return true;
-      return false;
-    }).map(a => a.id);
+    if (hydratedUserId !== currentUser.uid) {
+      const existingSnapshot = await getDoc(doc(db, 'users', currentUser.uid));
+      hydratedUserId = currentUser.uid;
 
-    const updatedStats = {
+      if (existingSnapshot.exists()) {
+        return mergeCloudStats(stats, existingSnapshot.data() as UserStats);
+      }
+    }
+
+    const unlockedAchievements = stats.achievements || [];
+    const newAchievements = ACHIEVEMENTS.filter((achievement) => {
+      if (unlockedAchievements.includes(achievement.id)) return false;
+      if (achievement.type === 'points' && stats.totalPoints >= achievement.threshold) return true;
+      if (achievement.type === 'streak' && stats.currentStreak >= achievement.threshold) return true;
+      if (achievement.type === 'rounds' && stats.roundsPlayed >= achievement.threshold) return true;
+      return false;
+    }).map((achievement) => achievement.id);
+
+    const updatedStats: UserStats = {
       ...stats,
-      uid: auth.currentUser.uid,
-      displayName: auth.currentUser.displayName || 'Anonymous',
-      photoURL: stats.customPhotoURL || auth.currentUser.photoURL || '',
-      achievements: [...unlockedAchievements, ...newAchievements]
+      uid: currentUser.uid,
+      displayName: currentUser.displayName || 'Anonym',
+      photoURL: stats.customPhotoURL || currentUser.photoURL || '',
+      achievements: Array.from(new Set([...unlockedAchievements, ...newAchievements])),
     };
 
-    // Remove undefined values which are not supported by Firestore
-    const sanitizedStats = JSON.parse(JSON.stringify(updatedStats));
+    await setDoc(doc(db, 'users', currentUser.uid), sanitizeForFirestore(updatedStats));
 
-    await setDoc(doc(db, 'users', auth.currentUser.uid), sanitizedStats);
-    
-    // Update leaderboard entry
-    await setDoc(doc(db, 'leaderboard', auth.currentUser.uid), {
-      uid: auth.currentUser.uid,
-      displayName: auth.currentUser.displayName || 'Anonymous',
-      photoURL: stats.customPhotoURL || auth.currentUser.photoURL || '',
-      totalPoints: stats.totalPoints
+    await setDoc(doc(db, 'leaderboard', currentUser.uid), {
+      uid: currentUser.uid,
+      displayName: currentUser.displayName || 'Anonym',
+      photoURL: stats.customPhotoURL || currentUser.photoURL || '',
+      totalPoints: stats.totalPoints,
     });
 
     return updatedStats;
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
+    handleFirestoreError(error, OperationType.WRITE, userPath);
   }
 };
 
 export const fetchUserStats = async (uid: string): Promise<UserStats | null> => {
   const path = `users/${uid}`;
+
   try {
-    const docSnap = await getDoc(doc(db, 'users', uid));
-    if (docSnap.exists()) {
-      return docSnap.data() as UserStats;
-    }
-    return null;
+    const documentSnapshot = await getDoc(doc(db, 'users', uid));
+    return documentSnapshot.exists() ? (documentSnapshot.data() as UserStats) : null;
   } catch (error) {
     handleFirestoreError(error, OperationType.GET, path);
-    return null;
   }
 };
 
 export const getLeaderboard = async (limitCount: number = 10): Promise<LeaderboardEntry[]> => {
   const path = 'leaderboard';
+
   try {
-    const q = query(collection(db, 'leaderboard'), orderBy('totalPoints', 'desc'), limit(limitCount));
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => doc.data() as LeaderboardEntry);
+    const safeLimit = Math.min(100, Math.max(1, Math.trunc(limitCount) || 10));
+    const leaderboardQuery = query(
+      collection(db, 'leaderboard'),
+      orderBy('totalPoints', 'desc'),
+      limit(safeLimit)
+    );
+    const querySnapshot = await getDocs(leaderboardQuery);
+
+    return querySnapshot.docs.map((documentSnapshot) => documentSnapshot.data() as LeaderboardEntry);
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, path);
-    return [];
   }
 };
 
@@ -138,7 +146,7 @@ export const testConnection = async () => {
     await getDocFromServer(doc(db, 'test', 'connection'));
   } catch (error) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration.");
+      console.error('Firebase ist offline. Prüfe die Projektkonfiguration und Netzwerkverbindung.');
     }
   }
 };
