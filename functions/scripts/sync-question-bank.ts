@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { QUESTIONS } from '../../wissenpur/src/data.ts';
+import { QUESTIONS } from '../content/rankedQuestions.ts';
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const outputDir = resolve(currentDir, '../src/generated');
