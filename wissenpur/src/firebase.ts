@@ -67,13 +67,16 @@ export const auth = initializeAuth(app, {
   popupRedirectResolver: browserPopupRedirectResolver,
 });
 
-export const db = initializeFirestore(
-  app,
-  {
-    localCache: memoryLocalCache(),
-  },
-  firebaseConfig.firestoreDatabaseId
-);
+const firestoreSettings = {
+  localCache: memoryLocalCache(),
+};
+const configuredDatabaseId = import.meta.env.VITE_FIRESTORE_DATABASE_ID?.trim();
+
+// Production uses the stable default Firestore database. A named database can
+// be selected explicitly for isolated development or a one-time migration.
+export const db = configuredDatabaseId && configuredDatabaseId !== '(default)'
+  ? initializeFirestore(app, firestoreSettings, configuredDatabaseId)
+  : initializeFirestore(app, firestoreSettings);
 
 export const googleProvider = new GoogleAuthProvider();
 
