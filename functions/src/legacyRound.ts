@@ -56,6 +56,21 @@ interface EconomyState {
   };
 }
 
+const ACHIEVEMENTS = [
+  { id: 'newbie', type: 'points', threshold: 100 },
+  { id: 'scholar', type: 'points', threshold: 1_000 },
+  { id: 'master', type: 'points', threshold: 5_000 },
+  { id: 'legend', type: 'points', threshold: 10_000 },
+  { id: 'streak_3', type: 'streak', threshold: 3 },
+  { id: 'streak_7', type: 'streak', threshold: 7 },
+  { id: 'streak_30', type: 'streak', threshold: 30 },
+  { id: 'perfect_10', type: 'roundCorrect', threshold: 10 },
+  { id: 'correct_100', type: 'correct', threshold: 100 },
+  { id: 'correct_500', type: 'correct', threshold: 500 },
+  { id: 'all_categories', type: 'categories', threshold: 10 },
+  { id: 'rounds_50', type: 'rounds', threshold: 50 },
+] as const;
+
 function dateKey(): string {
   const parts = new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Europe/Berlin',
@@ -204,6 +219,33 @@ function normalizeState(data: Record<string, unknown> | undefined, today: string
   };
 }
 
+function awardAchievements(state: EconomyState, roundCorrect: number): number {
+  const unlocked = new Set(state.achievements);
+  const categories = Object.keys(state.categoryStats).length;
+  let newlyUnlocked = 0;
+
+  for (const achievement of ACHIEVEMENTS) {
+    if (unlocked.has(achievement.id)) continue;
+
+    const earned =
+      (achievement.type === 'points' && state.totalPoints >= achievement.threshold) ||
+      (achievement.type === 'streak' && state.currentStreak >= achievement.threshold) ||
+      (achievement.type === 'roundCorrect' && roundCorrect >= achievement.threshold) ||
+      (achievement.type === 'correct' && state.correctAnswers >= achievement.threshold) ||
+      (achievement.type === 'categories' && categories >= achievement.threshold) ||
+      (achievement.type === 'rounds' && state.roundsPlayed >= achievement.threshold);
+
+    if (earned) {
+      unlocked.add(achievement.id);
+      newlyUnlocked += 1;
+    }
+  }
+
+  state.achievements = [...unlocked];
+  state.coins += newlyUnlocked * 50;
+  return newlyUnlocked;
+}
+
 function leaderboardData(
   uid: string,
   data: Record<string, unknown> | undefined,
@@ -275,7 +317,7 @@ export const recordRoundResult = onCall<RecordRoundRequest>(
       const state = normalizeState(userData, today);
       const firstDaily = mode === 'daily' && state.lastDailyChallengeDate !== today;
       const pointsEarned = correct * 10 + (firstDaily ? 50 : 0);
-      const coinsEarned = correct + 5 + (firstDaily ? 15 : 0);
+      const baseCoinsEarned = correct + 5 + (firstDaily ? 15 : 0);
       const streakGap = dateDifference(state.lastPlayedDate, today);
 
       if (state.lastPlayedDate !== today) {
@@ -284,7 +326,7 @@ export const recordRoundResult = onCall<RecordRoundRequest>(
       state.bestStreak = Math.max(state.bestStreak, state.currentStreak);
       state.lastPlayedDate = today;
       state.totalPoints += pointsEarned;
-      state.coins += coinsEarned;
+      state.coins += baseCoinsEarned;
       state.roundsPlayed += 1;
       state.correctAnswers += correct;
       state.totalQuestionsAnswered += total;
@@ -318,12 +360,14 @@ export const recordRoundResult = onCall<RecordRoundRequest>(
         state.weeklyGoal.current = Math.min(state.weeklyGoal.target, state.weeklyGoal.current + 1);
       }
 
+      const achievementsUnlocked = awardAchievements(state, correct);
       const result = {
         roundId,
         correct,
         total,
         pointsEarned,
-        coinsEarned,
+        coinsEarned: baseCoinsEarned + achievementsUnlocked * 50,
+        achievementsUnlocked,
         trustedLevel: 'bounded-client-result',
         stats: state,
       };
