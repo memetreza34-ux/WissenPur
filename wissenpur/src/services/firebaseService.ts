@@ -52,7 +52,6 @@ const mergeProfileContent = (
   photoURL: cloudStats.photoURL ?? localStats.photoURL,
   customName: cloudStats.customName ?? localStats.customName,
   age: cloudStats.age ?? localStats.age,
-  customPhotoURL: cloudStats.customPhotoURL ?? localStats.customPhotoURL,
   wrongQuestions: cloudStats.wrongQuestions ?? localStats.wrongQuestions ?? [],
   customDifficultyTimes:
     cloudStats.customDifficultyTimes ?? localStats.customDifficultyTimes,
@@ -67,7 +66,7 @@ const mergeCloudStats = (
   const profileMerged = mergeProfileContent(localStats, cloudStats);
 
   // Legacy documents were writable by the browser and therefore cannot be
-  // trusted for points, coins, streaks, achievements or inventory.
+  // trusted for points, coins, streaks, achievements, inventory or avatars.
   if (cloudStats.economyVersion !== 1) return profileMerged;
 
   return {
@@ -92,7 +91,6 @@ const getProfileUpdate = (stats: UserStats): Partial<UserStats> & { uid: string 
     photoURL: currentUser.photoURL || '',
     customName: stats.customName,
     age: stats.age,
-    customPhotoURL: stats.customPhotoURL,
     wrongQuestions: stats.wrongQuestions || [],
     customDifficultyTimes: stats.customDifficultyTimes,
     darkMode: stats.darkMode,
@@ -111,8 +109,8 @@ const persistProfileOnly = async (stats: UserStats): Promise<UserStats> => {
 
 /**
  * The browser only synchronizes profile settings and user-created learning
- * content. Points, coins, streaks, achievements, server inventory and all
- * leaderboard values are exclusively owned by callable Cloud Functions.
+ * content. Points, coins, streaks, achievements, server inventory, shop
+ * avatars and all leaderboard values are exclusively owned by Cloud Functions.
  */
 export const syncUserStats = async (stats: UserStats): Promise<UserStats | undefined> => {
   const currentUser = auth.currentUser;
