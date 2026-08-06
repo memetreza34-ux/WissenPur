@@ -25,6 +25,12 @@ interface FirestoreErrorInfo {
   userId?: string;
 }
 
+type ServerAuthoritativeStats = UserStats & {
+  economyVersion?: number;
+  lastDailyChallengeDate?: string | null;
+  lastSpinDate?: string | null;
+};
+
 let hydratedUserId: string | null = null;
 
 function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
@@ -44,7 +50,6 @@ const sanitizeForFirestore = <T>(value: T): T => JSON.parse(JSON.stringify(value
 const mergeCloudStats = (localStats: UserStats, cloudStats: UserStats): UserStats => ({
   ...localStats,
   ...cloudStats,
-  // Preserve local-only collections when an older cloud document does not contain them.
   wrongQuestions: cloudStats.wrongQuestions ?? localStats.wrongQuestions ?? [],
   customQuizzes: cloudStats.customQuizzes ?? localStats.customQuizzes ?? [],
   powerUps: cloudStats.powerUps ?? localStats.powerUps,
@@ -53,16 +58,33 @@ const mergeCloudStats = (localStats: UserStats, cloudStats: UserStats): UserStat
   achievements: cloudStats.achievements ?? localStats.achievements ?? [],
 });
 
+const isServerAuthoritative = (stats: UserStats): boolean =>
+  (stats as ServerAuthoritativeStats).economyVersion === 1;
+
+const getProfileUpdate = (stats: UserStats): Partial<UserStats> => {
+  const currentUser = auth.currentUser;
+  if (!currentUser) return {};
+
+  return sanitizeForFirestore({
+    uid: currentUser.uid,
+    displayName: currentUser.displayName || 'Anonym',
+    photoURL: currentUser.photoURL || '',
+    customName: stats.customName,
+    age: stats.age,
+    customPhotoURL: stats.customPhotoURL,
+    wrongQuestions: stats.wrongQuestions || [],
+    customDifficultyTimes: stats.customDifficultyTimes,
+    darkMode: stats.darkMode,
+    customQuizzes: stats.customQuizzes || [],
+  });
+};
+
 /**
- * Synchronizes a user's progress after the initial cloud hydration.
- *
- * On the first call for a signed-in user, an existing cloud document wins over
- * the local browser copy. This prevents a fresh or cleared browser from
- * overwriting established cloud progress with zeros. Later calls in the same
- * authenticated session persist the updated local state.
- *
- * Points and rewards still need a server-authoritative write path before the
- * public leaderboard can be considered cheat-resistant.
+ * Hydrates cloud data before the first write. Legacy accounts still use the
+ * former full-document sync until a trusted callable function adds
+ * `economyVersion: 1`. From that point on this client only writes profile,
+ * settings and user-created learning content. Economy and leaderboard fields
+ * are owned exclusively by Cloud Functions.
  */
 export const syncUserStats = async (stats: UserStats): Promise<UserStats | undefined> => {
   const currentUser = auth.currentUser;
@@ -78,6 +100,12 @@ export const syncUserStats = async (stats: UserStats): Promise<UserStats | undef
       if (existingSnapshot.exists()) {
         return mergeCloudStats(stats, existingSnapshot.data() as UserStats);
       }
+    }
+
+    if (isServerAuthoritative(stats)) {
+      const profileUpdate = getProfileUpdate(stats);
+      await setDoc(doc(db, 'users', currentUser.uid), profileUpdate, { merge: true });
+      return { ...stats, ...profileUpdate } as UserStats;
     }
 
     const unlockedAchievements = stats.achievements || [];
