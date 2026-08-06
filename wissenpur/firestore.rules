@@ -22,9 +22,14 @@ service cloud.firestore {
       return !(field in data) || (data[field] is list && data[field].size() <= maxItems);
     }
 
+    function hasServerEconomy(data) {
+      return ('economyVersion' in data) && data.economyVersion == 1;
+    }
+
     function isValidUser(userId, data) {
       return data.uid == userId &&
              data.uid is string &&
+             (!('economyVersion' in data) || data.economyVersion == 1) &&
              data.totalPoints is int && data.totalPoints >= 0 && data.totalPoints <= 10000000 &&
              data.coins is int && data.coins >= 0 && data.coins <= 1000000 &&
              data.currentStreak is int && data.currentStreak >= 0 && data.currentStreak <= 10000 &&
@@ -49,6 +54,20 @@ service cloud.firestore {
              data.bestStreak >= resource.data.bestStreak;
     }
 
+    function changesOnlyProfileFields() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'displayName',
+        'customName',
+        'age',
+        'photoURL',
+        'customPhotoURL',
+        'wrongQuestions',
+        'customDifficultyTimes',
+        'darkMode',
+        'customQuizzes'
+      ]);
+    }
+
     function isValidLeaderboardEntry(userId, data) {
       return data.uid == userId &&
              data.uid is string &&
@@ -61,18 +80,42 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId) && isValidUser(userId, request.resource.data);
+
+      // Legacy documents may be created by the current client during the
+      // transition. Clients can never mark their own balance as trusted.
+      allow create: if isOwner(userId) &&
+                       !('economyVersion' in request.resource.data) &&
+                       isValidUser(userId, request.resource.data);
+
       allow update: if isOwner(userId) &&
                        isValidUser(userId, request.resource.data) &&
-                       keepsCumulativeProgress(request.resource.data);
+                       (
+                         (hasServerEconomy(resource.data) && changesOnlyProfileFields()) ||
+                         (!hasServerEconomy(resource.data) &&
+                          !('economyVersion' in request.resource.data) &&
+                          keepsCumulativeProgress(request.resource.data))
+                       );
+
       allow delete: if isAdmin();
     }
 
     match /leaderboard/{userId} {
       allow read: if true;
+
+      // Once Cloud Functions migrates a user to economyVersion 1, only trusted
+      // server code may update that user's leaderboard entry.
       allow create, update: if isOwner(userId) &&
+                               exists(/databases/$(database)/documents/users/$(userId)) &&
+                               !hasServerEconomy(get(/databases/$(database)/documents/users/$(userId)).data) &&
                                isValidLeaderboardEntry(userId, request.resource.data);
       allow delete: if isAdmin();
+    }
+
+    // Quiz sessions contain trusted scoring state and are never readable or
+    // writable from the browser. Callable Functions use the Admin SDK and
+    // bypass these client rules.
+    match /quizSessions/{sessionId} {
+      allow read, write: if false;
     }
 
     // Multiplayer is not yet server-authoritative. Client writes stay disabled
