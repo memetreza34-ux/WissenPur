@@ -1,10 +1,6 @@
-import {
-  connectFunctionsEmulator,
-  getFunctions,
-  httpsCallable,
-} from 'firebase/functions';
-import { app } from '../firebase';
+import { httpsCallable } from 'firebase/functions';
 import { Difficulty, UserStats } from '../types';
+import { functions } from './functionsClient';
 
 export type RankedQuizMode = 'standard' | 'daily' | 'blitz';
 export type RankedDifficulty = Difficulty | 'all';
@@ -74,21 +70,6 @@ export interface SpinResponse extends EconomyResponse {
     type: 'coins' | PowerUpId;
     amount: number;
   };
-}
-
-const functions = getFunctions(app, 'europe-west1');
-
-const emulatorState = globalThis as typeof globalThis & {
-  __WISSENPUR_FUNCTIONS_EMULATOR_CONNECTED__?: boolean;
-};
-
-if (
-  import.meta.env.DEV &&
-  import.meta.env.VITE_USE_FUNCTIONS_EMULATOR === 'true' &&
-  !emulatorState.__WISSENPUR_FUNCTIONS_EMULATOR_CONNECTED__
-) {
-  connectFunctionsEmulator(functions, '127.0.0.1', 5001);
-  emulatorState.__WISSENPUR_FUNCTIONS_EMULATOR_CONNECTED__ = true;
 }
 
 const startRankedQuizCallable = httpsCallable<
