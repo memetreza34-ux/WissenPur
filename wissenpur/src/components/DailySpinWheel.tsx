@@ -85,8 +85,11 @@ export const DailySpinWheel: React.FC<DailySpinWheelProps> = ({ onClaimReward })
         setWonReward(reward);
         soundManager.playLevelUp();
 
-        saveStats(preserveLocalLearningData(result.stats));
+        // Keep the existing App callback for immediate React UI feedback, then
+        // persist the authoritative server balance after that callback's local
+        // write so it cannot be overwritten by the optimistic value.
         onClaimReward(result.reward);
+        saveStats(preserveLocalLearningData(result.stats));
       }, 4000);
     } catch (error) {
       setIsSpinning(false);
