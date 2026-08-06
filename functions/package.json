@@ -1,0 +1,26 @@
+{
+  "name": "wissenpur-functions",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "main": "lib/index.js",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "sync:questions": "tsx scripts/sync-question-bank.ts",
+    "build": "npm run sync:questions && tsc",
+    "lint": "tsc --noEmit",
+    "serve": "npm run build && firebase emulators:start --only auth,functions,firestore",
+    "deploy": "firebase deploy --only functions"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.2.0",
+    "firebase-functions": "^7.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "tsx": "^4.21.0",
+    "typescript": "~6.0.3"
+  }
+}
