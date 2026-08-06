@@ -1,12 +1,6 @@
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db, enforceAppCheck } from './database.js';
-import { QUESTION_BANK } from './generated/questionBank.js';
-import {
-  readSessionAnswerKey,
-  type SessionAnswerKeyEntry,
-} from './sessionAnswerKey.js';
-
-const questionById = new Map(QUESTION_BANK.map((question) => [question.id, question]));
+import { readSessionAnswerKey } from './sessionAnswerKey.js';
 
 interface RevealRequest {
   sessionId?: unknown;
@@ -21,24 +15,6 @@ function requireText(value: unknown): string {
     throw new HttpsError('invalid-argument', 'Die Sitzungs-ID ist ungültig.');
   }
   return trimmed;
-}
-
-function fallbackAnswerKey(questionIds: readonly string[]): SessionAnswerKeyEntry[] {
-  return questionIds.map((questionId) => {
-    const question = questionById.get(questionId);
-    if (!question) {
-      throw new HttpsError(
-        'failed-precondition',
-        'Der Fragenkatalog wurde aktualisiert. Bitte starte eine neue Runde.',
-      );
-    }
-    return {
-      questionId,
-      correctAnswer: question.correctAnswer,
-      optionCount: question.optionCount,
-      explanation: question.explanation,
-    };
-  });
 }
 
 export const revealSecureRankedQuiz = onCall<RevealRequest>(
@@ -66,12 +42,21 @@ export const revealSecureRankedQuiz = onCall<RevealRequest>(
     const questionIds = Array.isArray(session.questionIds)
       ? session.questionIds.filter((value): value is string => typeof value === 'string')
       : [];
-    if (questionIds.length < 1 || new Set(questionIds).size !== questionIds.length) {
+    if (
+      questionIds.length < 1 ||
+      questionIds.length > 30 ||
+      new Set(questionIds).size !== questionIds.length
+    ) {
       throw new HttpsError('failed-precondition', 'Die Quizrunde enthält ungültige Fragen.');
     }
 
-    const answerKey = readSessionAnswerKey(session.answerKey, questionIds)
-      || fallbackAnswerKey(questionIds);
+    const answerKey = readSessionAnswerKey(session.answerKey, questionIds);
+    if (!answerKey) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Der unveränderliche Sicherheitssnapshot dieser Runde fehlt oder ist beschädigt. Eine Detailauswertung ist nicht möglich.',
+      );
+    }
 
     return {
       sessionId,
