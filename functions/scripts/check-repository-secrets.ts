@@ -1,22 +1,15 @@
-import { readFile, readdir, stat } from 'node:fs/promises';
-import { basename, extname, relative, resolve } from 'node:path';
+import { execFile } from 'node:child_process';
+import { readFile, stat } from 'node:fs/promises';
+import { basename, extname, resolve } from 'node:path';
+import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 
+const execFileAsync = promisify(execFile);
 const currentDir = resolve(fileURLToPath(new URL('.', import.meta.url)));
 const repoRoot = resolve(currentDir, '../..');
-const scannerPath = resolve(currentDir, 'check-repository-secrets.ts');
+const scannerPath = 'functions/scripts/check-repository-secrets.ts';
 const failures: string[] = [];
 const maxTextFileBytes = 2_000_000;
-
-const ignoredDirectories = new Set([
-  '.git',
-  '.firebase',
-  'node_modules',
-  'dist',
-  'dist-ssr',
-  'lib',
-  'coverage',
-]);
 
 const ignoredFileNames = new Set([
   'package-lock.json',
@@ -77,27 +70,24 @@ const isForbiddenCredentialFile = (name: string): boolean => {
   );
 };
 
-const walk = async (directory: string): Promise<string[]> => {
-  const entries = await readdir(directory, { withFileTypes: true });
-  const files: string[] = [];
+let trackedFiles: string[];
+try {
+  const { stdout } = await execFileAsync('git', ['ls-files', '-z'], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    maxBuffer: 10 * 1024 * 1024,
+  });
+  trackedFiles = stdout.split('\0').filter(Boolean);
+} catch (error) {
+  console.error('Git-Dateiliste konnte für den Secret-Scan nicht gelesen werden.', error);
+  process.exit(1);
+}
 
-  for (const entry of entries) {
-    if (entry.isDirectory() && ignoredDirectories.has(entry.name)) continue;
-    const path = resolve(directory, entry.name);
-    if (entry.isDirectory()) files.push(...await walk(path));
-    else files.push(path);
-  }
-
-  return files;
-};
-
-const files = await walk(repoRoot);
-for (const file of files) {
-  const repoPath = relative(repoRoot, file).replaceAll('\\', '/');
-  const name = basename(file);
+for (const repoPath of trackedFiles) {
+  const name = basename(repoPath);
 
   if (isForbiddenEnvironmentFile(name)) {
-    failures.push(`${repoPath}: lokale Env-Datei darf nicht versioniert sein.`);
+    failures.push(`${repoPath}: versionierte Env-Datei ist verboten.`);
     continue;
   }
 
@@ -106,10 +96,16 @@ for (const file of files) {
     continue;
   }
 
-  if (file === scannerPath || ignoredFileNames.has(name)) continue;
+  if (repoPath === scannerPath || ignoredFileNames.has(name)) continue;
   if (!textExtensions.has(extname(name).toLocaleLowerCase('en-US'))) continue;
 
-  const fileStats = await stat(file);
+  const file = resolve(repoRoot, repoPath);
+  let fileStats;
+  try {
+    fileStats = await stat(file);
+  } catch {
+    continue;
+  }
   if (fileStats.size > maxTextFileBytes) continue;
 
   let content: string;
@@ -133,4 +129,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log(`Secret-Scan abgeschlossen: ${files.length} Repository-Dateien geprüft.`);
+console.log(`Secret-Scan abgeschlossen: ${trackedFiles.length} versionierte Dateien geprüft.`);
