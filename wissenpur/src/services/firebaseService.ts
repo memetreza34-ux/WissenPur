@@ -20,24 +20,27 @@ enum OperationType {
 }
 
 interface FirestoreErrorInfo {
-  error: string;
+  errorName: string;
   operationType: OperationType;
-  path: string | null;
-  userId?: string;
+  resourceType: string;
 }
 
 let hydratedAuthUser: User | null = null;
 
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
+function handleFirestoreError(
+  error: unknown,
+  operationType: OperationType,
+  resourceType: string,
+): never {
   const errorInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    errorName: error instanceof Error ? error.name : 'UnknownError',
     operationType,
-    path,
-    userId: auth.currentUser?.uid,
+    resourceType,
   };
 
-  console.error('Firestore operation failed:', errorInfo);
-  throw new Error(`${operationType} failed for ${path || 'unknown path'}`);
+  // Do not log UID, e-mail, profile values, question content or document data.
+  console.error('Firestore operation failed', errorInfo);
+  throw new Error('Die Cloud-Synchronisierung ist momentan nicht verfügbar.');
 }
 
 const sanitizeForFirestore = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
@@ -120,7 +123,6 @@ export const syncUserStats = async (stats: UserStats): Promise<UserStats | undef
   }
 
   const userRef = doc(db, 'users', currentUser.uid);
-  const userPath = `users/${currentUser.uid}`;
 
   try {
     if (hydratedAuthUser !== currentUser) {
@@ -138,24 +140,20 @@ export const syncUserStats = async (stats: UserStats): Promise<UserStats | undef
 
     return persistProfileOnly(stats);
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, userPath);
+    handleFirestoreError(error, OperationType.WRITE, 'current-user-profile');
   }
 };
 
 export const fetchUserStats = async (uid: string): Promise<UserStats | null> => {
-  const path = `users/${uid}`;
-
   try {
     const documentSnapshot = await getDoc(doc(db, 'users', uid));
     return documentSnapshot.exists() ? (documentSnapshot.data() as UserStats) : null;
   } catch (error) {
-    handleFirestoreError(error, OperationType.GET, path);
+    handleFirestoreError(error, OperationType.GET, 'user-profile');
   }
 };
 
 export const getLeaderboard = async (limitCount: number = 10): Promise<LeaderboardEntry[]> => {
-  const path = 'trustedLeaderboard';
-
   try {
     const safeLimit = Math.min(100, Math.max(1, Math.trunc(limitCount) || 10));
     const leaderboardQuery = query(
@@ -169,7 +167,7 @@ export const getLeaderboard = async (limitCount: number = 10): Promise<Leaderboa
       documentSnapshot.data() as LeaderboardEntry,
     );
   } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, path);
+    handleFirestoreError(error, OperationType.LIST, 'trusted-leaderboard');
   }
 };
 
@@ -178,7 +176,10 @@ export const testConnection = async () => {
     await getDocFromServer(doc(db, 'test', 'connection'));
   } catch (error) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error('Firebase ist offline. Prüfe die Projektkonfiguration und Netzwerkverbindung.');
+      console.error('Firebase connection unavailable', {
+        errorName: error.name,
+        resourceType: 'connection-check',
+      });
     }
   }
 };
