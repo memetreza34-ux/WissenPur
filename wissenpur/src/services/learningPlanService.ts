@@ -1,6 +1,8 @@
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
+import { getStats } from '../storage';
 import { CategoryId } from '../types';
+import { syncUserStats } from './firebaseService';
 
 export type LearningPlanPhase = 'foundation' | 'consolidation' | 'exam';
 
@@ -71,6 +73,11 @@ const normalizePlan = (value: unknown): LearningPlan | null => {
   };
 };
 
+const ensureCloudProfile = async () => {
+  if (!auth.currentUser) return;
+  await syncUserStats(getStats());
+};
+
 export const getLocalLearningPlan = (): LearningPlan | null => {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return null;
@@ -87,6 +94,7 @@ export const saveLearningPlan = async (plan: LearningPlan): Promise<LearningPlan
 
   localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
   if (auth.currentUser) {
+    await ensureCloudProfile();
     await setDoc(
       doc(db, 'users', auth.currentUser.uid),
       { learningPlan: normalized },
@@ -111,6 +119,7 @@ export const loadLearningPlan = async (): Promise<LearningPlan | null> => {
 export const removeLearningPlan = async (): Promise<void> => {
   localStorage.removeItem(STORAGE_KEY);
   if (auth.currentUser) {
+    await ensureCloudProfile();
     await setDoc(
       doc(db, 'users', auth.currentUser.uid),
       { learningPlan: null },
