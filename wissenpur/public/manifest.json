@@ -1,21 +1,22 @@
 {
-  "name": "WissenPur",
+  "name": "WissenPur – Quiz und Lernkarten",
   "short_name": "WissenPur",
-  "start_url": ".",
+  "description": "Interaktive Lern-App mit Quizzen, Karteikarten, Wiederholungen und persönlichem Lernfortschritt.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
+  "orientation": "portrait-primary",
+  "background_color": "#f8fafc",
   "theme_color": "#6366f1",
-  "description": "Die ultimative KI-Lern-App für 15 Jahre",
+  "lang": "de-DE",
+  "categories": ["education", "productivity", "games"],
   "icons": [
     {
-      "src": "/vite.svg",
-      "sizes": "192x192",
-      "type": "image/svg+xml"
-    },
-    {
-      "src": "/vite.svg",
-      "sizes": "512x512",
-      "type": "image/svg+xml"
+      "src": "/wissenpur-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
     }
   ]
 }
