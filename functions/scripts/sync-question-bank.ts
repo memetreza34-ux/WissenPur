@@ -2,12 +2,24 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { QUESTIONS } from '../content/rankedQuestions.ts';
+import { selectReleaseQuestions } from '../src/questionReleasePolicy.ts';
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const outputDir = resolve(currentDir, '../src/generated');
 const outputFile = resolve(outputDir, 'questionBank.ts');
+const minimumQuestionsPerCategory = 5;
+const minimumTotalQuestions = 100;
 
-const questionBank = QUESTIONS.map((question) => ({
+const sourceDuplicateIds = QUESTIONS
+  .map((question) => question.id)
+  .filter((id, index, ids) => ids.indexOf(id) !== index);
+
+if (sourceDuplicateIds.length > 0) {
+  throw new Error(`Duplicate question IDs: ${[...new Set(sourceDuplicateIds)].join(', ')}`);
+}
+
+const selection = selectReleaseQuestions(QUESTIONS);
+const questionBank = selection.accepted.map((question) => ({
   id: question.id,
   category: question.category,
   question: question.question,
@@ -15,17 +27,11 @@ const questionBank = QUESTIONS.map((question) => ({
   correctAnswer: question.correctAnswer,
   explanation: question.explanation,
   difficulty: question.difficulty || 'mittel',
-  imageUrl: question.imageUrl || null,
+  // Ranked release questions are deliberately text-only. This prevents hidden
+  // third-party requests and keeps the answer snapshot deterministic.
+  imageUrl: null,
   optionCount: question.options.length,
 }));
-
-const duplicateIds = questionBank
-  .map((question) => question.id)
-  .filter((id, index, ids) => ids.indexOf(id) !== index);
-
-if (duplicateIds.length > 0) {
-  throw new Error(`Duplicate question IDs: ${[...new Set(duplicateIds)].join(', ')}`);
-}
 
 for (const question of questionBank) {
   if (!question.id || typeof question.id !== 'string') {
@@ -38,6 +44,10 @@ for (const question of questionBank) {
 
   if (!Array.isArray(question.options) || question.options.some((option) => typeof option !== 'string' || !option.trim())) {
     throw new Error(`Ranked question ${question.id} has invalid options.`);
+  }
+
+  if (new Set(question.options.map((option) => option.trim().toLocaleLowerCase('de-DE'))).size !== 4) {
+    throw new Error(`Ranked question ${question.id} must have four distinct options.`);
   }
 
   if (
@@ -53,6 +63,30 @@ for (const question of questionBank) {
   }
 }
 
+if (questionBank.length < minimumTotalQuestions) {
+  throw new Error(
+    `Only ${questionBank.length} release-safe ranked questions remain; at least ${minimumTotalQuestions} are required.`,
+  );
+}
+
+const categoryCounts = new Map<string, number>();
+for (const question of questionBank) {
+  categoryCounts.set(question.category, (categoryCounts.get(question.category) || 0) + 1);
+}
+
+const sourceCategories = [...new Set(QUESTIONS.map((question) => question.category))];
+const undersuppliedCategories = sourceCategories
+  .map((category) => ({ category, count: categoryCounts.get(category) || 0 }))
+  .filter(({ count }) => count < minimumQuestionsPerCategory);
+
+if (undersuppliedCategories.length > 0) {
+  throw new Error(
+    `Ranked categories below ${minimumQuestionsPerCategory} safe questions: ${undersuppliedCategories
+      .map(({ category, count }) => `${category}=${count}`)
+      .join(', ')}`,
+  );
+}
+
 await mkdir(outputDir, { recursive: true });
 await writeFile(
   outputFile,
@@ -60,4 +94,21 @@ await writeFile(
   'utf8',
 );
 
-console.log(`Generated ${questionBank.length} ranked question records.`);
+for (const exclusion of selection.excluded) {
+  const duplicateDetails = exclusion.duplicateOf
+    ? `; duplicateOf=${exclusion.duplicateOf}`
+    : '';
+  console.warn(
+    `Excluded ranked question ${exclusion.id}: ${exclusion.reason}${duplicateDetails}`,
+  );
+}
+
+console.log(
+  `Generated ${questionBank.length} release-safe ranked questions; excluded ${selection.excluded.length}.`,
+);
+console.log(
+  `Category coverage: ${[...categoryCounts.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([category, count]) => `${category}=${count}`)
+    .join(', ')}`,
+);
