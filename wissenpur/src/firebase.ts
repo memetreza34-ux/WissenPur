@@ -11,13 +11,28 @@ import {
 import { initializeFirestore, memoryLocalCache } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
+const LOCAL_ACCOUNT_KEYS = [
+  'wissenpur_user_stats',
+  'wissenpur_user_stats_owner',
+  'wissenpur_learning_plan',
+] as const;
+
+const clearLocalAccountCache = () => {
+  for (const key of LOCAL_ACCOUNT_KEYS) localStorage.removeItem(key);
+  window.dispatchEvent(new CustomEvent('wissenpur:account-storage-reset'));
+};
+
 // Global error handler for IndexedDB to prevent crashes in restricted environments.
 if (typeof window !== 'undefined') {
   const handleIndexedDBError = (error: unknown) => {
     const candidate = error as { message?: string; name?: string } | undefined;
     const message = candidate?.message || String(error);
 
-    if (message.includes('Indexed Database') || message.includes('IndexedDB') || candidate?.name === 'IndexedDBError') {
+    if (
+      message.includes('Indexed Database') ||
+      message.includes('IndexedDB') ||
+      candidate?.name === 'IndexedDBError'
+    ) {
       console.warn('Caught IndexedDB error, preventing crash:', message);
       return true;
     }
@@ -56,7 +71,7 @@ if (appCheckSiteKey) {
   });
 } else if (import.meta.env.PROD) {
   console.error(
-    'Firebase App Check is not configured. Set VITE_RECAPTCHA_ENTERPRISE_SITE_KEY before releasing AI features.'
+    'Firebase App Check is not configured. Set VITE_RECAPTCHA_ENTERPRISE_SITE_KEY before releasing AI features.',
   );
 }
 
@@ -101,4 +116,8 @@ export const signInWithGoogle = async () => {
   }
 };
 
-export const logout = () => signOut(auth);
+export const logout = async () => {
+  await signOut(auth);
+  clearLocalAccountCache();
+  window.location.replace('/');
+};
