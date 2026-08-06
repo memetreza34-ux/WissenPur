@@ -1,11 +1,19 @@
 import { UserStats, Question, WeeklyGoal, CategoryId, ACHIEVEMENTS } from './types';
+import { auth } from './firebase';
+import {
+  claimServerDailyReward,
+  consumeServerPowerUp,
+  purchaseServerShopItem,
+  recordServerRoundResult,
+  type PowerUpId,
+} from './services/economyService';
 
 const STORAGE_KEY = 'wissenpur_user_stats';
 
 const getStartOfWeek = () => {
   const now = new Date();
-  const day = now.getDay(); // 0 (Sun) to 6 (Sat)
-  const diff = now.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+  const day = now.getDay();
+  const diff = now.getDate() - day + (day === 0 ? -6 : 1);
   const monday = new Date(now.setDate(diff));
   monday.setHours(0, 0, 0, 0);
   return monday.toISOString().split('T')[0];
@@ -69,11 +77,11 @@ const INITIAL_STATS: UserStats = {
 export const getStats = (): UserStats => {
   const stored = localStorage.getItem(STORAGE_KEY);
   const currentWeekStart = getStartOfWeek();
-  
+
   if (!stored) return INITIAL_STATS;
   try {
     const parsed = JSON.parse(stored);
-    let stats = {
+    const stats: UserStats = {
       ...INITIAL_STATS,
       ...parsed,
       wrongQuestions: parsed.wrongQuestions || [],
@@ -89,7 +97,6 @@ export const getStats = (): UserStats => {
       achievements: parsed.achievements || []
     };
 
-    // Check for daily reset
     const today = new Date().toISOString().split('T')[0];
     if (stats.lastDailyQuestionsDate !== today) {
       stats.dailyQuestionsAnswered = 0;
@@ -98,22 +105,19 @@ export const getStats = (): UserStats => {
       saveStats(stats);
     }
 
-    // Check for streak
     if (stats.lastPlayedDate) {
       const lastPlayed = new Date(stats.lastPlayedDate);
       const todayDate = new Date();
       const diffTime = Math.abs(todayDate.getTime() - lastPlayed.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-      
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
       if (diffDays > 1 && todayDate.toDateString() !== lastPlayed.toDateString()) {
-        // Streak broken
         stats.currentStreak = 0;
         saveStats(stats);
       }
     }
 
-    // Check for weekly reset
-    if (stats.weeklyGoal.lastResetDate !== currentWeekStart) {
+    if (stats.weeklyGoal && stats.weeklyGoal.lastResetDate !== currentWeekStart) {
       stats.weeklyGoal = getRandomGoal();
       saveStats(stats);
     }
@@ -126,6 +130,48 @@ export const getStats = (): UserStats => {
 
 export const saveStats = (stats: UserStats) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(stats));
+};
+
+const publishStatsUpdate = (stats: UserStats) => {
+  saveStats(stats);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent<UserStats>('wissenpur:stats-updated', { detail: stats }));
+  }
+};
+
+const applyServerStats = (serverStats: UserStats): UserStats => {
+  const localStats = getStats();
+  const merged: UserStats = {
+    ...localStats,
+    ...serverStats,
+    customName: localStats.customName,
+    age: localStats.age,
+    wrongQuestions: localStats.wrongQuestions || [],
+    customDifficultyTimes: localStats.customDifficultyTimes,
+    darkMode: localStats.darkMode,
+    customQuizzes: localStats.customQuizzes || [],
+    customPhotoURL: serverStats.customPhotoURL ?? localStats.customPhotoURL,
+  };
+  publishStatsUpdate(merged);
+  return merged;
+};
+
+const reconcileServerMutation = (
+  operation: Promise<{ stats: UserStats }>,
+  label: string,
+) => {
+  void operation
+    .then(({ stats }) => applyServerStats(stats))
+    .catch((error) => {
+      console.warn(`${label} konnte nicht mit dem Server abgeglichen werden.`, error);
+    });
+};
+
+const createRoundId = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
 };
 
 export const saveCustomPhoto = (dataUrl: string) => {
@@ -147,7 +193,7 @@ export const saveUserDetails = (name?: string, age?: number) => {
 export const saveWrongQuestion = (question: Question) => {
   const stats = getStats();
   const alreadyExists = stats.wrongQuestions?.some(q => q.id === question.id);
-  
+
   if (!alreadyExists) {
     const updatedStats = {
       ...stats,
@@ -179,12 +225,17 @@ export const claimDailyReward = () => {
       totalPoints: stats.totalPoints + 100
     };
     saveStats(updatedStats);
+
+    if (auth.currentUser) {
+      reconcileServerMutation(claimServerDailyReward(), 'Daily-Quest-Belohnung');
+    }
+
     return updatedStats;
   }
   return stats;
 };
 
-export const buyPowerUp = (type: 'fiftyFifty' | 'timeFreeze' | 'secondChance', cost: number) => {
+export const buyPowerUp = (type: PowerUpId, cost: number) => {
   const stats = getStats();
   if ((stats.coins || 0) >= cost) {
     const updatedStats = {
@@ -196,12 +247,17 @@ export const buyPowerUp = (type: 'fiftyFifty' | 'timeFreeze' | 'secondChance', c
       }
     };
     saveStats(updatedStats);
+
+    if (auth.currentUser) {
+      reconcileServerMutation(purchaseServerShopItem(type), 'Power-up-Kauf');
+    }
+
     return updatedStats;
   }
   return stats;
 };
 
-export const usePowerUp = (type: 'fiftyFifty' | 'timeFreeze' | 'secondChance') => {
+export const usePowerUp = (type: PowerUpId) => {
   const stats = getStats();
   if ((stats.powerUps?.[type] || 0) > 0) {
     const updatedStats = {
@@ -212,6 +268,11 @@ export const usePowerUp = (type: 'fiftyFifty' | 'timeFreeze' | 'secondChance') =
       }
     };
     saveStats(updatedStats);
+
+    if (auth.currentUser) {
+      reconcileServerMutation(consumeServerPowerUp(type), 'Power-up-Nutzung');
+    }
+
     return updatedStats;
   }
   return stats;
@@ -224,9 +285,14 @@ export const buyAvatar = (avatarId: string, cost: number, avatarUrl: string) => 
       ...stats,
       coins: (stats.coins || 0) - cost,
       unlockedAvatars: [...(stats.unlockedAvatars || []), avatarId],
-      customPhotoURL: avatarUrl // Equip immediately
+      customPhotoURL: avatarUrl
     };
     saveStats(updatedStats);
+
+    if (auth.currentUser) {
+      reconcileServerMutation(purchaseServerShopItem(avatarId), 'Avatar-Kauf');
+    }
+
     return updatedStats;
   }
   return stats;
@@ -239,9 +305,14 @@ export const buyTitle = (titleId: string, cost: number) => {
       ...stats,
       coins: (stats.coins || 0) - cost,
       unlockedTitles: [...(stats.unlockedTitles || []), titleId],
-      equippedTitle: titleId // Equip immediately
+      equippedTitle: titleId
     };
     saveStats(updatedStats);
+
+    if (auth.currentUser) {
+      reconcileServerMutation(purchaseServerShopItem(titleId), 'Titel-Kauf');
+    }
+
     return updatedStats;
   }
   return stats;
@@ -267,16 +338,22 @@ export const equipTitle = (titleId: string) => {
   return stats;
 };
 
-export const updateStatsAfterRound = (points: number, correct: number, total: number, category: CategoryId | 'all' | 'daily' | 'blitz', isDailyReward: boolean = false) => {
+export const updateStatsAfterRound = (
+  points: number,
+  correct: number,
+  total: number,
+  category: CategoryId | 'all' | 'daily' | 'blitz' | 'review' | 'custom' | 'project',
+  isDailyReward: boolean = false
+) => {
   const stats = getStats();
   const today = new Date().toISOString().split('T')[0];
-  
+
   let newStreak = stats.currentStreak;
   if (stats.lastPlayedDate !== today) {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = yesterday.toISOString().split('T')[0];
-    
+
     if (stats.lastPlayedDate === yesterdayStr) {
       newStreak += 1;
     } else {
@@ -284,10 +361,14 @@ export const updateStatsAfterRound = (points: number, correct: number, total: nu
     }
   }
 
+  const serverEconomy = stats.economyVersion === 1;
+  const trustedDisplayPoints = correct * 10;
+  const roundPoints = serverEconomy ? trustedDisplayPoints : points;
+
   const updatedStats: UserStats = {
     ...stats,
-    totalPoints: stats.totalPoints + points + (isDailyReward ? 50 : 0), // 50 bonus points for daily
-    coins: (stats.coins || 0) + correct + 5 + (isDailyReward ? 15 : 0), // 1 coin per correct, 5 per round, 15 extra for daily
+    totalPoints: stats.totalPoints + roundPoints + (isDailyReward ? 50 : 0),
+    coins: (stats.coins || 0) + correct + 5 + (isDailyReward ? 15 : 0),
     currentStreak: newStreak,
     bestStreak: Math.max(stats.bestStreak, newStreak),
     roundsPlayed: stats.roundsPlayed + 1,
@@ -301,10 +382,10 @@ export const updateStatsAfterRound = (points: number, correct: number, total: nu
     lastCategory: category,
     categoryStats: {
       ...(stats.categoryStats || {}),
-      ...(category !== 'all' && category !== 'daily' && category !== 'blitz' ? {
+      ...(category !== 'all' && category !== 'daily' && category !== 'blitz' && category !== 'review' && category !== 'custom' && category !== 'project' ? {
         [category]: {
           roundsPlayed: (stats.categoryStats?.[category]?.roundsPlayed || 0) + 1,
-          totalScore: (stats.categoryStats?.[category]?.totalScore || 0) + points,
+          totalScore: (stats.categoryStats?.[category]?.totalScore || 0) + roundPoints,
           correctAnswers: (stats.categoryStats?.[category]?.correctAnswers || 0) + correct,
           totalQuestions: (stats.categoryStats?.[category]?.totalQuestions || 0) + total,
         }
@@ -312,8 +393,8 @@ export const updateStatsAfterRound = (points: number, correct: number, total: nu
     },
     weeklyGoal: {
       ...stats.weeklyGoal!,
-      current: stats.weeklyGoal!.type === 'rounds' 
-        ? stats.weeklyGoal!.current + 1 
+      current: stats.weeklyGoal!.type === 'rounds'
+        ? stats.weeklyGoal!.current + 1
         : stats.weeklyGoal!.type === 'correctAnswers'
         ? stats.weeklyGoal!.current + correct
         : stats.weeklyGoal!.type === 'dailyChallenges' && isDailyReward
@@ -322,7 +403,6 @@ export const updateStatsAfterRound = (points: number, correct: number, total: nu
     }
   };
 
-  // Check achievements
   const newAchievements = new Set(updatedStats.achievements || []);
   ACHIEVEMENTS.forEach(achievement => {
     if (!newAchievements.has(achievement.id)) {
@@ -335,32 +415,37 @@ export const updateStatsAfterRound = (points: number, correct: number, total: nu
           earned = updatedStats.currentStreak >= achievement.threshold;
           break;
         case 'correct':
-          // Check if it's cumulative or per round
-          if (achievement.id === 'perfect_10') {
-            earned = correct >= achievement.threshold;
-          } else {
-            earned = updatedStats.correctAnswers >= achievement.threshold;
-          }
+          earned = achievement.id === 'perfect_10'
+            ? correct >= achievement.threshold
+            : updatedStats.correctAnswers >= achievement.threshold;
           break;
         case 'rounds':
           earned = updatedStats.roundsPlayed >= achievement.threshold;
           break;
         case 'categories':
-          const categoriesPlayed = Object.keys(updatedStats.categoryStats || {}).length;
-          earned = categoriesPlayed >= achievement.threshold;
+          earned = Object.keys(updatedStats.categoryStats || {}).length >= achievement.threshold;
           break;
       }
       if (earned) {
         newAchievements.add(achievement.id);
-        updatedStats.coins += 50; // Bonus coins for achievement
+        updatedStats.coins += 50;
       }
     }
   });
-  
+
   if (newAchievements.size > (updatedStats.achievements?.length || 0)) {
     updatedStats.achievements = Array.from(newAchievements);
   }
 
   saveStats(updatedStats);
+
+  if (auth.currentUser && total > 0 && total <= 30) {
+    const mode = category === 'daily' ? 'daily' : category === 'blitz' ? 'blitz' : 'standard';
+    reconcileServerMutation(
+      recordServerRoundResult(createRoundId(), correct, total, mode, category),
+      'Quizrunde'
+    );
+  }
+
   return updatedStats;
 };
