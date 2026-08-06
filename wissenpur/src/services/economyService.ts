@@ -26,7 +26,7 @@ interface StartRankedQuizResponse {
   ranked: true;
 }
 
-interface EconomyResponse {
+export interface EconomyResponse {
   stats: ServerEconomyStats;
 }
 
@@ -37,6 +37,15 @@ interface SubmitRankedQuizResponse extends EconomyResponse {
   pointsEarned: number;
   coinsEarned: number;
   achievementsUnlocked: number;
+}
+
+interface TransitionalRoundResponse extends EconomyResponse {
+  roundId: string;
+  correct: number;
+  total: number;
+  pointsEarned: number;
+  coinsEarned: number;
+  trustedLevel: 'bounded-client-result';
 }
 
 interface SpinResponse extends EconomyResponse {
@@ -70,6 +79,17 @@ const submitRankedQuizCallable = httpsCallable<
   { sessionId: string; answers: RankedAnswer[] },
   SubmitRankedQuizResponse
 >(functions, 'submitRankedQuiz');
+
+const recordRoundResultCallable = httpsCallable<
+  {
+    roundId: string;
+    correct: number;
+    total: number;
+    mode: RankedQuizMode;
+    category: string;
+  },
+  TransitionalRoundResponse
+>(functions, 'recordRoundResult');
 
 const claimDailyQuestRewardCallable = httpsCallable<Record<string, never>, EconomyResponse>(
   functions,
@@ -105,6 +125,23 @@ export const submitRankedQuizSession = async (
   answers: RankedAnswer[],
 ): Promise<SubmitRankedQuizResponse> => {
   const result = await submitRankedQuizCallable({ sessionId, answers });
+  return result.data;
+};
+
+export const recordServerRoundResult = async (
+  roundId: string,
+  correct: number,
+  total: number,
+  mode: RankedQuizMode,
+  category: string,
+): Promise<TransitionalRoundResponse> => {
+  const result = await recordRoundResultCallable({
+    roundId,
+    correct,
+    total,
+    mode,
+    category,
+  });
   return result.data;
 };
 
