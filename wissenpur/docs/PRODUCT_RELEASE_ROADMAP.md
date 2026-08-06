@@ -137,11 +137,14 @@ Erst nach sicherem Backend:
 - [x] PWA-Metadaten und Icon reparieren
 - [x] Service-Worker-Lebenszyklus verbessern
 - [x] automatische Typecheck- und Build-Prüfung hinzufügen
-- [ ] Gemini-Schlüssel aus dem Browser entfernen
-- [ ] serverseitige KI-Funktion mit Authentifizierung und Rate-Limit
+- [x] Gemini-Schlüssel aus dem Browser entfernen
+- [x] KI-Zugriff auf Firebase AI Logic und App Check umstellen
+- [x] KI-Antworten und Nutzereingaben zur Laufzeit validieren
+- [x] vorhandenen Cloud-Spielstand vor lokalen Schreibvorgängen laden
+- [x] erste gehärtete Firestore-Regeln und Custom-Claim-Adminzugriff
+- [ ] App Check, AI Logic, Quotas und Monitoring im Produktionsprojekt aktivieren
 - [ ] serverseitige Punkte, Münzen und Belohnungen
-- [ ] sichere Firestore-Regeln
-- [ ] Cloud-Spielstand vor lokaler Synchronisierung laden
+- [ ] Firestore-Regeln mit Emulator-Tests absichern
 - [ ] Fehlerüberwachung und Datenschutzkonzept
 
 ### Release 1.0 – verlässliche Kern-Lernapp
