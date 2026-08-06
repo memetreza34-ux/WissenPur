@@ -3,6 +3,7 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db, enforceAppCheck } from './database.js';
 import { QUESTION_BANK } from './generated/questionBank.js';
+import { evaluateFixedWindowRate } from './rateLimitCore.js';
 
 const sessionTtlMs = 30 * 60 * 1000;
 const maxQuestions = 30;
@@ -101,24 +102,29 @@ export const startSecureRankedQuiz = onCall<StartSecureQuizRequest>(
       const previousWindowMs = previousWindow instanceof Timestamp
         ? previousWindow.toMillis()
         : 0;
-      const isSameWindow = previousWindowMs > 0 && now - previousWindowMs < rateWindowMs;
-      const previousCount = isSameWindow && typeof rateData?.quizStarts === 'number'
-        ? Math.max(0, Math.trunc(rateData.quizStarts))
+      const previousCount = typeof rateData?.quizStarts === 'number'
+        ? rateData.quizStarts
         : 0;
+      const rateDecision = evaluateFixedWindowRate(
+        previousWindowMs,
+        previousCount,
+        now,
+        rateWindowMs,
+        maxStartsPerWindow,
+      );
 
-      if (previousCount >= maxStartsPerWindow) {
+      if (!rateDecision.allowed) {
+        const retrySeconds = Math.max(1, Math.ceil(rateDecision.retryAfterMs / 1000));
         throw new HttpsError(
           'resource-exhausted',
-          'Zu viele Quizstarts in kurzer Zeit. Warte kurz und versuche es erneut.',
+          `Zu viele Quizstarts in kurzer Zeit. Versuche es in ${retrySeconds} Sekunden erneut.`,
         );
       }
 
       transaction.set(rateLimitRef, {
         uid,
-        quizWindowStartedAt: isSameWindow
-          ? Timestamp.fromMillis(previousWindowMs)
-          : Timestamp.fromMillis(now),
-        quizStarts: previousCount + 1,
+        quizWindowStartedAt: Timestamp.fromMillis(rateDecision.windowStartedAtMs),
+        quizStarts: rateDecision.count,
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
 
