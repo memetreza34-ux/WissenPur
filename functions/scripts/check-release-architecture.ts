@@ -121,6 +121,33 @@ assertIncludes(
   'readSessionAnswerKey',
   'Gewertete Abgaben müssen den unveränderlichen Sitzungs-Snapshot verwenden.',
 );
+assertIncludes(
+  economyCallablesPath,
+  economyCallables,
+  'authToken?.picture',
+  'Identity-Provider-Bilder müssen aus dem verifizierten Auth-Token stammen.',
+);
+assertMissing(
+  economyCallablesPath,
+  economyCallables,
+  /userData\?\.photoURL/,
+  'Öffentliche Ranglistenbilder dürfen nicht aus clientbeschreibbaren Profildaten stammen.',
+);
+
+const accountPath = resolve(functionsSource, 'account.ts');
+const account = await readFile(accountPath, 'utf8');
+assertIncludes(
+  accountPath,
+  account,
+  'sanitizeQuizSessionForExport',
+  'Kontodatenexporte müssen den vertraulichen Lösungsschlüssel redigieren.',
+);
+assertIncludes(
+  accountPath,
+  account,
+  'quizSessionAnswerKeys',
+  'Der Export muss die Sicherheitsredaktion maschinenlesbar ausweisen.',
+);
 
 const mainPath = resolve(webSource, 'main.tsx');
 const main = await readFile(mainPath, 'utf8');
@@ -144,6 +171,12 @@ assertMissing(
   firebaseService,
   /setDoc\(doc\(db, ['"]leaderboard['"]|collection\(db, ['"]leaderboard['"]\)/,
   'Der Browser darf die historische Rangliste weder schreiben noch lesen.',
+);
+assertMissing(
+  firebaseServicePath,
+  firebaseService,
+  /customPhotoURL:\s*stats\.customPhotoURL/,
+  'Shop-Avatare dürfen nicht über den Browser-Profil-Sync geschrieben werden.',
 );
 
 const firebaseConfigPath = resolve(repoRoot, 'wissenpur/firebase-applet-config.json');
@@ -171,6 +204,12 @@ assertIncludes(
   rules,
   'match /serverRateLimits/{userId}',
   'Serverseitige Rate-Limits müssen vollständig vor Clients verborgen sein.',
+);
+assertMissing(
+  rulesPath,
+  rules,
+  /allow write:\s*if isAdmin\(\);\s*\n\s*}\s*\n\s*\/\/ Historical client-writable leaderboard/,
+  'Auch Browser-Admins dürfen trustedLeaderboard nicht schreiben.',
 );
 
 const webQuestionPath = resolve(webSource, 'data.ts');
