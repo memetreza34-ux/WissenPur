@@ -4,14 +4,31 @@ import {
   httpsCallable,
 } from 'firebase/functions';
 import { app } from '../firebase';
-import { UserStats } from '../types';
+import { Difficulty, UserStats } from '../types';
 
 export type RankedQuizMode = 'standard' | 'daily' | 'blitz';
+export type RankedDifficulty = Difficulty | 'all';
 export type PowerUpId = 'fiftyFifty' | 'timeFreeze' | 'secondChance';
 
 export interface RankedAnswer {
   questionId: string;
   answer: number;
+}
+
+export interface SecureRankedQuestion {
+  id: string;
+  category: string;
+  question: string;
+  options: string[];
+  explanation: string;
+  difficulty: Difficulty;
+  imageUrl?: string;
+}
+
+export interface RevealedRankedAnswer {
+  questionId: string;
+  correctAnswer: number;
+  explanation: string;
 }
 
 export interface ServerEconomyStats extends UserStats {
@@ -26,11 +43,15 @@ interface StartRankedQuizResponse {
   ranked: true;
 }
 
+export interface StartSecureRankedQuizResponse extends StartRankedQuizResponse {
+  questions: SecureRankedQuestion[];
+}
+
 export interface EconomyResponse {
   stats: ServerEconomyStats;
 }
 
-interface SubmitRankedQuizResponse extends EconomyResponse {
+export interface SubmitRankedQuizResponse extends EconomyResponse {
   sessionId: string;
   correct: number;
   total: number;
@@ -48,7 +69,7 @@ interface TransitionalRoundResponse extends EconomyResponse {
   trustedLevel: 'bounded-client-result';
 }
 
-interface SpinResponse extends EconomyResponse {
+export interface SpinResponse extends EconomyResponse {
   reward: {
     type: 'coins' | PowerUpId;
     amount: number;
@@ -75,10 +96,20 @@ const startRankedQuizCallable = httpsCallable<
   StartRankedQuizResponse
 >(functions, 'startRankedQuiz');
 
+const startSecureRankedQuizCallable = httpsCallable<
+  { mode: RankedQuizMode; category: string; difficulty: RankedDifficulty; count: number },
+  StartSecureRankedQuizResponse
+>(functions, 'startSecureRankedQuiz');
+
 const submitRankedQuizCallable = httpsCallable<
   { sessionId: string; answers: RankedAnswer[] },
   SubmitRankedQuizResponse
 >(functions, 'submitRankedQuiz');
+
+const revealSecureRankedQuizCallable = httpsCallable<
+  { sessionId: string },
+  { sessionId: string; answers: RevealedRankedAnswer[] }
+>(functions, 'revealSecureRankedQuiz');
 
 const recordRoundResultCallable = httpsCallable<
   {
@@ -120,12 +151,29 @@ export const startRankedQuizSession = async (
   return result.data;
 };
 
+export const startSecureRankedQuizSession = async (
+  mode: RankedQuizMode,
+  category: string,
+  difficulty: RankedDifficulty,
+  count: number,
+): Promise<StartSecureRankedQuizResponse> => {
+  const result = await startSecureRankedQuizCallable({ mode, category, difficulty, count });
+  return result.data;
+};
+
 export const submitRankedQuizSession = async (
   sessionId: string,
   answers: RankedAnswer[],
 ): Promise<SubmitRankedQuizResponse> => {
   const result = await submitRankedQuizCallable({ sessionId, answers });
   return result.data;
+};
+
+export const revealSecureRankedQuizSession = async (
+  sessionId: string,
+): Promise<RevealedRankedAnswer[]> => {
+  const result = await revealSecureRankedQuizCallable({ sessionId });
+  return result.data.answers;
 };
 
 export const recordServerRoundResult = async (
