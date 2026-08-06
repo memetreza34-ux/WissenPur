@@ -8,7 +8,6 @@ const MAX_QUESTION_COUNT = 30;
 const MAX_QUESTION_LENGTH = 300;
 const MAX_OPTION_LENGTH = 160;
 const MAX_EXPLANATION_LENGTH = 600;
-const MAX_IMAGE_PROMPT_LENGTH = 300;
 
 const ai = getAI(app, { backend: new GoogleAIBackend() });
 
@@ -18,7 +17,6 @@ interface GeneratedQuestion {
   correctAnswer: number;
   explanation: string;
   countryCode?: string;
-  imagePrompt: string;
 }
 
 const cleanText = (value: string, maxLength: number) =>
@@ -30,6 +28,11 @@ const cleanText = (value: string, maxLength: number) =>
 
 const normalizeTopic = (topic: string) => cleanText(topic, MAX_TOPIC_LENGTH) || 'Allgemeinwissen';
 
+const countryCodeToFlag = (countryCode: string): string =>
+  [...countryCode.toUpperCase()]
+    .map((character) => String.fromCodePoint(127397 + character.charCodeAt(0)))
+    .join('');
+
 const isGeneratedQuestion = (value: unknown): value is GeneratedQuestion => {
   if (!value || typeof value !== 'object') return false;
 
@@ -39,7 +42,6 @@ const isGeneratedQuestion = (value: unknown): value is GeneratedQuestion => {
   if (!candidate.options.every((option) => typeof option === 'string')) return false;
   if (!Number.isInteger(candidate.correctAnswer) || Number(candidate.correctAnswer) < 0 || Number(candidate.correctAnswer) > 3) return false;
   if (typeof candidate.explanation !== 'string') return false;
-  if (typeof candidate.imagePrompt !== 'string') return false;
 
   const question = cleanText(candidate.question, MAX_QUESTION_LENGTH);
   const options = candidate.options.map((option) => cleanText(option as string, MAX_OPTION_LENGTH));
@@ -64,9 +66,7 @@ const validateGeneratedQuestions = (value: unknown, expectedCount: number): Gene
         typeof question.countryCode === 'string' && /^[a-z]{2}$/i.test(question.countryCode.trim())
           ? question.countryCode.trim().toLowerCase()
           : undefined,
-      imagePrompt: cleanText(question.imagePrompt, MAX_IMAGE_PROMPT_LENGTH),
-    }))
-    .filter((question) => question.imagePrompt.length > 0);
+    }));
 };
 
 const createResponseSchema = (questionCount: number) =>
@@ -82,7 +82,6 @@ const createResponseSchema = (questionCount: number) =>
         correctAnswer: Schema.number(),
         explanation: Schema.string(),
         countryCode: Schema.string(),
-        imagePrompt: Schema.string(),
       },
       optionalProperties: ['countryCode'],
     }),
@@ -112,13 +111,12 @@ Regeln:
 - Jede Erklärung begründet die richtige Antwort knapp und sachlich.
 - Keine Fangfragen, erfundenen Fakten oder zeitabhängigen Behauptungen ohne notwendige Einordnung.
 - Jede Frage ist innerhalb der Ausgabe einzigartig.
-- imagePrompt ist ein kurzer englischer Bildprompt ohne Text, Logos oder Marken.
 - Antworte ausschließlich im vorgegebenen JSON-Schema.
 
 Variations-Seed: ${seed}`;
 
   if (safeCategory.toLocaleLowerCase('de-DE') === 'flaggen erraten') {
-    prompt += `\n\nFür jede Flaggenfrage muss countryCode einen gültigen ISO-3166-1-Alpha-2-Code in Kleinbuchstaben enthalten. Die Frage lautet: "Zu welchem Land gehört diese Flagge?"`;
+    prompt += `\n\nFür jede Flaggenfrage muss countryCode einen gültigen ISO-3166-1-Alpha-2-Code in Kleinbuchstaben enthalten. Die vier Optionen sind Ländernamen. Verwende keine externe Bild-URL.`;
   }
 
   try {
@@ -144,16 +142,14 @@ Variations-Seed: ${seed}`;
 
     return validatedQuestions.map((question, index) => ({
       id: `gen-${generatedAt}-${index}`,
-      question: question.question,
+      question: question.countryCode
+        ? `${countryCodeToFlag(question.countryCode)} ${question.question}`
+        : question.question,
       options: question.options,
       correctAnswer: question.correctAnswer,
       category: safeCategory === 'all' ? 'allgemein' : safeCategory,
       difficulty: difficulty === 'all' ? 'mittel' : difficulty,
       explanation: question.explanation,
-      imagePrompt: question.imagePrompt,
-      imageUrl: question.countryCode
-        ? `https://flagcdn.com/w320/${question.countryCode}.png`
-        : `https://image.pollinations.ai/prompt/${encodeURIComponent(question.imagePrompt)}?width=800&height=600&nologo=true`,
     }));
   } catch (error) {
     console.error('Error generating questions:', error);
