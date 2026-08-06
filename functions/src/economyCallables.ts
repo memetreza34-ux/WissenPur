@@ -15,7 +15,7 @@ import {
   consumePowerUpItem,
   EconomyDomainError,
   normalizeEconomy,
-  purchaseShopItem,
+  purchaseShopItem as applyShopPurchase,
   rewardFromRoll,
   stringOrNull,
   toPublicEconomy,
@@ -354,7 +354,7 @@ export const spinDailyWheel = onCall(
   },
 );
 
-export const purchaseShopItemCallable = onCall<PurchaseRequest>(
+export const purchaseShopItem = onCall<PurchaseRequest>(
   { enforceAppCheck },
   async (request) => {
     try {
@@ -369,7 +369,7 @@ export const purchaseShopItemCallable = onCall<PurchaseRequest>(
           ? userSnapshot.data() as Record<string, unknown>
           : undefined;
         const currentState = normalizeEconomy(userData, today);
-        const purchase = purchaseShopItem(currentState, itemId);
+        const purchase = applyShopPurchase(currentState, itemId);
         const publicState = toPublicEconomy(purchase.state);
 
         transaction.set(userRef, {
@@ -421,7 +421,3 @@ export const consumePowerUp = onCall<ConsumePowerUpRequest>(
     }
   },
 );
-
-// Preserve the public callable name expected by the web client while keeping
-// the pure purchase function separately testable in economyCore.ts.
-export { purchaseShopItemCallable as purchaseShopItem };
