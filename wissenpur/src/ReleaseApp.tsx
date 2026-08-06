@@ -40,7 +40,6 @@ import {
   getCallableErrorMessage,
   purchaseServerShopItem,
   revealSecureRankedQuizSession,
-  SecureRankedQuestion,
   ServerEconomyStats,
   startSecureRankedQuizSession,
   submitRankedQuizSession,
@@ -185,6 +184,7 @@ export default function ReleaseApp() {
   const [questionIndex, setQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<number[]>([]);
   const answersRef = useRef<number[]>([]);
+  const quizGenerationRef = useRef(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [questionSeconds, setQuestionSeconds] = useState(20);
   const [globalSeconds, setGlobalSeconds] = useState(60);
@@ -249,6 +249,8 @@ export default function ReleaseApp() {
   }, [stats.customQuizzes]);
 
   const startActiveQuiz = (quiz: ActiveQuiz) => {
+    quizGenerationRef.current += 1;
+    submittingRef.current = false;
     const initialAnswers = new Array(quiz.questions.length).fill(-1);
     answersRef.current = initialAnswers;
     setAnswers(initialAnswers);
@@ -259,6 +261,18 @@ export default function ReleaseApp() {
     setGlobalSeconds(quiz.globalSeconds || 60);
     setResult(null);
     setScreen('quiz');
+  };
+
+  const cancelActiveQuiz = () => {
+    if (isBusy) return;
+    quizGenerationRef.current += 1;
+    submittingRef.current = false;
+    answersRef.current = [];
+    setAnswers([]);
+    setSelectedAnswer(null);
+    setResult(null);
+    setActiveQuiz(null);
+    setScreen('today');
   };
 
   const startRanked = async (
@@ -273,7 +287,7 @@ export default function ReleaseApp() {
       startActiveQuiz({
         title: mode === 'daily' ? 'Daily Challenge – Übung' : mode === 'blitz' ? 'Blitz – Übung' : 'Quiz – Übung',
         category,
-        mode: mode === 'daily' ? 'practice' : mode === 'blitz' ? 'practice' : 'practice',
+        mode: 'practice',
         ranked: false,
         questions: local,
         perQuestionSeconds: mode === 'blitz' ? 0 : 20,
@@ -320,6 +334,7 @@ export default function ReleaseApp() {
 
   const finishQuiz = async () => {
     if (!activeQuiz || submittingRef.current) return;
+    const submissionGeneration = quizGenerationRef.current;
     submittingRef.current = true;
     setIsBusy(true);
     const submittedAnswers = [...answersRef.current];
@@ -333,11 +348,13 @@ export default function ReleaseApp() {
             answer: submittedAnswers[index] ?? -1,
           })),
         );
+        if (quizGenerationRef.current !== submissionGeneration) return;
         applyServerStats(submitted.stats);
 
         let reveals: QuizResult['reveals'] = {};
         try {
           const revealed = await revealSecureRankedQuizSession(activeQuiz.sessionId);
+          if (quizGenerationRef.current !== submissionGeneration) return;
           reveals = Object.fromEntries(
             revealed.map((entry) => [entry.questionId, {
               correctAnswer: entry.correctAnswer,
@@ -345,6 +362,7 @@ export default function ReleaseApp() {
             }]),
           );
         } catch (error) {
+          if (quizGenerationRef.current !== submissionGeneration) return;
           setNotice(`Die Runde wurde gewertet, aber die Detailauswertung ist noch nicht verfügbar: ${safeError(error)}`);
         }
 
@@ -375,11 +393,12 @@ export default function ReleaseApp() {
           reveals: {},
         });
       }
-      setScreen('result');
+      if (quizGenerationRef.current === submissionGeneration) setScreen('result');
     } catch (error) {
+      if (quizGenerationRef.current !== submissionGeneration) return;
       const message = safeError(error);
       setResult({
-        ranked: false,
+        ranked: activeQuiz.ranked,
         title: activeQuiz.title,
         correct: 0,
         total: activeQuiz.questions.length,
@@ -391,13 +410,15 @@ export default function ReleaseApp() {
       });
       setScreen('result');
     } finally {
-      setIsBusy(false);
-      submittingRef.current = false;
+      if (quizGenerationRef.current === submissionGeneration) {
+        setIsBusy(false);
+        submittingRef.current = false;
+      }
     }
   };
 
   const advanceQuestion = () => {
-    if (!activeQuiz) return;
+    if (!activeQuiz || screen !== 'quiz' || submittingRef.current) return;
     if (questionIndex + 1 >= activeQuiz.questions.length) {
       void finishQuiz();
       return;
@@ -408,7 +429,7 @@ export default function ReleaseApp() {
   };
 
   const chooseAnswer = (answer: number) => {
-    if (!activeQuiz || selectedAnswer !== null || isBusy) return;
+    if (!activeQuiz || screen !== 'quiz' || selectedAnswer !== null || isBusy) return;
     setSelectedAnswer(answer);
     const updated = [...answersRef.current];
     updated[questionIndex] = answer;
@@ -432,7 +453,10 @@ export default function ReleaseApp() {
     }
 
     if (activeQuiz.mode === 'blitz' || activeQuiz.globalSeconds) {
-      window.setTimeout(advanceQuestion, 250);
+      const generation = quizGenerationRef.current;
+      window.setTimeout(() => {
+        if (quizGenerationRef.current === generation) advanceQuestion();
+      }, 250);
     }
   };
 
@@ -616,7 +640,7 @@ export default function ReleaseApp() {
           <div className="grid grid-cols-3 gap-3">
             <Card className="p-4 text-center"><Flame className="mx-auto text-orange-500" size={22} /><p className="mt-2 text-xl font-black">{stats.currentStreak}</p><p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Streak</p></Card>
             <Card className="p-4 text-center"><Trophy className="mx-auto text-blue-500" size={22} /><p className="mt-2 text-xl font-black">{stats.totalPoints}</p><p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Punkte</p></Card>
-            <Card className="p-4 text-center"><Star className="mx-auto text-amber-500" size={22} /><p className="mt-2 text-xl font-black">{level.level}</p><p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Level</p></Card>
+            <Card className="p-4 text-center"><Star className="mx-auto text-amber-500" size={22} /><p className="mt-2 text-xl font-black">{getLevelInfo(stats.totalPoints).level}</p><p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Level</p></Card>
           </div>
 
           <section>
@@ -794,7 +818,7 @@ export default function ReleaseApp() {
     return (
       <div className="flex min-h-full flex-col">
         <header className="border-b border-slate-200 bg-white px-5 py-4 dark:border-slate-800 dark:bg-slate-950">
-          <div className="flex items-center justify-between"><button type="button" onClick={() => { setScreen('today'); setActiveQuiz(null); }} className="rounded-xl p-2 text-slate-500"><X /></button><div className="text-center"><p className="text-[10px] font-black uppercase tracking-widest text-blue-600">{activeQuiz.ranked ? 'Servergeprüfte Prüfung' : 'Übungsmodus'}</p><h1 className="font-black">{activeQuiz.title}</h1></div><div className="w-10 text-right font-black">{activeQuiz.globalSeconds ? `${globalSeconds}s` : activeQuiz.perQuestionSeconds ? `${questionSeconds}s` : ''}</div></div>
+          <div className="flex items-center justify-between"><button type="button" aria-label="Quiz abbrechen" disabled={isBusy} onClick={cancelActiveQuiz} className="rounded-xl p-2 text-slate-500 disabled:cursor-not-allowed disabled:opacity-40"><X /></button><div className="text-center"><p className="text-[10px] font-black uppercase tracking-widest text-blue-600">{activeQuiz.ranked ? 'Servergeprüfte Prüfung' : 'Übungsmodus'}</p><h1 className="font-black">{activeQuiz.title}</h1></div><div className="w-10 text-right font-black">{activeQuiz.globalSeconds ? `${globalSeconds}s` : activeQuiz.perQuestionSeconds ? `${questionSeconds}s` : ''}</div></div>
           <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"><div className="h-full rounded-full bg-blue-600" style={{ width: `${progress}%` }} /></div>
         </header>
         <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col p-5">
@@ -805,7 +829,7 @@ export default function ReleaseApp() {
               const selected = selectedAnswer === index;
               const correct = practiceCorrect && selectedAnswer !== null && index === question.correctAnswer;
               const wrong = practiceCorrect && selected && index !== question.correctAnswer;
-              return <button key={index} type="button" disabled={selectedAnswer !== null} onClick={() => chooseAnswer(index)} className={`flex w-full items-center gap-4 rounded-2xl border-2 p-4 text-left font-bold transition ${correct ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200' : wrong ? 'border-rose-500 bg-rose-50 text-rose-800 dark:bg-rose-950/30 dark:text-rose-200' : selected ? 'border-blue-600 bg-blue-50 text-blue-800 dark:bg-blue-950/30 dark:text-blue-200' : 'border-slate-200 bg-white hover:border-blue-400 dark:border-slate-800 dark:bg-slate-900'}`}><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-xs font-black dark:bg-slate-800">{String.fromCharCode(65 + index)}</span><span>{option}</span></button>;
+              return <button key={index} type="button" disabled={selectedAnswer !== null || isBusy} onClick={() => chooseAnswer(index)} className={`flex w-full items-center gap-4 rounded-2xl border-2 p-4 text-left font-bold transition disabled:cursor-not-allowed ${correct ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200' : wrong ? 'border-rose-500 bg-rose-50 text-rose-800 dark:bg-rose-950/30 dark:text-rose-200' : selected ? 'border-blue-600 bg-blue-50 text-blue-800 dark:bg-blue-950/30 dark:text-blue-200' : 'border-slate-200 bg-white hover:border-blue-400 dark:border-slate-800 dark:bg-slate-900'}`}><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-xs font-black dark:bg-slate-800">{String.fromCharCode(65 + index)}</span><span>{option}</span></button>;
             })}
           </div>
           {selectedAnswer !== null && !activeQuiz.ranked && question.correctAnswer !== undefined && (
@@ -822,13 +846,21 @@ export default function ReleaseApp() {
   const renderResult = () => {
     if (!result || !activeQuiz) return null;
     const accuracy = result.total > 0 ? Math.round(result.correct / result.total * 100) : 0;
+    const resultLabel = result.error
+      ? result.ranked
+        ? 'Gewertete Prüfung fehlgeschlagen'
+        : 'Übung fehlgeschlagen'
+      : result.ranked
+        ? 'Serverbestätigtes Ergebnis'
+        : 'Übungsergebnis';
+
     return (
       <div className="min-h-full pb-10">
         {renderHeader('Auswertung')}
         <main className="mx-auto max-w-2xl space-y-6 p-5">
-          <Card className="p-7 text-center"><div className={`mx-auto flex h-24 w-24 items-center justify-center rounded-[2rem] ${accuracy >= 80 ? 'bg-emerald-100 text-emerald-600' : accuracy >= 50 ? 'bg-blue-100 text-blue-600' : 'bg-amber-100 text-amber-600'}`}>{accuracy >= 80 ? <Trophy size={44} /> : <Target size={44} />}</div><p className="mt-5 text-xs font-black uppercase tracking-widest text-slate-400">{result.ranked ? 'Serverbestätigtes Ergebnis' : 'Übungsergebnis'}</p><h1 className="mt-2 text-4xl font-black">{result.correct} / {result.total}</h1><p className="mt-2 font-bold text-slate-500">{accuracy}% richtig</p>{result.ranked && <div className="mt-6 grid grid-cols-2 gap-3"><div className="rounded-2xl bg-blue-50 p-4 dark:bg-blue-950/30"><p className="text-2xl font-black text-blue-600">+{result.pointsEarned}</p><p className="text-xs text-slate-500">Punkte</p></div><div className="rounded-2xl bg-amber-50 p-4 dark:bg-amber-950/30"><p className="text-2xl font-black text-amber-600">+{result.coinsEarned}</p><p className="text-xs text-slate-500">Münzen</p></div></div>}{result.error && <div className="mt-5 rounded-2xl bg-rose-50 p-4 text-sm font-bold text-rose-900 dark:bg-rose-950/30 dark:text-rose-100">Die Runde konnte nicht gewertet werden: {result.error}</div>}</Card>
+          <Card className="p-7 text-center"><div className={`mx-auto flex h-24 w-24 items-center justify-center rounded-[2rem] ${result.error ? 'bg-rose-100 text-rose-600' : accuracy >= 80 ? 'bg-emerald-100 text-emerald-600' : accuracy >= 50 ? 'bg-blue-100 text-blue-600' : 'bg-amber-100 text-amber-600'}`}>{result.error ? <AlertCircle size={44} /> : accuracy >= 80 ? <Trophy size={44} /> : <Target size={44} />}</div><p className="mt-5 text-xs font-black uppercase tracking-widest text-slate-400">{resultLabel}</p>{result.error ? <h1 className="mt-2 text-3xl font-black">Nicht gewertet</h1> : <><h1 className="mt-2 text-4xl font-black">{result.correct} / {result.total}</h1><p className="mt-2 font-bold text-slate-500">{accuracy}% richtig</p></>}{result.ranked && !result.error && <div className="mt-6 grid grid-cols-2 gap-3"><div className="rounded-2xl bg-blue-50 p-4 dark:bg-blue-950/30"><p className="text-2xl font-black text-blue-600">+{result.pointsEarned}</p><p className="text-xs text-slate-500">Punkte</p></div><div className="rounded-2xl bg-amber-50 p-4 dark:bg-amber-950/30"><p className="text-2xl font-black text-amber-600">+{result.coinsEarned}</p><p className="text-xs text-slate-500">Münzen</p></div></div>}{result.error && <div className="mt-5 rounded-2xl bg-rose-50 p-4 text-sm font-bold text-rose-900 dark:bg-rose-950/30 dark:text-rose-100">Die Runde konnte nicht gewertet werden: {result.error}</div>}</Card>
 
-          {activeQuiz.questions.map((question, index) => {
+          {!result.error && activeQuiz.questions.map((question, index) => {
             const reveal = result.reveals[question.id];
             const correctAnswer = reveal?.correctAnswer ?? question.correctAnswer;
             const chosen = result.answers[index];
@@ -837,7 +869,7 @@ export default function ReleaseApp() {
             return <Card key={question.id} className="p-5"><div className="flex items-start gap-3"><div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${correct ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>{correct ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}</div><div><h3 className="font-black">{question.question}</h3><p className="mt-2 text-sm text-slate-500">Deine Antwort: {chosen >= 0 ? question.options[chosen] : 'Keine Antwort'}</p><p className="mt-1 text-sm font-bold text-emerald-700 dark:text-emerald-300">Richtig: {question.options[correctAnswer]}</p><p className="mt-3 text-sm font-medium text-slate-600 dark:text-slate-300">{reveal?.explanation || question.explanation}</p></div></div></Card>;
           })}
 
-          <div className="grid grid-cols-2 gap-3"><Button variant="outline" onClick={() => { setActiveQuiz(null); setResult(null); setScreen('today'); }}>Heute</Button><Button onClick={() => activeQuiz.ranked ? void startRanked(activeQuiz.mode === 'practice' || activeQuiz.mode === 'review' ? 'standard' : activeQuiz.mode, activeQuiz.category as CategoryId | 'all', selectedDifficulty, activeQuiz.questions.length) : startPractice(activeQuiz.title, activeQuiz.questions as Question[])}>Nochmal</Button></div>
+          <div className="grid grid-cols-2 gap-3"><Button variant="outline" onClick={() => { quizGenerationRef.current += 1; setActiveQuiz(null); setResult(null); setScreen('today'); }}>Heute</Button><Button onClick={() => activeQuiz.ranked ? void startRanked(activeQuiz.mode === 'practice' || activeQuiz.mode === 'review' ? 'standard' : activeQuiz.mode, activeQuiz.category as CategoryId | 'all', selectedDifficulty, activeQuiz.questions.length) : startPractice(activeQuiz.title, activeQuiz.questions as Question[])}>Nochmal</Button></div>
         </main>
       </div>
     );
