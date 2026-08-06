@@ -42,16 +42,45 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 
 const sanitizeForFirestore = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
-const mergeCloudStats = (localStats: UserStats, cloudStats: Partial<UserStats>): UserStats => ({
+const mergeProfileContent = (
+  localStats: UserStats,
+  cloudStats: Partial<UserStats>,
+): UserStats => ({
   ...localStats,
-  ...cloudStats,
+  uid: cloudStats.uid ?? localStats.uid,
+  displayName: cloudStats.displayName ?? localStats.displayName,
+  photoURL: cloudStats.photoURL ?? localStats.photoURL,
+  customName: cloudStats.customName ?? localStats.customName,
+  age: cloudStats.age ?? localStats.age,
+  customPhotoURL: cloudStats.customPhotoURL ?? localStats.customPhotoURL,
   wrongQuestions: cloudStats.wrongQuestions ?? localStats.wrongQuestions ?? [],
+  customDifficultyTimes:
+    cloudStats.customDifficultyTimes ?? localStats.customDifficultyTimes,
+  darkMode: cloudStats.darkMode ?? localStats.darkMode,
   customQuizzes: cloudStats.customQuizzes ?? localStats.customQuizzes ?? [],
-  powerUps: cloudStats.powerUps ?? localStats.powerUps,
-  unlockedAvatars: cloudStats.unlockedAvatars ?? localStats.unlockedAvatars,
-  unlockedTitles: cloudStats.unlockedTitles ?? localStats.unlockedTitles,
-  achievements: cloudStats.achievements ?? localStats.achievements ?? [],
 });
+
+const mergeCloudStats = (
+  localStats: UserStats,
+  cloudStats: Partial<UserStats>,
+): UserStats => {
+  const profileMerged = mergeProfileContent(localStats, cloudStats);
+
+  // Legacy documents were writable by the browser and therefore cannot be
+  // trusted for points, coins, streaks, achievements or inventory.
+  if (cloudStats.economyVersion !== 1) return profileMerged;
+
+  return {
+    ...profileMerged,
+    ...cloudStats,
+    wrongQuestions: profileMerged.wrongQuestions,
+    customQuizzes: profileMerged.customQuizzes,
+    customDifficultyTimes: profileMerged.customDifficultyTimes,
+    darkMode: profileMerged.darkMode,
+    customName: profileMerged.customName,
+    age: profileMerged.age,
+  } as UserStats;
+};
 
 const getProfileUpdate = (stats: UserStats): Partial<UserStats> & { uid: string } => {
   const currentUser = auth.currentUser;
