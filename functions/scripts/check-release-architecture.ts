@@ -149,6 +149,33 @@ assertIncludes(
   'Der Export muss die Sicherheitsredaktion maschinenlesbar ausweisen.',
 );
 
+const syncQuestionBankPath = resolve(repoRoot, 'functions/scripts/sync-question-bank.ts');
+const syncQuestionBank = await readFile(syncQuestionBankPath, 'utf8');
+assertIncludes(
+  syncQuestionBankPath,
+  syncQuestionBank,
+  'selectReleaseQuestions',
+  'Der Ranglistenkatalog muss Zeitabhängigkeit und Textduplikate filtern.',
+);
+assertIncludes(
+  syncQuestionBankPath,
+  syncQuestionBank,
+  'minimumQuestionsPerCategory',
+  'Jede sichtbare Kategorie benötigt eine geprüfte Mindestabdeckung.',
+);
+assertIncludes(
+  syncQuestionBankPath,
+  syncQuestionBank,
+  'imageUrl: null',
+  'Gewertete Fragen müssen aktuell ohne externe Bild-URLs erzeugt werden.',
+);
+assertIncludes(
+  syncQuestionBankPath,
+  syncQuestionBank,
+  'four distinct options',
+  'Der Build muss vier unterschiedliche Antwortoptionen erzwingen.',
+);
+
 const mainPath = resolve(webSource, 'main.tsx');
 const main = await readFile(mainPath, 'utf8');
 if (!main.includes("from './ReleaseApp'")) {
@@ -179,6 +206,27 @@ assertMissing(
   'Shop-Avatare dürfen nicht über den Browser-Profil-Sync geschrieben werden.',
 );
 
+const geminiServicePath = resolve(webSource, 'services/geminiService.ts');
+const geminiService = await readFile(geminiServicePath, 'utf8');
+assertMissing(
+  geminiServicePath,
+  geminiService,
+  /pollinations|flagcdn|imagePrompt/i,
+  'KI-Lernsets dürfen keine Lernthemen oder Bildprompts an externe Bildanbieter weitergeben.',
+);
+assertIncludes(
+  geminiServicePath,
+  geminiService,
+  'countryCodeToFlag',
+  'Flaggenübungen müssen ohne externen Bildabruf auskommen.',
+);
+assertIncludes(
+  geminiServicePath,
+  geminiService,
+  'resolveQuestionCategory',
+  'Freie KI-Themen müssen auf gültige interne Kategorien abgebildet werden.',
+);
+
 const firebaseConfigPath = resolve(repoRoot, 'wissenpur/firebase-applet-config.json');
 const firebaseConfig = JSON.parse(await readFile(firebaseConfigPath, 'utf8')) as Record<string, unknown>;
 if ('firestoreDatabaseId' in firebaseConfig) {
@@ -205,11 +253,17 @@ assertIncludes(
   'match /serverRateLimits/{userId}',
   'Serverseitige Rate-Limits müssen vollständig vor Clients verborgen sein.',
 );
+assertIncludes(
+  rulesPath,
+  rules,
+  'allow write: if false;',
+  'Die serververifizierte Rangliste muss sämtliche Browserwrites verweigern.',
+);
 assertMissing(
   rulesPath,
   rules,
-  /allow write:\s*if isAdmin\(\);\s*\n\s*}\s*\n\s*\/\/ Historical client-writable leaderboard/,
-  'Auch Browser-Admins dürfen trustedLeaderboard nicht schreiben.',
+  /customPhotoURL['"]?\s*,/,
+  'Clientregeln dürfen keine öffentlich nutzbaren Shop-Avatar-URLs freigeben.',
 );
 
 const webQuestionPath = resolve(webSource, 'data.ts');
