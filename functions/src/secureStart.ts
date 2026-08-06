@@ -1,13 +1,9 @@
 import { randomInt, randomUUID } from 'node:crypto';
-import { getApps, initializeApp } from 'firebase-admin/app';
-import { FieldValue, Timestamp, getFirestore } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import { db, enforceAppCheck } from './database.js';
 import { QUESTION_BANK } from './generated/questionBank.js';
 
-const firebaseApp = getApps()[0] ?? initializeApp();
-const databaseId = process.env.FIRESTORE_DATABASE_ID || 'ai-studio-e6a56a0b-5009-48b4-ab34-e5fc5f5b781b';
-const db = getFirestore(firebaseApp, databaseId);
-const enforceAppCheck = process.env.ENFORCE_APP_CHECK !== 'false';
 const sessionTtlMs = 30 * 60 * 1000;
 const maxQuestions = 30;
 
