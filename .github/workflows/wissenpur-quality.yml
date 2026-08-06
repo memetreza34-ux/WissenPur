@@ -4,19 +4,25 @@ on:
   pull_request:
     paths:
       - 'wissenpur/**'
+      - 'functions/**'
+      - 'firebase.json'
+      - '.firebaserc'
       - '.github/workflows/wissenpur-quality.yml'
   push:
     branches:
       - main
     paths:
       - 'wissenpur/**'
+      - 'functions/**'
+      - 'firebase.json'
+      - '.firebaserc'
       - '.github/workflows/wissenpur-quality.yml'
 
 permissions:
   contents: read
 
 jobs:
-  typecheck-and-build:
+  frontend-typecheck-and-build:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -33,11 +39,32 @@ jobs:
           cache: npm
           cache-dependency-path: wissenpur/package-lock.json
 
-      - name: Install dependencies
+      - name: Install frontend dependencies
         run: npm ci
 
-      - name: Type-check
+      - name: Type-check frontend
         run: npm run lint
 
       - name: Build production bundle
         run: npm run build
+
+  functions-typecheck-and-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Functions dependencies
+        run: npm install --prefix functions --no-audit --no-fund
+
+      - name: Type-check Functions
+        run: npm --prefix functions run lint
+
+      - name: Build Functions
+        run: npm --prefix functions run build
