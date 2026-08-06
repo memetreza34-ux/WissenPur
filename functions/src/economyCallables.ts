@@ -5,7 +5,6 @@ import {
   HttpsError,
   onCall,
   type CallableRequest,
-  type FunctionsErrorCode,
 } from 'firebase-functions/v2/https';
 import { db, enforceAppCheck } from './database.js';
 import {
@@ -113,7 +112,7 @@ function parseAnswers(value: unknown): Map<string, number> {
 function toHttpsError(error: unknown): HttpsError {
   if (error instanceof HttpsError) return error;
   if (error instanceof EconomyDomainError) {
-    return new HttpsError(error.code as FunctionsErrorCode, error.message);
+    return new HttpsError(error.code, error.message);
   }
   logger.error('Unexpected economy error', error);
   return new HttpsError('internal', 'Die Aktion konnte nicht sicher verarbeitet werden.');
