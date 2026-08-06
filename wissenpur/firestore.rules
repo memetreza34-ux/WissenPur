@@ -15,43 +15,98 @@ service cloud.firestore {
     }
 
     function hasValidOptionalString(data, field, maxLength) {
-      return !(field in data) || (data[field] is string && data[field].size() <= maxLength);
+      return !(field in data) ||
+             (data[field] is string && data[field].size() <= maxLength);
     }
 
     function hasValidOptionalList(data, field, maxItems) {
-      return !(field in data) || (data[field] is list && data[field].size() <= maxItems);
+      return !(field in data) ||
+             (data[field] is list && data[field].size() <= maxItems);
     }
 
-    function hasServerEconomy(data) {
-      return ('economyVersion' in data) && data.economyVersion == 1;
+    function hasValidOptionalBool(data, field) {
+      return !(field in data) || data[field] is bool;
     }
 
-    function isValidUser(userId, data) {
+    function hasValidOptionalAge(data) {
+      return !('age' in data) ||
+             (data.age is int && data.age >= 0 && data.age <= 120);
+    }
+
+    function hasValidOptionalDifficultyTimes(data) {
+      return !('customDifficultyTimes' in data) ||
+             data.customDifficultyTimes is map;
+    }
+
+    function hasValidLearningPlan(data) {
+      return !('learningPlan' in data) ||
+             data.learningPlan == null ||
+             (
+               data.learningPlan is map &&
+               data.learningPlan.version == 1 &&
+               data.learningPlan.examTitle is string &&
+               data.learningPlan.examTitle.size() > 0 &&
+               data.learningPlan.examTitle.size() <= 100 &&
+               data.learningPlan.examDate is string &&
+               data.learningPlan.examDate.size() == 10 &&
+               data.learningPlan.category is string &&
+               data.learningPlan.category.size() > 0 &&
+               data.learningPlan.category.size() <= 50 &&
+               data.learningPlan.dailyMinutes is int &&
+               (
+                 data.learningPlan.dailyMinutes == 10 ||
+                 data.learningPlan.dailyMinutes == 20 ||
+                 data.learningPlan.dailyMinutes == 30 ||
+                 data.learningPlan.dailyMinutes == 45
+               ) &&
+               data.learningPlan.weeklyDays is int &&
+               data.learningPlan.weeklyDays >= 3 &&
+               data.learningPlan.weeklyDays <= 7 &&
+               data.learningPlan.createdAt is int &&
+               data.learningPlan.createdAt >= 0 &&
+               data.learningPlan.updatedAt is int &&
+               data.learningPlan.updatedAt >= data.learningPlan.createdAt &&
+               data.learningPlan.completedSessions is int &&
+               data.learningPlan.completedSessions >= 0 &&
+               (
+                 data.learningPlan.lastCompletedDate == null ||
+                 (
+                   data.learningPlan.lastCompletedDate is string &&
+                   data.learningPlan.lastCompletedDate.size() == 10
+                 )
+               )
+             );
+    }
+
+    function isValidClientProfile(userId, data) {
       return data.uid == userId &&
              data.uid is string &&
-             (!('economyVersion' in data) || data.economyVersion == 1) &&
-             data.totalPoints is int && data.totalPoints >= 0 && data.totalPoints <= 10000000 &&
-             data.coins is int && data.coins >= 0 && data.coins <= 1000000 &&
-             data.currentStreak is int && data.currentStreak >= 0 && data.currentStreak <= 10000 &&
-             data.bestStreak is int && data.bestStreak >= 0 && data.bestStreak <= 10000 &&
-             data.roundsPlayed is int && data.roundsPlayed >= 0 && data.roundsPlayed <= 1000000 &&
-             data.correctAnswers is int && data.correctAnswers >= 0 && data.correctAnswers <= 100000000 &&
-             data.totalQuestionsAnswered is int && data.totalQuestionsAnswered >= 0 && data.totalQuestionsAnswered <= 100000000 &&
              hasValidOptionalString(data, 'displayName', 100) &&
              hasValidOptionalString(data, 'customName', 100) &&
              hasValidOptionalString(data, 'photoURL', 1000) &&
              hasValidOptionalString(data, 'customPhotoURL', 350000) &&
-             hasValidOptionalList(data, 'achievements', 100) &&
+             hasValidOptionalAge(data) &&
              hasValidOptionalList(data, 'wrongQuestions', 300) &&
-             hasValidOptionalList(data, 'customQuizzes', 100);
+             hasValidOptionalDifficultyTimes(data) &&
+             hasValidOptionalBool(data, 'darkMode') &&
+             hasValidOptionalList(data, 'customQuizzes', 100) &&
+             hasValidLearningPlan(data);
     }
 
-    function keepsCumulativeProgress(data) {
-      return data.totalPoints >= resource.data.totalPoints &&
-             data.roundsPlayed >= resource.data.roundsPlayed &&
-             data.correctAnswers >= resource.data.correctAnswers &&
-             data.totalQuestionsAnswered >= resource.data.totalQuestionsAnswered &&
-             data.bestStreak >= resource.data.bestStreak;
+    function clientProfileKeys() {
+      return [
+        'uid',
+        'displayName',
+        'customName',
+        'age',
+        'photoURL',
+        'customPhotoURL',
+        'wrongQuestions',
+        'customDifficultyTimes',
+        'darkMode',
+        'customQuizzes',
+        'learningPlan'
+      ];
     }
 
     function changesOnlyProfileFields() {
@@ -64,74 +119,58 @@ service cloud.firestore {
         'wrongQuestions',
         'customDifficultyTimes',
         'darkMode',
-        'customQuizzes'
+        'customQuizzes',
+        'learningPlan'
       ]);
-    }
-
-    function isValidLeaderboardEntry(userId, data) {
-      return data.uid == userId &&
-             data.uid is string &&
-             data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 100 &&
-             data.totalPoints is int && data.totalPoints >= 0 && data.totalPoints <= 10000000 &&
-             hasValidOptionalString(data, 'photoURL', 1000) &&
-             exists(/databases/$(database)/documents/users/$(userId)) &&
-             data.totalPoints == get(/databases/$(database)/documents/users/$(userId)).data.totalPoints;
     }
 
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
 
-      // Legacy documents may be created by the current client during the
-      // transition. Clients can never mark their own balance as trusted.
+      // New browser-created documents contain profile and learning content
+      // only. Economy fields are added exclusively by Cloud Functions.
       allow create: if isOwner(userId) &&
-                       !('economyVersion' in request.resource.data) &&
-                       isValidUser(userId, request.resource.data);
+                       request.resource.data.keys().hasOnly(clientProfileKeys()) &&
+                       isValidClientProfile(userId, request.resource.data);
 
       allow update: if isOwner(userId) &&
-                       isValidUser(userId, request.resource.data) &&
-                       (
-                         (hasServerEconomy(resource.data) && changesOnlyProfileFields()) ||
-                         (!hasServerEconomy(resource.data) &&
-                          !('economyVersion' in request.resource.data) &&
-                          keepsCumulativeProgress(request.resource.data))
-                       );
+                       changesOnlyProfileFields() &&
+                       isValidClientProfile(userId, request.resource.data);
 
       allow delete: if isAdmin();
     }
 
-    match /leaderboard/{userId} {
+    // Only Cloud Functions write this collection. Public reads contain the
+    // minimum display profile and server-verified point total.
+    match /trustedLeaderboard/{userId} {
       allow read: if true;
-
-      // Once Cloud Functions migrates a user to economyVersion 1, only trusted
-      // server code may update that user's leaderboard entry.
-      allow create, update: if isOwner(userId) &&
-                               exists(/databases/$(database)/documents/users/$(userId)) &&
-                               !hasServerEconomy(get(/databases/$(database)/documents/users/$(userId)).data) &&
-                               isValidLeaderboardEntry(userId, request.resource.data);
-      allow delete: if isAdmin();
+      allow write: if isAdmin();
     }
 
-    // Quiz sessions contain trusted scoring state and are never readable or
-    // writable from the browser. Callable Functions use the Admin SDK and
-    // bypass these client rules.
+    // Historical client-writable leaderboard. It is hidden from release
+    // clients and retained only until the one-time cleanup is complete.
+    match /leaderboard/{userId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Trusted scoring state and immutable answer snapshots are never exposed
+    // through the Firestore browser SDK.
     match /quizSessions/{sessionId} {
       allow read, write: if false;
     }
 
-    // Multiplayer is not yet server-authoritative. Client writes stay disabled
-    // until lobby membership, score calculation, reconnects and match results
-    // are validated by trusted backend code.
+    match /serverRateLimits/{userId} {
+      allow read, write: if false;
+    }
+
+    // Multiplayer remains disabled until a new server-authoritative model is
+    // implemented. Old data is admin-only during cleanup.
     match /lobbies/{lobbyId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow read, write: if isAdmin();
     }
 
     match /duels/{duelId} {
-      allow read: if isAuthenticated() &&
-                     (request.auth.uid == resource.data.player1Uid ||
-                      request.auth.uid == resource.data.player2Uid ||
-                      isAdmin());
-      allow write: if isAdmin();
+      allow read, write: if isAdmin();
     }
 
     match /{allPaths=**} {
