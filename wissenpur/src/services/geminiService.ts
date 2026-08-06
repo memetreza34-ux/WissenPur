@@ -1,4 +1,5 @@
-import { GoogleGenAI, Type, ThinkingLevel } from '@google/genai';
+import { getAI, getGenerativeModel, GoogleAIBackend, Schema } from 'firebase/ai';
+import { app } from '../firebase';
 import { Difficulty, Question } from '../types';
 
 const MODEL_NAME = 'gemini-3.5-flash-lite';
@@ -9,13 +10,13 @@ const MAX_OPTION_LENGTH = 160;
 const MAX_EXPLANATION_LENGTH = 600;
 const MAX_IMAGE_PROMPT_LENGTH = 300;
 
-let ai: GoogleGenAI | null = null;
+const ai = getAI(app, { backend: new GoogleAIBackend() });
 
 interface GeneratedQuestion {
   question: string;
   options: string[];
   correctAnswer: number;
-  explanation?: string;
+  explanation: string;
   countryCode?: string;
   imagePrompt: string;
 }
@@ -37,13 +38,15 @@ const isGeneratedQuestion = (value: unknown): value is GeneratedQuestion => {
   if (!Array.isArray(candidate.options) || candidate.options.length !== 4) return false;
   if (!candidate.options.every((option) => typeof option === 'string')) return false;
   if (!Number.isInteger(candidate.correctAnswer) || Number(candidate.correctAnswer) < 0 || Number(candidate.correctAnswer) > 3) return false;
+  if (typeof candidate.explanation !== 'string') return false;
   if (typeof candidate.imagePrompt !== 'string') return false;
 
   const question = cleanText(candidate.question, MAX_QUESTION_LENGTH);
   const options = candidate.options.map((option) => cleanText(option as string, MAX_OPTION_LENGTH));
+  const explanation = cleanText(candidate.explanation, MAX_EXPLANATION_LENGTH);
   const uniqueOptions = new Set(options.map((option) => option.toLocaleLowerCase('de-DE')));
 
-  return Boolean(question) && options.every(Boolean) && uniqueOptions.size === 4;
+  return Boolean(question) && Boolean(explanation) && options.every(Boolean) && uniqueOptions.size === 4;
 };
 
 const validateGeneratedQuestions = (value: unknown, expectedCount: number): GeneratedQuestion[] => {
@@ -56,10 +59,7 @@ const validateGeneratedQuestions = (value: unknown, expectedCount: number): Gene
       question: cleanText(question.question, MAX_QUESTION_LENGTH),
       options: question.options.map((option) => cleanText(option, MAX_OPTION_LENGTH)),
       correctAnswer: question.correctAnswer,
-      explanation:
-        typeof question.explanation === 'string'
-          ? cleanText(question.explanation, MAX_EXPLANATION_LENGTH)
-          : undefined,
+      explanation: cleanText(question.explanation, MAX_EXPLANATION_LENGTH),
       countryCode:
         typeof question.countryCode === 'string' && /^[a-z]{2}$/i.test(question.countryCode.trim())
           ? question.countryCode.trim().toLowerCase()
@@ -69,29 +69,30 @@ const validateGeneratedQuestions = (value: unknown, expectedCount: number): Gene
     .filter((question) => question.imagePrompt.length > 0);
 };
 
-export const getGeminiClient = () => {
-  if (!ai) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      console.warn('GEMINI_API_KEY is not set. Using fallback questions.');
-      return null;
-    }
-
-    // TODO: Replace this browser client with an authenticated server function before release.
-    ai = new GoogleGenAI({ apiKey });
-  }
-
-  return ai;
-};
+const createResponseSchema = (questionCount: number) =>
+  Schema.array({
+    maxItems: questionCount,
+    items: Schema.object({
+      properties: {
+        question: Schema.string(),
+        options: Schema.array({
+          maxItems: 4,
+          items: Schema.string(),
+        }),
+        correctAnswer: Schema.number(),
+        explanation: Schema.string(),
+        countryCode: Schema.string(),
+        imagePrompt: Schema.string(),
+      },
+      optionalProperties: ['countryCode'],
+    }),
+  });
 
 export const generateQuestions = async (
   category: string,
   difficulty: Difficulty | 'all',
   count: number = 10
 ): Promise<Question[] | null> => {
-  const client = getGeminiClient();
-  if (!client) return null;
-
   const safeCategory = normalizeTopic(category);
   const safeCount = Math.min(MAX_QUESTION_COUNT, Math.max(1, Math.trunc(count) || 10));
   const difficultyName = difficulty === 'all' ? 'gemischt' : difficulty;
@@ -121,34 +122,16 @@ Variations-Seed: ${seed}`;
   }
 
   try {
-    const response = await client.models.generateContent({
+    const model = getGenerativeModel(ai, {
       model: MODEL_NAME,
-      contents: prompt,
-      config: {
-        thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+      generationConfig: {
         responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              question: { type: Type.STRING },
-              options: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING },
-              },
-              correctAnswer: { type: Type.INTEGER },
-              explanation: { type: Type.STRING },
-              countryCode: { type: Type.STRING },
-              imagePrompt: { type: Type.STRING },
-            },
-            required: ['question', 'options', 'correctAnswer', 'explanation', 'imagePrompt'],
-          },
-        },
+        responseSchema: createResponseSchema(safeCount),
       },
     });
 
-    const jsonText = response.text?.trim();
+    const result = await model.generateContent(prompt);
+    const jsonText = result.response.text().trim();
     if (!jsonText) return null;
 
     const validatedQuestions = validateGeneratedQuestions(JSON.parse(jsonText) as unknown, safeCount);
@@ -166,7 +149,7 @@ Variations-Seed: ${seed}`;
       correctAnswer: question.correctAnswer,
       category: safeCategory === 'all' ? 'allgemein' : safeCategory,
       difficulty: difficulty === 'all' ? 'mittel' : difficulty,
-      explanation: question.explanation || 'Keine Erklärung verfügbar.',
+      explanation: question.explanation,
       imagePrompt: question.imagePrompt,
       imageUrl: question.countryCode
         ? `https://flagcdn.com/w320/${question.countryCode}.png`
