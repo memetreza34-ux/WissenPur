@@ -6,6 +6,8 @@ import { QUESTION_BANK } from './generated/questionBank.js';
 
 const sessionTtlMs = 30 * 60 * 1000;
 const maxQuestions = 30;
+const rateWindowMs = 60 * 1000;
+const maxStartsPerWindow = 12;
 
 type RankedMode = 'standard' | 'daily' | 'blitz';
 type RankedDifficulty = 'all' | 'leicht' | 'mittel' | 'schwer';
@@ -87,16 +89,55 @@ export const startSecureRankedQuiz = onCall<StartSecureQuizRequest>(
     const selected = shuffle(candidates).slice(0, count);
     const sessionId = randomUUID();
     const now = Date.now();
+    const sessionRef = db.collection('quizSessions').doc(sessionId);
+    const rateLimitRef = db.collection('serverRateLimits').doc(uid);
 
-    await db.collection('quizSessions').doc(sessionId).create({
-      uid,
-      questionIds: selected.map((question) => question.id),
-      mode,
-      category: mode === 'daily' ? 'daily' : mode === 'blitz' ? 'blitz' : category,
-      difficulty,
-      status: 'active',
-      createdAt: FieldValue.serverTimestamp(),
-      expiresAt: Timestamp.fromMillis(now + sessionTtlMs),
+    await db.runTransaction(async (transaction) => {
+      const rateSnapshot = await transaction.get(rateLimitRef);
+      const rateData = rateSnapshot.exists
+        ? rateSnapshot.data() as Record<string, unknown>
+        : undefined;
+      const previousWindow = rateData?.quizWindowStartedAt;
+      const previousWindowMs = previousWindow instanceof Timestamp
+        ? previousWindow.toMillis()
+        : 0;
+      const isSameWindow = previousWindowMs > 0 && now - previousWindowMs < rateWindowMs;
+      const previousCount = isSameWindow && typeof rateData?.quizStarts === 'number'
+        ? Math.max(0, Math.trunc(rateData.quizStarts))
+        : 0;
+
+      if (previousCount >= maxStartsPerWindow) {
+        throw new HttpsError(
+          'resource-exhausted',
+          'Zu viele Quizstarts in kurzer Zeit. Warte kurz und versuche es erneut.',
+        );
+      }
+
+      transaction.set(rateLimitRef, {
+        uid,
+        quizWindowStartedAt: isSameWindow
+          ? Timestamp.fromMillis(previousWindowMs)
+          : Timestamp.fromMillis(now),
+        quizStarts: previousCount + 1,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+      transaction.create(sessionRef, {
+        uid,
+        questionIds: selected.map((question) => question.id),
+        answerKey: selected.map((question) => ({
+          questionId: question.id,
+          correctAnswer: question.correctAnswer,
+          optionCount: question.optionCount,
+          explanation: question.explanation,
+        })),
+        mode,
+        category: mode === 'daily' ? 'daily' : mode === 'blitz' ? 'blitz' : category,
+        difficulty,
+        status: 'active',
+        createdAt: FieldValue.serverTimestamp(),
+        expiresAt: Timestamp.fromMillis(now + sessionTtlMs),
+      });
     });
 
     return {
