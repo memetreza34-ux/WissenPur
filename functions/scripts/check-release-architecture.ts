@@ -32,6 +32,15 @@ const assertMissing = (
   if (pattern.test(content)) failures.push(`${relative(file)}: ${explanation}`);
 };
 
+const assertIncludes = (
+  file: string,
+  content: string,
+  expected: string,
+  explanation: string,
+) => {
+  if (!content.includes(expected)) failures.push(`${relative(file)}: ${explanation}`);
+};
+
 const webFiles = await walk(webSource);
 for (const file of webFiles) {
   const content = await readFile(file, 'utf8');
@@ -92,6 +101,27 @@ for (const requiredExport of [
   }
 }
 
+const economyCallablesPath = resolve(functionsSource, 'economyCallables.ts');
+const economyCallables = await readFile(economyCallablesPath, 'utf8');
+assertIncludes(
+  economyCallablesPath,
+  economyCallables,
+  "db.collection('trustedLeaderboard')",
+  'Serverwertungen müssen in trustedLeaderboard geschrieben werden.',
+);
+assertMissing(
+  economyCallablesPath,
+  economyCallables,
+  /db\.collection\(['"]leaderboard['"]\)/,
+  'Aktives Scoring darf die historische Client-Rangliste nicht schreiben.',
+);
+assertIncludes(
+  economyCallablesPath,
+  economyCallables,
+  'readSessionAnswerKey',
+  'Gewertete Abgaben müssen den unveränderlichen Sitzungs-Snapshot verwenden.',
+);
+
 const mainPath = resolve(webSource, 'main.tsx');
 const main = await readFile(mainPath, 'utf8');
 if (!main.includes("from './ReleaseApp'")) {
@@ -101,11 +131,47 @@ if (/from ['"]\.\/App['"]/.test(main)) {
   failures.push('wissenpur/src/main.tsx: Der archivierte App-Monolith darf nicht gestartet werden.');
 }
 
+const firebaseServicePath = resolve(webSource, 'services/firebaseService.ts');
+const firebaseService = await readFile(firebaseServicePath, 'utf8');
+assertIncludes(
+  firebaseServicePath,
+  firebaseService,
+  "collection(db, 'trustedLeaderboard')",
+  'Der Client darf nur die serververifizierte Rangliste lesen.',
+);
+assertMissing(
+  firebaseServicePath,
+  firebaseService,
+  /setDoc\(doc\(db, ['"]leaderboard['"]|collection\(db, ['"]leaderboard['"]\)/,
+  'Der Browser darf die historische Rangliste weder schreiben noch lesen.',
+);
+
 const firebaseConfigPath = resolve(repoRoot, 'wissenpur/firebase-applet-config.json');
 const firebaseConfig = JSON.parse(await readFile(firebaseConfigPath, 'utf8')) as Record<string, unknown>;
 if ('firestoreDatabaseId' in firebaseConfig) {
   failures.push('wissenpur/firebase-applet-config.json: Eine benannte Firestore-Datenbank darf nicht fest eingebaut sein.');
 }
+
+const rulesPath = resolve(repoRoot, 'wissenpur/firestore.rules');
+const rules = await readFile(rulesPath, 'utf8');
+assertIncludes(
+  rulesPath,
+  rules,
+  'match /trustedLeaderboard/{userId}',
+  'Regeln für die serververifizierte Rangliste fehlen.',
+);
+assertIncludes(
+  rulesPath,
+  rules,
+  'changesOnlyProfileFields()',
+  'Clientupdates müssen auf Profilfelder begrenzt sein.',
+);
+assertIncludes(
+  rulesPath,
+  rules,
+  'match /serverRateLimits/{userId}',
+  'Serverseitige Rate-Limits müssen vollständig vor Clients verborgen sein.',
+);
 
 const webQuestionPath = resolve(webSource, 'data.ts');
 const webQuestions = await readFile(webQuestionPath, 'utf8');
