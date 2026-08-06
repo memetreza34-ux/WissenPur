@@ -15,6 +15,10 @@ interface ImportMetaEnv {
   readonly VITE_SUPPORT_EMAIL?: string;
   readonly VITE_LEGAL_EFFECTIVE_DATE?: string;
   readonly VITE_MINIMUM_AGE?: string;
+  readonly VITE_LOG_RETENTION_DAYS?: string;
+  readonly VITE_SESSION_RETENTION_DAYS?: string;
+  readonly VITE_SUPPORT_RETENTION_DAYS?: string;
+  readonly VITE_LEGAL_REVIEW_CONFIRMED?: 'true' | 'false';
 }
 
 interface ImportMeta {
