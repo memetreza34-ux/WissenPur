@@ -5,6 +5,7 @@ import {
   onCall,
   type CallableRequest,
 } from 'firebase-functions/v2/https';
+import { enforceGlobalCallableRateLimit } from './callableRateLimit.js';
 import { db, enforceAppCheck } from './database.js';
 import {
   berlinDateKey,
@@ -34,10 +35,11 @@ export const getMyEconomyState = onCall(
   { enforceAppCheck },
   async (request) => {
     const uid = requireUser(request);
-    const userRef = db.collection('users').doc(uid);
-    const today = berlinDateKey();
 
     try {
+      await enforceGlobalCallableRateLimit(uid);
+      const userRef = db.collection('users').doc(uid);
+      const today = berlinDateKey();
       const stats = await db.runTransaction(async (transaction) => {
         const snapshot = await transaction.get(userRef);
         const userData = snapshot.exists
