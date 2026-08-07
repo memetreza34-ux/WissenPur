@@ -3,8 +3,11 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  estimateLearningLibraryBytes,
   LearningSetImportError,
   MAX_IMPORTED_QUESTIONS,
+  MAX_LIBRARY_QUESTIONS,
+  MAX_LIBRARY_SERIALIZED_BYTES,
   parseLearningSetImport,
   serializeLearningSet,
 } from '../../wissenpur/src/services/learningSetImport.ts';
@@ -39,6 +42,9 @@ assert.equal(jsonImport.deck.questions[0]?.correctAnswer, 0);
 assert.equal(jsonImport.deck.questions[1]?.correctAnswer, 1);
 assert.match(jsonImport.deck.questions[0]?.id || '', /^import-elektrotechnik-ap1-/);
 assert.equal(new Set(jsonImport.deck.questions.map((question) => question.id)).size, 2);
+assert.ok(estimateLearningLibraryBytes([jsonImport.deck]) > 0);
+assert.ok(MAX_LIBRARY_QUESTIONS >= MAX_IMPORTED_QUESTIONS);
+assert.ok(MAX_LIBRARY_SERIALIZED_BYTES < 1_000_000);
 
 const csvImport = parseLearningSetImport([
   'frage;option1;option2;option3;option4;richtig;erklaerung;kategorie;schwierigkeit',
@@ -86,20 +92,30 @@ const limited = parseLearningSetImport(JSON.stringify({ questions: tooManyRows }
 assert.equal(limited.deck.questions.length, MAX_IMPORTED_QUESTIONS);
 assert.ok(limited.warnings.some((warning) => warning.includes(String(MAX_IMPORTED_QUESTIONS))));
 
-const [main, manager, boundary] = await Promise.all([
+const [main, manager, boundary, flashcards, importPanel] = await Promise.all([
   readFile(resolve(repoRoot, 'wissenpur/src/main.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/components/LearningLibraryManager.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/components/AccountSessionBoundary.tsx'), 'utf8'),
+  readFile(resolve(repoRoot, 'wissenpur/src/pages/Flashcards.tsx'), 'utf8'),
+  readFile(resolve(repoRoot, 'wissenpur/src/components/LearningSetImportPanel.tsx'), 'utf8'),
 ]);
 
 assert.match(main, /<LearningLibraryManager\s*\/>/);
-assert.match(manager, /parseLearningSetImport|LearningSetImportPanel/);
+assert.match(manager, /LearningSetImportPanel/);
 assert.match(manager, /serializeLearningSet/);
 assert.match(manager, /questionIsDue/);
 assert.match(manager, /Probeprüfung/);
 assert.match(manager, /keine Ranglistenpunkte/);
+assert.match(manager, /validateLibraryLimits/);
+assert.match(manager, /syncStatsBestEffort/);
+assert.match(manager, /\.catch\(\(error: unknown\)/);
 assert.match(manager, /wissenpur:library-updated/);
+assert.match(importPanel, /MAX_LIBRARY_QUESTIONS/);
+assert.match(importPanel, /MAX_LIBRARY_SERIALIZED_BYTES/);
+assert.match(importPanel, /estimateLearningLibraryBytes/);
+assert.match(flashcards, /persistSrsUpdates/);
+assert.match(flashcards, /wissenpur:stats-updated/);
 assert.match(boundary, /wissenpur:library-updated/);
 assert.match(boundary, /contentRevision/);
 
-console.log('Lernset-Import, Bibliothek, Fälligkeit und Probeprüfung geprüft.');
+console.log('Lernset-Import, Bibliothek, Fälligkeit, Offline-Speicherung und Probeprüfung geprüft.');
