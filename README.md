@@ -1,261 +1,160 @@
 # WissenPur
 
-WissenPur ist eine deutschsprachige Lern-App für Quizze, Karteikarten, Spaced Repetition, Lernplanung, persönliche Lernanalyse und servergeprüfte Ranglistenrunden.
+WissenPur ist eine Lern- und Prüfungs-Web-App mit servergeprüften Quizrunden, eigenen Lernsets, Karteikarten, Fehlertraining, Lernplan, persönlicher Lernanalyse und einer klar getrennten Übungs-/Ranglistenarchitektur.
 
-> **Release-Status:** Dieses Repository befindet sich auf dem Draft-Release-Branch `agent/release-foundation`. Der aktuelle Pull Request darf noch nicht produktiv gemergt oder deployed werden. GitHub Actions kann wegen eines Account-Billing-/Spending-Limit-Problems derzeit keine Runner starten; deshalb existiert noch kein bestätigter vollständiger CI-Build.
+Der aktuelle Entwicklungsstand liegt auf `agent/release-foundation`. Pull Request #2 bleibt **Draft**, bis die unten genannten externen und technischen Release-Blocker tatsächlich abgeschlossen sind.
 
 ## Repository-Struktur
 
-```text
-.
-├── wissenpur/                 # React/Vite-Web-App
-│   ├── src/                   # aktive Produktoberfläche
-│   ├── public/                # PWA-Manifest, Service Worker, Icon
-│   ├── docs/                  # Produkt-, Datenschutz- und Release-Dokumentation
-│   ├── scripts/               # Frontend-Release-Gates
-│   └── legacy/                # archivierter Altcode, nicht Teil des Builds
-├── functions/                 # Firebase Cloud Functions (Node.js 22)
-│   ├── src/                   # serverautoritative Economy und Quiz-Sitzungen
-│   ├── content/               # vollständiger Ranglisten-Fragenkatalog
-│   ├── tests/                 # Unit-Tests
-│   ├── scripts/               # Architektur-/Release-Prüfungen
-│   └── legacy/                # archivierte alte Functions
-├── rules-tests/               # Firestore-Regeltests mit Emulator Suite
-├── firebase.json              # Hosting, Functions, Firestore und Emulatoren
-└── .github/workflows/         # Qualitäts-Workflow
-```
-
-## Produktfunktionen
-
-### Lernen
-
-- Standard-, Daily- und Blitz-Quiz
-- Fehlertraining
-- SRS-Karteikarten
-- fällige Wiederholungen
-- ungewertete Probeprüfungen
-- adaptive Lernplanung nach Prüfungsdatum und verfügbarer Lernzeit
-
-### Lernsets
-
-- KI-generierte Übungssets
-- JSON-/CSV-/TSV-Import
-- manuelles Erstellen und Bearbeiten
-- 2–6 Antwortoptionen pro manuell bearbeitbarer Frage
-- Suche und Fälligkeitsfilter
-- JSON-Export
-- Löschen einzelner Sets
-
-### Persönliche Lernanalyse
-
-- lokale Prüfungshistorie
-- letzter-5-vs.-vorheriger-5-Trend
-- stärkster und schwächster Wissensbereich
-- Tagesempfehlung
-- Priorisierung fälliger SRS-Karten
-
-Die lokale Analyse enthält keine Antwortwerte, Fragentexte oder Lösungsschlüssel und beeinflusst weder Punkte noch Rangliste.
-
-### Konto und Datenschutz
-
-- Google-Login
-- kontogebundene lokale Daten
-- Auth-Hydrierungsgrenze vor Rendering kontoabhängiger Oberflächen
-- serverseitiger JSON-Kontoexport
-- lokale Lernanalyse wird beim Export nur im Browser ergänzt
-- vollständige Selbstlöschung mit Reauth-Pflicht
-- Logout und Löschung entfernen kontoabhängige lokale Daten
+- `wissenpur/` – React-/Vite-Web-App, PWA, Firestore-Regeln und Produktdokumentation
+- `functions/` – Firebase Cloud Functions, Economy, sichere Quiz-Sitzungen, Account-Export/-Löschung und Release-Gates
+- `rules-tests/` – Firestore-Emulator-Tests mit getrennten Testkonten
+- `.github/workflows/wissenpur-quality.yml` – Frontend-, Functions- und Rules-Qualitätsjobs
+- `firebase.json` / `.firebaserc` – Firebase-Hosting-, Functions- und Rules-Konfiguration
 
 ## Sicherheitsmodell
 
-### Ranglistenrunden
+### Gewertete Prüfungen
 
-Gewertete Runden sind serverautoritativ:
+Gewertete Runden werden ausschließlich über den sicheren Sitzungsfluss ausgeführt:
 
-1. `startRankedQuiz`
-   - Backend wählt die Fragen.
-   - Der Browser erhält keine Lösungen.
-   - Ein unveränderlicher Antwort-Snapshot wird serverseitig gespeichert.
+1. `startSecureRankedQuiz` wählt Fragen serverseitig aus.
+2. Der Browser erhält vor der Abgabe keine korrekten Antworten oder Erklärungen.
+3. Die Sitzung speichert einen unveränderlichen Antwort-Snapshot.
+4. `submitRankedQuiz` wertet nur gegen diesen Snapshot.
+5. `revealSecureRankedQuiz` gibt Lösungen erst nach erfolgreicher Abgabe frei.
+6. Punkte, Münzen, Streaks, Wochenziele und `trustedLeaderboard` werden serverseitig aktualisiert.
 
-2. `submitRankedQuiz`
-   - Antworten werden gegen genau diesen Snapshot geprüft.
-   - Die Sitzung ist nutzergebunden, zeitlich begrenzt und nur einmal wertbar.
-   - Wiederholungsabgaben sind idempotent.
+Der frühere client-vertraute Rundenergebnis-Pfad ist nicht Teil des aktiven Release-Codes.
 
-3. `revealRankedQuiz`
-   - Lösungen und Erklärungen werden erst nach einer gültigen Abgabe freigegeben.
+### Authentifizierte Economy
 
-### Economy
+Jede neue Auth-Sitzung lädt `getMyEconomyState` über eine App-Check-geschützte Callable Function. Der Server normalisiert den Kontostand und verwirft alte/client-schreibbare Economy-Werte, wenn sie nicht dem vertrauenswürdigen Economy-Schema entsprechen.
 
-Serververwaltet sind unter anderem:
+Während dieser Hydrierung:
 
-- Punkte
-- Münzen
-- Streaks
-- Achievements
-- Daily Quest
-- Glücksrad
-- Shop
-- Power-ups
-- öffentliche Ranglistenwerte
+- zeigt die Oberfläche keine Gastpunkte als Kontopunkte,
+- sind gewertete Runden und Shop-Aktionen gesperrt,
+- können lokale Übungsrunden keine Economy-Werte verändern,
+- werden verspätete Antworten einer alten Auth-Sitzung nach Logout/Kontowechsel verworfen.
 
-Historische client-schreibbare Economy-Daten werden nicht vertraut. Ohne `economyVersion: 1` erzeugt der Server einen sauberen serververwalteten Ausgangszustand.
+### Gastdaten beim ersten Login
 
-### Firestore
+Nutzererstellte Lerninhalte werden beim ersten Login nicht unnötig gelöscht:
 
-- Produktion verwendet Firestore `(default)`.
-- Eine benannte Datenbank ist außerhalb des Emulators im Functions-Code blockiert.
-- `trustedLeaderboard` ist die öffentliche Ranglistenquelle.
-- Quiz-Sitzungen, Rate-Limits und vertrauenswürdige Ranglistenwerte sind nicht client-schreibbar.
+- Lernsets: lokale und Cloud-Bibliothek werden vereinigt, lokal gewinnt bei gleicher Deck-ID
+- Fehlerfragen: lokale und Cloud-Fragen werden vereinigt, lokal gewinnt bei gleicher Frage-ID
+- Lernplan: Zeitstempel-Konfliktregel
+- lokale Lernanalyse: Wechsel in den neuen Kontokontext
 
-### App Check
+Gastpunkte, Gastmünzen, Gaststreaks und andere Economy-Werte werden dagegen nicht in das Konto migriert.
 
-Cloud Functions erzwingen App Check außerhalb des Emulators. Ein Produktionsdeploy darf die Schutzprüfung nicht über eine einfache Environment-Variable deaktivieren.
+## Lokaler Start
 
-## Voraussetzungen
+Voraussetzung: Node.js 22.
 
-- Node.js 22
-- npm
-- Java 21 für Firestore-Emulator-Tests
-- Firebase CLI für Emulatoren/Deployment
-
-## Frontend lokal starten
+### Frontend
 
 ```bash
 cd wissenpur
-npm install --no-audit --no-fund
+npm install
+npm run lint
 npm run dev
 ```
 
-Frontend-Typecheck:
-
-```bash
-cd wissenpur
-npm run lint
-```
-
-Normaler Build:
-
-```bash
-cd wissenpur
-npm run build
-```
-
-Produktions-Release-Build mit Release-Gates:
-
-```bash
-cd wissenpur
-npm run build:release
-```
-
-`build:release` darf absichtlich fehlschlagen, solange verpflichtende Produktions- und Rechtsangaben fehlen.
-
-## Functions prüfen
+### Functions
 
 ```bash
 cd functions
-npm install --no-audit --no-fund
+npm install
 npm run verify
 npm run compile
 ```
 
-Vollständiger Functions-Build:
+### Firestore-Regeln
+
+Die Rules-Tests benötigen Java und die Firebase Emulator Suite:
+
+```bash
+cd rules-tests
+npm install
+npm test
+```
+
+## Release-Build
+
+Frontend:
+
+```bash
+cd wissenpur
+npm run lint
+npm run check:release
+npm run build
+```
+
+Functions:
 
 ```bash
 cd functions
 npm run build
 ```
 
-Der `verify`-Pfad enthält unter anderem Checks für:
+Der Functions-Verifikationspfad prüft unter anderem Secrets, Firebase-/Hosting-Konfiguration, Architekturgrenzen, Frontend-Manifest, **Frontend-Lockfile**, Konto-Isolation, Economy-Hydrierung, Ranglisten-Snapshots, PWA-Runtime, Lernset-Bibliothek, Lernanalyse und Inhaltsqualität.
 
-- Secrets
-- Hosting/Firebase-Konfiguration
-- Release-Architektur
-- Frontend-Paketmanifest
-- Konto-Isolation und Auth-Hydrierung
-- Ranglisten-Snapshots
-- PWA-Runtime
-- Functions-Runtime und App Check
-- Lernset-Import und Bibliothekslimits
-- Lernanalyse
-- manuellen Lernset-Editor
-- Fragenkatalog-Trennung und -Qualität
-- Unit-Tests und TypeScript
+## Frontend-Lockfile
 
-## Firestore-Regeln testen
+`wissenpur/package-lock.json` ist derzeit **bewusst als Release-Blocker markiert**, weil der Root-Eintrag noch aus der älteren Demo-Abhängigkeitsstruktur stammt und direkte aktuelle Pakete wie `@types/react` und `@types/react-dom` nicht vollständig aufgelöst enthält.
 
-Die Regeltests liegen getrennt unter `rules-tests/` und benötigen die Firebase Emulator Suite.
+Sobald Registry-Zugriff verfügbar ist:
 
 ```bash
-cd rules-tests
+cd wissenpur
+rm -rf node_modules package-lock.json
 npm install --no-audit --no-fund
-npm test
+npm run lint
+npm run build
 ```
 
-Alternativ den in der Workflow-Datei dokumentierten Emulator-Aufruf verwenden.
+Danach muss das neue `package-lock.json` committed werden. Anschließend kann der GitHub-Workflow wieder von `npm install` auf `npm ci` umgestellt werden. Der Gate `check:frontend-lock` verhindert bis dahin einen irrtümlich reproduzierbar genannten Release.
 
-## Lokale Firebase-Emulatoren
+## Produktionskonfiguration
 
-Nach installierten Functions-Abhängigkeiten:
+Vor einem öffentlichen Deployment müssen mindestens vollständig gesetzt beziehungsweise geprüft sein:
 
-```bash
-firebase emulators:start --only auth,functions,firestore,hosting
-```
+- Firebase App Check / reCAPTCHA Enterprise
+- Firebase AI Logic
+- Cloud Functions
+- Firestore `(default)` und kontrollierte Migration vorhandener Daten
+- Quotas, Budgetwarnungen und Monitoring
+- echte Betreiber-, Datenschutz- und Supportangaben
+- definierte Log-/Session-/Support-Aufbewahrungsfristen
+- rechtliche Freigabe
 
-Die Ports sind in `firebase.json` festgelegt.
+Die Release-App blockiert eine vollständige rechtliche Freigabe, solange die erforderliche Konfiguration fehlt.
 
-## Environment-Dateien
+## Bekannte Release-Blocker
 
-Beispiele:
+- GitHub Actions startet aktuell keine Runner wegen Billing-/Spending-Limit des GitHub-Kontos.
+- Deshalb existiert noch kein bestätigter echter Frontend-, Functions- oder Firestore-Regelbuild dieses Branches.
+- Das Frontend-Lockfile muss aus dem bereinigten Manifest neu erzeugt werden.
+- Firebase-Zielprojekt, App Check, AI Logic, Quotas und Monitoring müssen final konfiguriert werden.
+- Firestore-Daten müssen kontrolliert nach `(default)` migriert werden.
+- Emulator-Tests mit zwei echten Testkonten müssen tatsächlich ausgeführt werden.
+- alte Lobby-/Duel-Daten müssen bereinigt werden.
+- echte Betreiberangaben und rechtliche Prüfung fehlen noch.
+- mobile/desktop End-to-End- und Rollback-Tests fehlen.
+- PNG-/Apple-Touch-PWA-Icons und reale iOS-/Android-Installationstests fehlen.
 
-- `wissenpur/.env.example`
-- `functions/.env.example`
-
-Lokale `.env`-Dateien, Service-Account-Dateien, private Schlüssel und andere Credentials dürfen nicht committed werden. Der Repository-Secret-Scanner prüft versionierte Dateien vor dem Functions-Build.
-
-## Lernset-Limits
-
-Zur Begrenzung von LocalStorage-/Firestore-Größe gelten aktuell:
-
-- Importdatei: maximal 1 MB
-- Fragen pro importiertem Lernset: maximal 100
-- neu manuell angelegtes Set: maximal 30 Fragen
-- Bibliothek: maximal 100 Lernsets
-- Bibliothek: maximal 500 Fragen insgesamt
-- Bibliothek: maximal 700.000 serialisierte Bytes
-
-Die zentrale Bibliotheksrichtlinie normalisiert ungültige oder doppelte IDs und wird sowohl lokal als auch vor Cloud-Synchronisierung angewendet.
-
-## Wichtige Dokumentation
+## Wichtige Dokumente
 
 - `wissenpur/docs/PRODUCT_RELEASE_ROADMAP.md`
+- `wissenpur/docs/ACCOUNT_PRIVACY.md`
 - `wissenpur/docs/FIREBASE_RELEASE_CHECKLIST.md`
 - `wissenpur/docs/FIRESTORE_DEFAULT_MIGRATION.md`
-- `wissenpur/docs/ACCOUNT_PRIVACY.md`
-- `wissenpur/docs/RANKED_CONTENT_POLICY.md`
 - `wissenpur/docs/LEARNING_SET_IMPORT.md`
 - `wissenpur/docs/LEARNING_ANALYTICS.md`
+- `wissenpur/docs/RANKED_CONTENT_POLICY.md`
 
-## Aktuelle Release-Blocker
+## Release-Regel
 
-Vor einem öffentlichen Release müssen mindestens folgende Punkte erledigt sein:
-
-1. GitHub-Actions-Billing/Spending-Limit korrigieren.
-2. Frontend-, Functions- und Firestore-Regeljobs tatsächlich ausführen und erfolgreich abschließen.
-3. Frontend-`package-lock.json` aus dem bereinigten Manifest neu erzeugen.
-4. CI danach wieder auf reproduzierbares `npm ci` umstellen.
-5. Firebase-Zielprojekt vollständig konfigurieren.
-6. App Check und AI Logic im Zielprojekt verifizieren.
-7. Firestore-Daten kontrolliert nach `(default)` migrieren.
-8. Alte Lobby-/Duel-Daten bereinigen.
-9. Quotas, Budgetwarnungen und Monitoring aktivieren.
-10. Echte Betreiber-, Support- und Rechtsangaben eintragen und rechtlich freigeben.
-11. Mobile und Desktop-End-to-End-Tests durchführen.
-12. PWA auf realen iOS-/Android-Geräten testen und PNG-/Apple-Touch-Icons ergänzen.
-13. Hosting-Rollback einmal praktisch verifizieren.
-
-## CI-Hinweis
-
-Ein GitHub-Actions-Job mit `conclusion: failure` ist derzeit **kein nachgewiesener Codefehler**, wenn er gleichzeitig keine Steps, keine Logs und keinen Runner besitzt. Die aktuelle GitHub-Annotation nennt fehlgeschlagene Kontozahlungen beziehungsweise ein zu niedriges Actions-Spending-Limit.
-
-Umgekehrt gilt: Solange kein Runner die Schritte tatsächlich ausgeführt hat, ist auch **kein erfolgreicher Build bestätigt**.
+PR #2 bleibt Draft. Er darf erst als releasefähig gelten, wenn **echte** Builds und Emulator-Tests erfolgreich gelaufen sind, das Lockfile reproduzierbar ist, die Produktionskonfiguration vollständig ist und die rechtlichen Pflichtangaben freigegeben wurden.
