@@ -45,6 +45,19 @@ const serverEconomy = (uid: string) => ({
   },
 });
 
+const validLearningPlan = () => ({
+  version: 1,
+  examTitle: 'AP1 Elektrotechnik',
+  examDate: '2026-10-01',
+  category: 'technik',
+  dailyMinutes: 20,
+  weeklyDays: 5,
+  createdAt: 1_786_000_000_000,
+  updatedAt: 1_786_000_000_000,
+  completedSessions: 0,
+  lastCompletedDate: null,
+});
+
 const seed = async (path: string, value: Record<string, unknown>) => {
   await testEnv.withSecurityRulesDisabled(async (context) => {
     await setDoc(doc(context.firestore(), path), value);
@@ -122,23 +135,19 @@ test('the browser cannot create or update economy and shop-avatar fields', async
   }));
 });
 
-test('valid learning plans are allowed and malformed plans are rejected', async () => {
+test('valid learning plans are allowed and malformed or extended plans are rejected', async () => {
   await seed('users/alice', serverEconomy('alice'));
   const alice = testEnv.authenticatedContext('alice').firestore();
   const userRef = doc(alice, 'users/alice');
 
   await assertSucceeds(updateDoc(userRef, {
+    learningPlan: validLearningPlan(),
+  }));
+
+  await assertFails(updateDoc(userRef, {
     learningPlan: {
-      version: 1,
-      examTitle: 'AP1 Elektrotechnik',
-      examDate: '2026-10-01',
-      category: 'technik',
-      dailyMinutes: 20,
-      weeklyDays: 5,
-      createdAt: 1_786_000_000_000,
-      updatedAt: 1_786_000_000_000,
-      completedSessions: 0,
-      lastCompletedDate: null,
+      ...validLearningPlan(),
+      hiddenAdminFlag: true,
     },
   }));
 
@@ -155,6 +164,54 @@ test('valid learning plans are allowed and malformed plans are rejected', async 
       completedSessions: -1,
       lastCompletedDate: 'irgendwann',
     },
+  }));
+});
+
+test('custom difficulty times accept only known keys and safe integer ranges', async () => {
+  await seed('users/alice', serverEconomy('alice'));
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  const userRef = doc(alice, 'users/alice');
+
+  await assertSucceeds(updateDoc(userRef, {
+    customDifficultyTimes: {
+      leicht: 25,
+      mittel: 15,
+      schwer: 10,
+      all: 20,
+    },
+  }));
+  await assertFails(updateDoc(userRef, {
+    customDifficultyTimes: {
+      leicht: 25,
+      ultra: 10,
+    },
+  }));
+  await assertFails(updateDoc(userRef, {
+    customDifficultyTimes: {
+      leicht: 2,
+    },
+  }));
+  await assertFails(updateDoc(userRef, {
+    customDifficultyTimes: {
+      mittel: '15',
+    },
+  }));
+});
+
+test('profile learning lists enforce their top-level item limits', async () => {
+  await seed('users/alice', serverEconomy('alice'));
+  const alice = testEnv.authenticatedContext('alice').firestore();
+  const userRef = doc(alice, 'users/alice');
+
+  await assertSucceeds(updateDoc(userRef, {
+    wrongQuestions: Array.from({ length: 300 }, (_, index) => ({ id: `q-${index}` })),
+    customQuizzes: Array.from({ length: 100 }, (_, index) => ({ id: `deck-${index}` })),
+  }));
+  await assertFails(updateDoc(userRef, {
+    wrongQuestions: Array.from({ length: 301 }, (_, index) => ({ id: `q-${index}` })),
+  }));
+  await assertFails(updateDoc(userRef, {
+    customQuizzes: Array.from({ length: 101 }, (_, index) => ({ id: `deck-${index}` })),
   }));
 });
 
