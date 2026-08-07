@@ -7,6 +7,7 @@ import {
 } from '../storage';
 import { CategoryId } from '../types';
 import { syncUserStats } from './firebaseService';
+import { getReviewTargetCount } from './reviewQueue';
 
 export type LearningPlanPhase = 'foundation' | 'consolidation' | 'exam';
 
@@ -201,10 +202,7 @@ export const buildLearningRecommendation = (
       : plan.dailyMinutes <= 30
         ? 18
         : 25;
-  const cardsToday = Math.min(
-    Math.max(5, Math.round(plan.dailyMinutes / 2)),
-    Math.max(5, Math.max(0, Math.trunc(dueCards))),
-  );
+  const cardsToday = getReviewTargetCount(dueCards, plan.dailyMinutes);
 
   return {
     daysRemaining,
