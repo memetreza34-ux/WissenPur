@@ -32,13 +32,14 @@ assert.equal(trusted.totalPoints, 420);
 assert.equal(trusted.coins, 33);
 assert.equal(trusted.roundsPlayed, 7);
 
-const [callable, entry, economyService, firebaseService, storage, releaseApp] = await Promise.all([
+const [callable, entry, economyService, firebaseService, storage, releaseApp, spinWheel] = await Promise.all([
   readFile(resolve(repoRoot, 'functions/src/economyStateCallable.ts'), 'utf8'),
   readFile(resolve(repoRoot, 'functions/src/entry.ts'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/services/economyService.ts'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/services/firebaseService.ts'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/storage.ts'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/ReleaseApp.tsx'), 'utf8'),
+  readFile(resolve(repoRoot, 'wissenpur/src/components/DailySpinWheel.tsx'), 'utf8'),
 ]);
 
 assert.match(callable, /getMyEconomyState = onCall/);
@@ -86,5 +87,11 @@ assert.match(releaseApp, /const \[isAccountHydrating, setIsAccountHydrating\] = 
 assert.match(releaseApp, /Kontofortschritt wird sicher geladen/);
 assert.match(releaseApp, /Punkte und Münzen werden erst nach der serverseitigen Prüfung angezeigt/);
 assert.match(releaseApp, /if \(isAccountHydrating\)/);
+assert.match(releaseApp, /DailySpinWheel onClaimReward=\{\(\) => setStats\(getStats\(\) as ReleaseStats\)\}/);
+assert.doesNotMatch(releaseApp, /DailySpinWheel[\s\S]{0,160}setTimeout/);
 
-console.log('Autoritative Economy-Hydrierung, UI-Maskierung, Stale-Session-Sperre, Legacy-Reset und signierte Local-Mutation-Sperre geprüft.');
+const spinSaveIndex = spinWheel.indexOf('saveStats(preserveLocalLearningData(result.stats));');
+const spinCallbackIndex = spinWheel.indexOf('onClaimReward(result.reward);');
+assert.ok(spinSaveIndex >= 0 && spinCallbackIndex > spinSaveIndex, 'Das Glücksrad muss den autoritativen Serverstand vor dem Parent-Callback speichern.');
+
+console.log('Autoritative Economy-Hydrierung, UI-Maskierung, Stale-Session-Sperre, Glücksrad-Persistenz, Legacy-Reset und signierte Local-Mutation-Sperre geprüft.');
