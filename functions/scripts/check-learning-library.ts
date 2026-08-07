@@ -2,16 +2,19 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { mergeLearningLibraries } from '../../wissenpur/src/services/learningLibraryMerge.ts';
 import { applyLearningLibraryPolicy } from '../../wissenpur/src/services/learningLibraryPolicy.ts';
 import {
   estimateLearningLibraryBytes,
   LearningSetImportError,
   MAX_IMPORTED_QUESTIONS,
+  MAX_LIBRARY_DECKS,
   MAX_LIBRARY_QUESTIONS,
   MAX_LIBRARY_SERIALIZED_BYTES,
   parseLearningSetImport,
   serializeLearningSet,
 } from '../../wissenpur/src/services/learningSetImport.ts';
+import type { CustomQuiz, Question } from '../../wissenpur/src/types.ts';
 
 const currentDir = resolve(fileURLToPath(new URL('.', import.meta.url)));
 const repoRoot = resolve(currentDir, '../..');
@@ -133,6 +136,54 @@ const limited = parseLearningSetImport(JSON.stringify({ questions: tooManyRows }
 assert.equal(limited.deck.questions.length, MAX_IMPORTED_QUESTIONS);
 assert.ok(limited.warnings.some((warning) => warning.includes(String(MAX_IMPORTED_QUESTIONS))));
 
+const cloneQuestion = (question: Question, id: string, text = question.question): Question => ({
+  ...question,
+  id,
+  question: text,
+});
+const makeDeck = (id: string, title: string, questionId: string, text = title): CustomQuiz => ({
+  id,
+  title,
+  createdAt: 10_000,
+  questions: [cloneQuestion(jsonImport.deck.questions[0]!, questionId, text)],
+});
+
+const cloudDeck = makeDeck('cloud-set', 'Cloud Set', 'cloud-question');
+const localDeck = makeDeck('local-set', 'Gast Set', 'local-question');
+assert.deepEqual(mergeLearningLibraries([], [cloudDeck]).decks, [cloudDeck]);
+assert.deepEqual(mergeLearningLibraries([localDeck], []).decks, [localDeck]);
+
+const guestAndCloud = mergeLearningLibraries([localDeck], [cloudDeck]);
+assert.equal(guestAndCloud.decks.length, 2, 'Gast- und Cloud-Lernsets müssen beim Login vereinigt werden.');
+assert.deepEqual(guestAndCloud.decks.map((deck) => deck.id), ['local-set', 'cloud-set']);
+
+const sharedCloud = makeDeck('shared-set', 'Cloud-Fassung', 'shared-cloud-question', 'Cloud-Frage');
+const sharedLocal = makeDeck('shared-set', 'Lokale Fassung', 'shared-local-question', 'Lokale Offline-Frage');
+const sameIdMerge = mergeLearningLibraries([sharedLocal], [sharedCloud]);
+assert.equal(sameIdMerge.decks.length, 1);
+assert.equal(sameIdMerge.decks[0]?.title, 'Lokale Fassung', 'Bei gleicher Deck-ID muss die aktuelle lokale Fassung gewinnen.');
+assert.equal(sameIdMerge.decks[0]?.questions[0]?.question, 'Lokale Offline-Frage');
+
+const localQuestionOwner = makeDeck('local-owner', 'Lokal', 'cross-device-question', 'Lokale Frage');
+const cloudDuplicateQuestion = makeDeck('cloud-duplicate', 'Cloud', 'cross-device-question', 'Cloud-Frage');
+const questionConflict = mergeLearningLibraries([localQuestionOwner], [cloudDuplicateQuestion]);
+assert.equal(questionConflict.decks[0]?.questions[0]?.id, 'cross-device-question');
+assert.notEqual(questionConflict.decks[1]?.questions[0]?.id, 'cross-device-question', 'Cloud-only-ID-Konflikt muss umbenannt werden, lokale ID bleibt stabil.');
+
+const manyLocalDecks = Array.from({ length: Math.ceil(MAX_LIBRARY_DECKS / 2) }, (_, index) =>
+  makeDeck(`local-${index}`, `Lokal ${index}`, `local-question-${index}`),
+);
+const manyCloudDecks = Array.from({ length: MAX_LIBRARY_DECKS }, (_, index) =>
+  makeDeck(`cloud-${index}`, `Cloud ${index}`, `cloud-question-${index}`),
+);
+const limitedMerge = mergeLearningLibraries(manyLocalDecks, manyCloudDecks);
+assert.equal(limitedMerge.decks.length, MAX_LIBRARY_DECKS, 'Auch der Merge muss das globale Deck-Limit einhalten.');
+assert.deepEqual(
+  limitedMerge.decks.slice(0, manyLocalDecks.length).map((deck) => deck.id),
+  manyLocalDecks.map((deck) => deck.id),
+  'Lokale Decks dürfen durch das globale Limit nicht hinter Cloud-Decks verdrängt werden.',
+);
+
 const [main, manager, boundary, flashcards, importPanel, storage, firebaseService] = await Promise.all([
   readFile(resolve(repoRoot, 'wissenpur/src/main.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/components/LearningLibraryManager.tsx'), 'utf8'),
@@ -161,10 +212,11 @@ assert.match(flashcards, /sameSrsData/);
 assert.match(flashcards, /wissenpur:stats-updated/);
 assert.match(storage, /applyLearningLibraryPolicy/);
 assert.match(storage, /customQuizzes: library\.decks/);
-assert.match(firebaseService, /applyLearningLibraryPolicy/);
+assert.match(firebaseService, /mergeLearningLibraries/);
+assert.match(firebaseService, /customQuizzes: mergedLibrary/);
 assert.match(firebaseService, /saveStats\(persistedStats\)/);
 assert.match(firebaseService, /wissenpur:library-updated/);
 assert.match(boundary, /wissenpur:library-updated/);
 assert.match(boundary, /contentRevision/);
 
-console.log('Lernset-Import, zentrale Bibliotheksrichtlinie, Fälligkeit, Offline-Speicherung und Probeprüfung geprüft.');
+console.log('Lernset-Import, lokale/Cloud-Merge-Policy, zentrale Bibliotheksrichtlinie, Fälligkeit, Offline-Speicherung und Probeprüfung geprüft.');
