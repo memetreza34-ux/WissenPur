@@ -181,15 +181,26 @@ requireText(
   'Das maskierbare Icon muss Teil der Offline-App-Shell sein.',
 );
 
-const serviceWorkerHeaders = firebase.hosting?.headers?.find(
-  (entry) => entry.source === '/sw.js',
+const headersFor = (source: string) => firebase.hosting?.headers?.find(
+  (entry) => entry.source === source,
 )?.headers || [];
-const headerMap = new Map(serviceWorkerHeaders.map((entry) => [entry.key, entry.value]));
-if (headerMap.get('Cache-Control') !== 'no-cache, no-store, must-revalidate') {
+const headerValue = (source: string, key: string) => new Map(
+  headersFor(source).map((entry) => [entry.key, entry.value]),
+).get(key);
+
+for (const source of ['/', '/index.html']) {
+  if (headerValue(source, 'Cache-Control') !== 'no-cache, no-store, must-revalidate') {
+    failures.push(`firebase.json: ${source} muss ohne langlebigen HTTP-Cache ausgeliefert werden.`);
+  }
+}
+if (headerValue('/sw.js', 'Cache-Control') !== 'no-cache, no-store, must-revalidate') {
   failures.push('firebase.json: /sw.js muss ohne Browsercache ausgeliefert werden.');
 }
-if (headerMap.get('Service-Worker-Allowed') !== '/') {
+if (headerValue('/sw.js', 'Service-Worker-Allowed') !== '/') {
   failures.push('firebase.json: Der Service Worker benötigt explizit den Root-Scope.');
+}
+if (headerValue('/assets/**', 'Cache-Control') !== 'public, max-age=31536000, immutable') {
+  failures.push('firebase.json: Gehashte Vite-Assets müssen langfristig immutable gecacht werden.');
 }
 
 if (failures.length > 0) {
@@ -199,4 +210,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('PWA-App-Shell, Build-Asset-Precache, Installationsmetadaten, Icons, Offline-Antworten, Cachewechsel und Hosting-Header geprüft.');
+console.log('PWA-App-Shell, Build-Asset-Precache, Installationsmetadaten, Icons, Root-/Asset-Cacheheader, Offline-Antworten und Cachewechsel geprüft.');
