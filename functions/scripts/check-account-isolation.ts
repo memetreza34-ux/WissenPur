@@ -1,6 +1,8 @@
+import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { shouldClearLocalAccountDataForTransition } from '../../wissenpur/src/services/accountSessionPolicy.ts';
 
 const currentDir = resolve(fileURLToPath(new URL('.', import.meta.url)));
 const repoRoot = resolve(currentDir, '../..');
@@ -27,12 +29,20 @@ const assertMissing = (
   if (pattern.test(content)) failures.push(`${file}: ${explanation}`);
 };
 
-const [storage, learningPlan, firebase, accountService, sessionBoundary, main] = await Promise.all([
+assert.equal(shouldClearLocalAccountDataForTransition(undefined, null), false);
+assert.equal(shouldClearLocalAccountDataForTransition(undefined, 'account-a'), false);
+assert.equal(shouldClearLocalAccountDataForTransition(null, 'account-a'), false, 'Gastdaten sollen beim ersten Login übernommen werden.');
+assert.equal(shouldClearLocalAccountDataForTransition('account-a', 'account-a'), false);
+assert.equal(shouldClearLocalAccountDataForTransition('account-a', null), true, 'Logout/Auth-Verlust muss Kontodaten löschen.');
+assert.equal(shouldClearLocalAccountDataForTransition('account-a', 'account-b'), true, 'Kontowechsel muss vorherige Kontodaten löschen.');
+
+const [storage, learningPlan, firebase, accountService, sessionBoundary, analyticsPanel, main] = await Promise.all([
   readWebFile('storage.ts'),
   readWebFile('services/learningPlanService.ts'),
   readWebFile('firebase.ts'),
   readWebFile('services/accountService.ts'),
   readWebFile('components/AccountSessionBoundary.tsx'),
+  readWebFile('components/LearningAnalyticsPanel.tsx'),
   readWebFile('main.tsx'),
 ]);
 
@@ -90,30 +100,10 @@ for (const [file, content] of [
   ['wissenpur/src/firebase.ts', firebase],
   ['wissenpur/src/services/accountService.ts', accountService],
 ] as const) {
-  assertIncludes(
-    file,
-    content,
-    "wissenpur_user_stats_owner",
-    'Logout und Kontolöschung müssen den lokalen Besitzer-Marker entfernen.',
-  );
-  assertIncludes(
-    file,
-    content,
-    "wissenpur_learning_plan",
-    'Logout und Kontolöschung müssen den lokalen Lernplan entfernen.',
-  );
-  assertIncludes(
-    file,
-    content,
-    "wissenpur_learning_history_v1",
-    'Logout und Kontolöschung müssen die lokale Lernanalyse entfernen.',
-  );
-  assertIncludes(
-    file,
-    content,
-    "wissenpur_learning_history_owner_v1",
-    'Logout und Kontolöschung müssen auch den Besitzer der lokalen Lernanalyse entfernen.',
-  );
+  assertIncludes(file, content, 'wissenpur_user_stats_owner', 'Logout und Kontolöschung müssen den lokalen Besitzer-Marker entfernen.');
+  assertIncludes(file, content, 'wissenpur_learning_plan', 'Logout und Kontolöschung müssen den lokalen Lernplan entfernen.');
+  assertIncludes(file, content, 'wissenpur_learning_history_v1', 'Logout und Kontolöschung müssen die lokale Lernanalyse entfernen.');
+  assertIncludes(file, content, 'wissenpur_learning_history_owner_v1', 'Logout und Kontolöschung müssen auch den Besitzer der lokalen Lernanalyse entfernen.');
 }
 
 assertIncludes(
@@ -125,8 +115,8 @@ assertIncludes(
 assertIncludes(
   'wissenpur/src/components/AccountSessionBoundary.tsx',
   sessionBoundary,
-  'previous !== undefined && previous !== nextUid',
-  'Ein Konto- oder Authwechsel muss lokale Kontodaten verwerfen.',
+  'shouldClearLocalAccountDataForTransition(previous, nextUid)',
+  'Authwechsel müssen über die zentrale Session-Policy entschieden werden.',
 );
 assertIncludes(
   'wissenpur/src/components/AccountSessionBoundary.tsx',
@@ -147,6 +137,12 @@ assertIncludes(
   'Die vollständige Produktoberfläche muss bei Auth- und Bibliothekswechseln neu gemountet werden.',
 );
 assertIncludes(
+  'wissenpur/src/components/LearningAnalyticsPanel.tsx',
+  analyticsPanel,
+  'shouldClearLocalAccountDataForTransition(previousIdentity, nextIdentity)',
+  'Auch die lokale Lernanalyse muss dieselbe Gast-/Kontowechsel-Policy verwenden.',
+);
+assertIncludes(
   'wissenpur/src/main.tsx',
   main,
   '<AccountSessionBoundary>',
@@ -160,4 +156,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('Lokale Konto-Isolation, Analyse-Löschung, Auth-Hydrierung, Authwechsel, Logout und Löschung geprüft.');
+console.log('Gastdaten-Übernahme, Konto-Isolation, Analyse-Löschung, Auth-Hydrierung, Authwechsel, Logout und Löschung geprüft.');
