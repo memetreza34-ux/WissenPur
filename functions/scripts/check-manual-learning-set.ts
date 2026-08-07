@@ -14,7 +14,10 @@ const [main, editor, policy] = await Promise.all([
 
 assert.match(main, /<ManualLearningSetPanel\s*\/>/);
 assert.match(editor, /MAX_MANUAL_QUESTIONS = 30/);
-assert.match(editor, /assertLearningLibraryWithinPolicy\(nextDecks\)/);
+assert.match(editor, /applyLearningLibraryPolicy\(candidateDecks\)/);
+assert.match(editor, /policy\.decks\.find\(\(entry\) => entry\.id === deck\.id\)/);
+assert.match(editor, /savedDeck\.questions\.length !== questions\.length/);
+assert.match(editor, /Bibliothek hat ihr Größenlimit erreicht/);
 assert.match(editor, /vier unterschiedliche Antworten/);
 assert.match(editor, /new Set\(normalizedOptions/);
 assert.match(editor, /keine Ranglistenpunkte/);
@@ -29,4 +32,4 @@ assert.match(policy, /MAX_LIBRARY_DECKS/);
 assert.match(policy, /MAX_LIBRARY_QUESTIONS/);
 assert.match(policy, /MAX_LIBRARY_SERIALIZED_BYTES/);
 
-console.log('Manueller Lernset-Editor, Übungsgrenze und Bibliotheksrichtlinie geprüft.');
+console.log('Manueller Lernset-Editor, Alt-Daten-Normalisierung, Übungsgrenze und Bibliotheksrichtlinie geprüft.');
