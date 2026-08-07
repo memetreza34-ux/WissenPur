@@ -235,7 +235,10 @@ const [main, releaseApp, manager, boundary, flashcards, importPanel, storage, fi
 assert.match(main, /<LearningLibraryManager\s*\/>/);
 assert.match(releaseApp, /getDueQuestionsFromLibrary/);
 assert.match(releaseApp, /const dueReviewQuestions = useMemo/);
-assert.match(releaseApp, /openFlashcards\(dueReviewQuestions\)/);
+assert.match(releaseApp, /getDueQuestionsFromLibrary\(stats\.customQuizzes \|\| \[\], reviewNow\)/);
+assert.match(releaseApp, /openFlashcards\(dueReviewQuestions, null, 'today'\)/);
+assert.match(releaseApp, /setScreen\(flashcardReturnScreen\)/);
+assert.match(releaseApp, /setInterval\(\(\) => setReviewNow\(Date\.now\(\)\), REVIEW_REFRESH_MS\)/);
 assert.doesNotMatch(
   releaseApp,
   /openFlashcards\(stats\.customQuizzes\.flatMap\(\(deck\) => deck\.questions\)\)/,
@@ -245,6 +248,9 @@ assert.match(manager, /LearningSetImportPanel/);
 assert.match(manager, /serializeLearningSet/);
 assert.match(manager, /getDueQuestionsFromDeck/);
 assert.match(manager, /getDueQuestionsFromLibrary/);
+assert.match(manager, /getDueQuestionsFromLibrary\(decks, reviewNow\)/);
+assert.match(manager, /getDueQuestionsFromDeck\(deck, reviewNow\)/);
+assert.match(manager, /setInterval\(\(\) => setReviewNow\(Date\.now\(\)\), REVIEW_REFRESH_MS\)/);
 assert.doesNotMatch(manager, /const questionIsDue/);
 assert.match(manager, /Probeprüfung/);
 assert.match(manager, /keine Ranglistenpunkte/);
@@ -267,4 +273,4 @@ assert.match(firebaseService, /wissenpur:library-updated/);
 assert.match(boundary, /wissenpur:library-updated/);
 assert.match(boundary, /contentRevision/);
 
-console.log('Lernset-Import, lokale/Cloud-Merge-Policy, zentrale Bibliotheksrichtlinie, fällige Heute-Queue, Offline-Speicherung und Probeprüfung geprüft.');
+console.log('Lernset-Import, lokale/Cloud-Merge-Policy, zentrale Bibliotheksrichtlinie, fällige Heute-Queue, Zeit-Refresh, Rücknavigation, Offline-Speicherung und Probeprüfung geprüft.');
