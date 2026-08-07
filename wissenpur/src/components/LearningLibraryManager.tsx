@@ -47,6 +47,8 @@ interface MockExamState {
   completed: boolean;
 }
 
+const REVIEW_REFRESH_MS = 60_000;
+
 const shuffle = <T,>(items: readonly T[]): T[] => {
   const result = [...items];
   for (let index = result.length - 1; index > 0; index -= 1) {
@@ -119,6 +121,7 @@ export const LearningLibraryManager = () => {
   const [message, setMessage] = useState<string | null>(null);
   const [flashcardSession, setFlashcardSession] = useState<FlashcardSession | null>(null);
   const [exam, setExam] = useState<MockExamState | null>(null);
+  const [reviewNow, setReviewNow] = useState(() => Date.now());
 
   useEffect(() => onAuthStateChanged(auth, (user) => {
     setIsAuthenticated(Boolean(user));
@@ -129,6 +132,11 @@ export const LearningLibraryManager = () => {
     const refresh = () => setDecks(getStats().customQuizzes || []);
     window.addEventListener('wissenpur:stats-updated', refresh);
     return () => window.removeEventListener('wissenpur:stats-updated', refresh);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setReviewNow(Date.now()), REVIEW_REFRESH_MS);
+    return () => window.clearInterval(timer);
   }, []);
 
   const persistDecks = (nextDecks: CustomQuiz[], remountProduct = false) => {
@@ -143,17 +151,17 @@ export const LearningLibraryManager = () => {
   };
 
   const totalDue = useMemo(
-    () => getDueQuestionsFromLibrary(decks).length,
-    [decks],
+    () => getDueQuestionsFromLibrary(decks, reviewNow).length,
+    [decks, reviewNow],
   );
 
   const visibleDecks = useMemo(() => {
     const query = search.trim().toLocaleLowerCase('de-DE');
     return [...decks]
       .filter((deck) => !query || deck.title.toLocaleLowerCase('de-DE').includes(query))
-      .filter((deck) => filter === 'all' || getDueQuestionsFromDeck(deck).length > 0)
+      .filter((deck) => filter === 'all' || getDueQuestionsFromDeck(deck, reviewNow).length > 0)
       .sort((left, right) => right.createdAt - left.createdAt);
-  }, [decks, filter, search]);
+  }, [decks, filter, reviewNow, search]);
 
   const importDeck = async (deck: CustomQuiz) => {
     const existingTitles = new Set(decks.map((entry) => entry.title.trim().toLocaleLowerCase('de-DE')));
@@ -179,7 +187,7 @@ export const LearningLibraryManager = () => {
   };
 
   const openDueCards = (deck: CustomQuiz) => {
-    const questions = getDueQuestionsFromDeck(deck);
+    const questions = getDueQuestionsFromDeck(deck, reviewNow);
     if (questions.length === 0) {
       setMessage('In diesem Lernset ist aktuell keine Karte fällig.');
       return;
@@ -200,6 +208,7 @@ export const LearningLibraryManager = () => {
 
   const closeFlashcards = () => {
     setFlashcardSession(null);
+    setReviewNow(Date.now());
     window.dispatchEvent(new Event('wissenpur:library-updated'));
   };
 
@@ -368,6 +377,7 @@ export const LearningLibraryManager = () => {
         onClick={() => {
           setMessage(null);
           setDecks(getStats().customQuizzes || []);
+          setReviewNow(Date.now());
           setIsOpen(true);
         }}
         className="fixed bottom-44 left-4 z-[78] flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 text-xs font-black text-slate-700 shadow-xl backdrop-blur-xl hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 dark:border-slate-700 dark:bg-slate-900/95 dark:text-slate-100"
@@ -440,7 +450,7 @@ export const LearningLibraryManager = () => {
             ) : (
               <div className="space-y-3">
                 {visibleDecks.map((deck) => {
-                  const due = getDueQuestionsFromDeck(deck);
+                  const due = getDueQuestionsFromDeck(deck, reviewNow);
                   return (
                     <Card key={deck.id} className="p-5">
                       <div className="flex items-start justify-between gap-4">
