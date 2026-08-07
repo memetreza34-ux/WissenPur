@@ -22,7 +22,10 @@ import {
   removeLearningPlan,
   saveLearningPlan,
 } from '../services/learningPlanService';
+import { getDueQuestionsFromLibrary } from '../services/reviewQueue';
 import { Button, ProgressBar } from './UI';
+
+const REVIEW_REFRESH_MS = 60_000;
 
 const todayKey = () =>
   new Intl.DateTimeFormat('en-CA', {
@@ -43,13 +46,8 @@ const defaultExamDate = () => {
   }).format(date);
 };
 
-const getDueCards = () => {
-  const now = Date.now();
-  return (getStats().customQuizzes || [])
-    .flatMap((deck) => deck.questions)
-    .filter((question) => !question.srsData || question.srsData.nextReviewDate <= now)
-    .length;
-};
+const getDueCards = (now = Date.now()) =>
+  getDueQuestionsFromLibrary(getStats().customQuizzes || [], now).length;
 
 const getErrorMessage = (error: unknown) => {
   if (error && typeof error === 'object' && 'message' in error) {
@@ -93,9 +91,11 @@ export const LearningPlanPanel = () => {
 
   useEffect(() => {
     const refresh = () => setDueCards(getDueCards());
+    const timer = window.setInterval(refresh, REVIEW_REFRESH_MS);
     window.addEventListener('wissenpur:stats-updated', refresh);
     window.addEventListener('storage', refresh);
     return () => {
+      window.clearInterval(timer);
       window.removeEventListener('wissenpur:stats-updated', refresh);
       window.removeEventListener('storage', refresh);
     };
@@ -191,6 +191,7 @@ export const LearningPlanPanel = () => {
         type="button"
         onClick={() => {
           setMessage(null);
+          setDueCards(getDueCards());
           setIsEditing(!plan);
           setIsOpen(true);
         }}
