@@ -67,6 +67,7 @@ export const createEconomySnapshot = (stats: UserStats): EconomySnapshot => ({
 const normalizeRecord = (value: unknown): LearningSessionRecord | null => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const raw = value as Partial<LearningSessionRecord>;
+  if (raw.kind !== 'ranked' && raw.kind !== 'mock') return null;
   const id = safeString(raw.id, 120);
   const label = safeString(raw.label, 100);
   const category = safeString(raw.category, 50) || 'all';
@@ -74,11 +75,10 @@ const normalizeRecord = (value: unknown): LearningSessionRecord | null => {
   const correct = clampInt(raw.correct, 0, 30);
   const total = clampInt(raw.total, 1, 30);
   if (!id || !label || completedAt <= 0 || correct > total) return null;
-  const kind: LearningSessionKind = raw.kind === 'mock' ? 'mock' : raw.kind === 'ranked' ? 'ranked' : 'ranked';
   return {
     id,
     completedAt,
-    kind,
+    kind: raw.kind,
     label,
     category,
     correct,
