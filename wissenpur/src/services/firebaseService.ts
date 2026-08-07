@@ -30,6 +30,13 @@ interface FirestoreErrorInfo {
   resourceType: string;
 }
 
+class AuthSessionChangedError extends Error {
+  constructor() {
+    super('Authentication session changed during synchronization.');
+    this.name = 'AuthSessionChangedError';
+  }
+}
+
 let hydratedAuthUid: string | null = null;
 
 onAuthStateChanged(auth, (user) => {
@@ -38,6 +45,12 @@ onAuthStateChanged(auth, (user) => {
     hydratedAuthUid = null;
   }
 });
+
+const assertActiveAuthUid = (expectedUid: string): void => {
+  if (auth.currentUser?.uid !== expectedUid) {
+    throw new AuthSessionChangedError();
+  }
+};
 
 function handleFirestoreError(
   error: unknown,
@@ -106,14 +119,16 @@ const mergeCloudStats = (
   } as UserStats;
 };
 
-const getProfileUpdate = (stats: UserStats): Partial<UserStats> & { uid: string } => {
-  const currentUser = auth.currentUser;
-  if (!currentUser) throw new Error('Profil-Synchronisierung erfordert eine Anmeldung.');
-
+const getProfileUpdate = (
+  stats: UserStats,
+  expectedUid: string,
+): Partial<UserStats> & { uid: string } => {
+  assertActiveAuthUid(expectedUid);
+  const currentUser = auth.currentUser!;
   const library = applyLearningLibraryPolicy(stats.customQuizzes);
   const wrongQuestions = mergeWrongQuestions(stats.wrongQuestions, []);
   return sanitizeForFirestore({
-    uid: currentUser.uid,
+    uid: expectedUid,
     displayName: currentUser.displayName || 'Anonym',
     photoURL: currentUser.photoURL || '',
     customName: stats.customName,
@@ -125,18 +140,22 @@ const getProfileUpdate = (stats: UserStats): Partial<UserStats> & { uid: string 
   });
 };
 
-const persistProfileOnly = async (stats: UserStats): Promise<UserStats> => {
-  const currentUser = auth.currentUser;
-  if (!currentUser) return stats;
-
+const persistProfileOnly = async (
+  stats: UserStats,
+  expectedUid: string,
+): Promise<UserStats> => {
+  assertActiveAuthUid(expectedUid);
   const library = applyLearningLibraryPolicy(stats.customQuizzes);
   const wrongQuestions = mergeWrongQuestions(stats.wrongQuestions, []);
   const profileNormalized = library.changed || wrongQuestions.length !== (stats.wrongQuestions || []).length;
   const normalizedStats: UserStats = profileNormalized
     ? { ...stats, customQuizzes: library.decks, wrongQuestions }
     : stats;
-  const profileUpdate = getProfileUpdate(normalizedStats);
+  const profileUpdate = getProfileUpdate(normalizedStats, expectedUid);
   const persistedStats = { ...normalizedStats, ...profileUpdate } as UserStats;
+
+  await setDoc(doc(db, 'users', expectedUid), profileUpdate, { merge: true });
+  assertActiveAuthUid(expectedUid);
 
   if (profileNormalized) {
     console.warn('Lokale Lerninhalte wurden vor der Cloud-Synchronisierung normalisiert.', {
@@ -151,7 +170,6 @@ const persistProfileOnly = async (stats: UserStats): Promise<UserStats> => {
     }
   }
 
-  await setDoc(doc(db, 'users', currentUser.uid), profileUpdate, { merge: true });
   return persistedStats;
 };
 
@@ -159,6 +177,7 @@ const persistProfileOnly = async (stats: UserStats): Promise<UserStats> => {
  * The browser only synchronizes profile settings and user-created learning
  * content. Every new authenticated session obtains economy state from the
  * App-Check-protected backend normalizer before it is persisted locally.
+ * Late responses from a previous auth session are discarded.
  */
 export const syncUserStats = async (stats: UserStats): Promise<UserStats | undefined> => {
   const currentUser = auth.currentUser;
@@ -166,21 +185,24 @@ export const syncUserStats = async (stats: UserStats): Promise<UserStats | undef
     hydratedAuthUid = null;
     return undefined;
   }
-
-  const userRef = doc(db, 'users', currentUser.uid);
+  const expectedUid = currentUser.uid;
+  const userRef = doc(db, 'users', expectedUid);
 
   try {
-    if (hydratedAuthUid !== currentUser.uid) {
+    if (hydratedAuthUid !== expectedUid) {
       const existingSnapshot = await getDoc(userRef);
+      assertActiveAuthUid(expectedUid);
       const existingData = existingSnapshot.exists()
         ? existingSnapshot.data() as Partial<UserStats>
         : {};
       const profileMerged = mergeProfileContent(stats, existingData);
       const authoritativeEconomy = (await getServerEconomyState()).stats;
+      assertActiveAuthUid(expectedUid);
       const hydratedStats = mergeCloudStats(profileMerged, authoritativeEconomy);
 
-      const persisted = await persistProfileOnly(hydratedStats);
-      hydratedAuthUid = currentUser.uid;
+      const persisted = await persistProfileOnly(hydratedStats, expectedUid);
+      assertActiveAuthUid(expectedUid);
+      hydratedAuthUid = expectedUid;
       saveStats(persisted);
       if (typeof window !== 'undefined') {
         window.dispatchEvent(
@@ -190,8 +212,9 @@ export const syncUserStats = async (stats: UserStats): Promise<UserStats | undef
       return persisted;
     }
 
-    return persistProfileOnly(stats);
+    return persistProfileOnly(stats, expectedUid);
   } catch (error) {
+    if (error instanceof AuthSessionChangedError) return undefined;
     handleFirestoreError(error, OperationType.WRITE, 'current-user-profile');
   }
 };
