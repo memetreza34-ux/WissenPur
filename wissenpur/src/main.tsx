@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { AccountPrivacyPanel } from './components/AccountPrivacyPanel';
 import { AccountSessionBoundary } from './components/AccountSessionBoundary';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
+import { LearningLibraryManager } from './components/LearningLibraryManager';
 import { LearningPlanPanel } from './components/LearningPlanPanel';
 import { LegalPanel } from './components/LegalPanel';
 import ReleaseApp from './ReleaseApp';
@@ -13,6 +14,7 @@ createRoot(document.getElementById('root')!).render(
     <AppErrorBoundary>
       <AccountSessionBoundary>
         <ReleaseApp />
+        <LearningLibraryManager />
         <LearningPlanPanel />
         <LegalPanel />
         <AccountPrivacyPanel />
@@ -23,8 +25,9 @@ createRoot(document.getElementById('root')!).render(
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch((error) => {
-      console.warn('Service Worker konnte nicht registriert werden:', error);
+    void navigator.serviceWorker.register('/sw.js').catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : 'unknown registration error';
+      console.warn('Service Worker konnte nicht registriert werden:', message);
     });
   });
 }
