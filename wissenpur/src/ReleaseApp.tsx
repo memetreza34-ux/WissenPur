@@ -170,12 +170,44 @@ const mergeServerStats = (local: ReleaseStats, server: ServerEconomyStats): Rele
   customPhotoURL: server.customPhotoURL ?? local.customPhotoURL,
 });
 
+const maskEconomyUntilHydrated = (local: ReleaseStats): ReleaseStats => ({
+  ...local,
+  economyVersion: undefined,
+  totalPoints: 0,
+  coins: 0,
+  currentStreak: 0,
+  bestStreak: 0,
+  roundsPlayed: 0,
+  correctAnswers: 0,
+  totalQuestionsAnswered: 0,
+  dailyQuestionsAnswered: 0,
+  lastDailyQuestionsDate: null,
+  dailyRewardClaimed: false,
+  lastPlayedDate: null,
+  lastDailyChallengeDate: null,
+  lastDailyRewardDate: null,
+  lastSpinDate: null,
+  achievements: [],
+  powerUps: {
+    fiftyFifty: 0,
+    timeFreeze: 0,
+    secondChance: 0,
+  },
+  unlockedAvatars: ['default'],
+  unlockedTitles: ['Neuling'],
+  equippedTitle: 'Neuling',
+  customPhotoURL: undefined,
+  categoryStats: {},
+  weeklyGoal: undefined,
+});
+
 const safeError = (error: unknown) => getCallableErrorMessage(error).replace(/^Firebase:\s*/i, '');
 
 export default function ReleaseApp() {
   const [screen, setScreen] = useState<ReleaseScreen>('today');
   const [stats, setStats] = useState<ReleaseStats>(() => getStats() as ReleaseStats);
   const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [isAccountHydrating, setIsAccountHydrating] = useState(false);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<CategoryId | 'all'>('all');
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty | 'all'>('all');
@@ -210,12 +242,22 @@ export default function ReleaseApp() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (nextUser) => {
       setUser(nextUser);
-      if (!nextUser) return;
+      if (!nextUser) {
+        setIsAccountHydrating(false);
+        return;
+      }
+
+      const localBeforeHydration = getStats() as ReleaseStats;
+      setStats(maskEconomyUntilHydrated(localBeforeHydration));
+      setIsAccountHydrating(true);
+      setNotice(null);
       try {
-        const hydrated = await syncUserStats(getStats());
+        const hydrated = await syncUserStats(localBeforeHydration);
         if (hydrated) persistStats(hydrated as ReleaseStats);
       } catch (error) {
-        setNotice(safeError(error));
+        setNotice(`Kontodaten konnten nicht sicher geladen werden: ${safeError(error)}`);
+      } finally {
+        setIsAccountHydrating(false);
       }
     });
     return unsubscribe;
@@ -226,11 +268,11 @@ export default function ReleaseApp() {
   }, [stats.darkMode]);
 
   useEffect(() => {
-    if (screen !== 'leaderboard') return;
+    if (screen !== 'leaderboard' || isAccountHydrating) return;
     getLeaderboard(100)
       .then(setLeaderboard)
       .catch((error) => setNotice(safeError(error)));
-  }, [screen]);
+  }, [screen, isAccountHydrating]);
 
   const weakCategory = useMemo(() => {
     const entries = Object.entries(stats.categoryStats || {}).filter(([, value]) => value.totalQuestions > 0);
@@ -294,6 +336,10 @@ export default function ReleaseApp() {
         globalSeconds: mode === 'blitz' ? 60 : undefined,
       });
       setNotice('Du spielst ohne Anmeldung im Übungsmodus. Es werden keine Ranglistenpunkte vergeben.');
+      return;
+    }
+    if (isAccountHydrating) {
+      setNotice('Dein servergesicherter Fortschritt wird noch geladen. Gewertete Runden starten erst danach.');
       return;
     }
 
@@ -514,6 +560,7 @@ export default function ReleaseApp() {
   };
 
   const claimDailyQuest = async () => {
+    if (isAccountHydrating) return;
     setIsBusy(true);
     try {
       const response = await claimServerDailyReward();
@@ -529,6 +576,10 @@ export default function ReleaseApp() {
   const buyItem = async (itemId: string) => {
     if (!user) {
       setNotice('Bitte melde dich an, um den servergesicherten Shop zu verwenden.');
+      return;
+    }
+    if (isAccountHydrating) {
+      setNotice('Dein servergesicherter Fortschritt wird noch geladen. Der Shop ist danach verfügbar.');
       return;
     }
     setIsBusy(true);
@@ -619,6 +670,7 @@ export default function ReleaseApp() {
             </div>
             <Button
               className="mt-6 bg-white text-blue-700 hover:bg-blue-50"
+              disabled={isAccountHydrating}
               onClick={() => dueCards > 0 && stats.customQuizzes?.length
                 ? openFlashcards(stats.customQuizzes.flatMap((deck) => deck.questions))
                 : void startRanked('standard', weakCategory || 'all', 'all', 10)}
@@ -646,7 +698,7 @@ export default function ReleaseApp() {
           <section>
             <div className="mb-3 flex items-end justify-between">
               <div><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Tagesaufgaben</p><h2 className="text-xl font-black">Dein Fokus</h2></div>
-              {user && <DailySpinWheel onClaimReward={() => window.setTimeout(() => setStats(getStats() as ReleaseStats), 20)} />}
+              {user && !isAccountHydrating && <DailySpinWheel onClaimReward={() => window.setTimeout(() => setStats(getStats() as ReleaseStats), 20)} />}
             </div>
             <div className="space-y-3">
               <Card onClick={() => dailyDone ? startPractice('Daily – Wiederholung', selectLocalQuestions('all', 'all', 10)) : void startRanked('daily', 'all', 'all', 10)} className="flex items-center gap-4 p-5">
@@ -665,7 +717,7 @@ export default function ReleaseApp() {
             </div>
           </section>
 
-          {canClaimDaily && user && (
+          {canClaimDaily && user && !isAccountHydrating && (
             <Card className="border-0 bg-gradient-to-r from-emerald-500 to-teal-600 p-5 text-white">
               <div className="flex items-center justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-widest text-emerald-100">Tagesziel erreicht</p><h3 className="mt-1 text-lg font-black">+100 Punkte und +50 Münzen</h3></div><Button disabled={isBusy} onClick={claimDailyQuest} className="bg-white text-emerald-700">Einlösen</Button></div>
             </Card>
@@ -690,7 +742,7 @@ export default function ReleaseApp() {
           <div className="mt-5 flex items-center gap-3">
             {[5, 10, 15, 20].map((count) => <button key={count} type="button" onClick={() => setQuestionCount(count)} className={`flex-1 rounded-xl py-2 text-sm font-black ${questionCount === count ? 'bg-slate-950 text-white dark:bg-white dark:text-slate-950' : 'bg-white dark:bg-slate-800'}`}>{count}</button>)}
           </div>
-          <Button fullWidth className="mt-5" disabled={isBusy} onClick={() => void startRanked('standard', selectedCategory, selectedDifficulty, questionCount)}><Play size={18} /> Prüfung starten</Button>
+          <Button fullWidth className="mt-5" disabled={isBusy || isAccountHydrating} onClick={() => void startRanked('standard', selectedCategory, selectedDifficulty, questionCount)}><Play size={18} /> Prüfung starten</Button>
           <p className="mt-3 text-xs font-medium text-slate-500">In gewerteten Runden kommen Fragen und Lösungen vom Backend. Lösungen erscheinen erst nach der Abgabe.</p>
         </section>
 
@@ -703,7 +755,7 @@ export default function ReleaseApp() {
                   <div className={`flex h-11 w-11 items-center justify-center rounded-2xl text-white ${category.color}`}><BookOpen size={20} /></div>
                   <h3 className="mt-4 font-black">{category.title}</h3><p className="mt-1 text-xs text-slate-500">{category.description}</p>
                 </button>
-                <div className="mt-4 grid grid-cols-2 gap-2"><Button size="sm" onClick={() => void startRanked('standard', category.id, selectedDifficulty, questionCount)}>Quiz</Button><Button size="sm" variant="outline" onClick={() => openFlashcards(selectLocalQuestions(category.id, selectedDifficulty, Math.min(20, QUESTIONS.length)))}>Karten</Button></div>
+                <div className="mt-4 grid grid-cols-2 gap-2"><Button size="sm" disabled={isAccountHydrating} onClick={() => void startRanked('standard', category.id, selectedDifficulty, questionCount)}>Quiz</Button><Button size="sm" variant="outline" onClick={() => openFlashcards(selectLocalQuestions(category.id, selectedDifficulty, Math.min(20, QUESTIONS.length)))}>Karten</Button></div>
               </Card>
             ))}
           </div>
@@ -711,7 +763,7 @@ export default function ReleaseApp() {
 
         <Card className="border-0 bg-gradient-to-br from-orange-500 to-rose-600 p-6 text-white">
           <div className="flex items-start justify-between"><div><p className="text-xs font-black uppercase tracking-widest text-orange-100">60 Sekunden</p><h2 className="mt-2 text-2xl font-black">Blitz-Prüfung</h2><p className="mt-2 text-sm text-orange-100/80">Bis zu 30 servergelieferte Fragen, eine gemeinsame Uhr.</p></div><Zap size={44} className="text-white/30" /></div>
-          <Button className="mt-5 bg-white text-orange-700" onClick={() => void startRanked('blitz', 'all', 'all', 30)}>Blitz starten</Button>
+          <Button className="mt-5 bg-white text-orange-700" disabled={isAccountHydrating} onClick={() => void startRanked('blitz', 'all', 'all', 30)}>Blitz starten</Button>
         </Card>
       </main>
     </div>
@@ -776,8 +828,8 @@ export default function ReleaseApp() {
         <main className="space-y-6 p-5">
           <Card className="p-6 text-center"><div className="mx-auto flex h-20 w-20 items-center justify-center overflow-hidden rounded-[1.75rem] bg-blue-600 text-3xl font-black text-white">{user?.photoURL ? <img src={user.photoURL} alt="Profil" className="h-full w-full object-cover" referrerPolicy="no-referrer" /> : stats.customName?.[0] || user?.displayName?.[0] || level.icon}</div><h2 className="mt-4 text-2xl font-black">{stats.customName || user?.displayName || 'Gastkonto'}</h2><p className={`mt-1 text-sm font-black ${level.color}`}>{level.name} · Level {level.level}</p><div className="mt-5"><ProgressBar progress={level.progress} /></div></Card>
           <div className="grid grid-cols-2 gap-3"><Card className="p-5 text-center"><Trophy className="mx-auto text-blue-500" /><p className="mt-2 text-2xl font-black">{stats.totalPoints}</p><p className="text-xs text-slate-500">Punkte</p></Card><Card className="p-5 text-center"><Target className="mx-auto text-emerald-500" /><p className="mt-2 text-2xl font-black">{accuracy}%</p><p className="text-xs text-slate-500">Genauigkeit</p></Card></div>
-          <Button fullWidth variant="outline" onClick={() => setScreen('leaderboard')}><Medal size={18} /> Rangliste öffnen</Button>
-          <Button fullWidth variant="outline" onClick={() => setScreen('shop')}><Coins size={18} /> Shop öffnen</Button>
+          <Button fullWidth variant="outline" disabled={isAccountHydrating} onClick={() => setScreen('leaderboard')}><Medal size={18} /> Rangliste öffnen</Button>
+          <Button fullWidth variant="outline" disabled={isAccountHydrating} onClick={() => setScreen('shop')}><Coins size={18} /> Shop öffnen</Button>
           <label className="flex items-center justify-between rounded-2xl bg-white p-4 font-bold shadow-sm dark:bg-slate-900"><span>Dark Mode</span><input type="checkbox" checked={Boolean(stats.darkMode)} onChange={() => { const next = { ...stats, darkMode: !stats.darkMode }; persistStats(next); if (user) void syncUserStats(next); }} className="h-5 w-5 accent-blue-600" /></label>
           {user ? <Button fullWidth variant="danger" onClick={logout}><LogOut size={18} /> Abmelden</Button> : <Button fullWidth onClick={signInWithGoogle}><LogIn size={18} /> Mit Google anmelden</Button>}
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs font-medium text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">Impressum, Datenschutz, Datenexport und vollständige Kontolöschung bleiben vor dem öffentlichen Release verpflichtende Freigabepunkte.</div>
@@ -803,7 +855,7 @@ export default function ReleaseApp() {
       <main className="space-y-4 p-5">
         <div className="rounded-2xl bg-amber-50 p-4 text-sm font-medium text-amber-900 dark:bg-amber-950/30 dark:text-amber-100">Preise und Bestände werden ausschließlich im Backend geprüft. Power-ups werden erst in einem späteren sicheren Übungsmodus eingesetzt.</div>
         {notice && <div className="rounded-2xl bg-blue-50 p-4 text-sm font-bold text-blue-900 dark:bg-blue-950/30 dark:text-blue-100">{notice}</div>}
-        {SHOP_ITEMS.map((item) => <Card key={item.id} className="flex items-center gap-4 p-5"><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-600"><Coins /></div><div className="flex-1"><h3 className="font-black">{item.title}</h3><p className="text-xs text-slate-500">{item.description}</p></div><Button size="sm" disabled={isBusy || (stats.coins || 0) < item.cost} onClick={() => void buyItem(item.id)}>{item.cost}</Button></Card>)}
+        {SHOP_ITEMS.map((item) => <Card key={item.id} className="flex items-center gap-4 p-5"><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-600"><Coins /></div><div className="flex-1"><h3 className="font-black">{item.title}</h3><p className="text-xs text-slate-500">{item.description}</p></div><Button size="sm" disabled={isBusy || isAccountHydrating || (stats.coins || 0) < item.cost} onClick={() => void buyItem(item.id)}>{item.cost}</Button></Card>)}
       </main>
     </div>
   );
@@ -896,7 +948,8 @@ export default function ReleaseApp() {
   return (
     <div className={`min-h-[100dvh] bg-slate-50 text-slate-950 dark:bg-slate-950 dark:text-white ${stats.darkMode ? 'dark' : ''}`}>
       <div className="mx-auto min-h-[100dvh] max-w-5xl bg-white/60 shadow-2xl dark:bg-slate-950/80">
-        {isBusy && screen !== 'quiz' && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 backdrop-blur-sm"><div className="rounded-3xl bg-white p-6 text-center shadow-2xl dark:bg-slate-900"><div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600" /><p className="mt-4 font-black">Wird sicher verarbeitet …</p></div></div>}
+        {isAccountHydrating && <div className="fixed inset-0 z-[105] flex items-center justify-center bg-slate-950/70 p-5 backdrop-blur-sm"><div role="status" aria-live="polite" className="max-w-sm rounded-3xl bg-white p-6 text-center shadow-2xl dark:bg-slate-900"><div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600" /><p className="mt-4 font-black">Kontofortschritt wird sicher geladen …</p><p className="mt-2 text-xs font-medium text-slate-500">Punkte und Münzen werden erst nach der serverseitigen Prüfung angezeigt.</p></div></div>}
+        {isBusy && !isAccountHydrating && screen !== 'quiz' && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 backdrop-blur-sm"><div className="rounded-3xl bg-white p-6 text-center shadow-2xl dark:bg-slate-900"><div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600" /><p className="mt-4 font-black">Wird sicher verarbeitet …</p></div></div>}
         {renderScreen()}
         {showNavigation && (
           <nav aria-label="Hauptnavigation" className="fixed bottom-4 left-1/2 z-50 flex w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 items-center justify-around rounded-[2rem] border border-white/60 bg-white/90 px-2 py-3 shadow-2xl backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/90">
