@@ -43,6 +43,8 @@ const clearDeletedAccountCache = () => {
   localStorage.removeItem('wissenpur_user_stats');
   localStorage.removeItem('wissenpur_user_stats_owner');
   localStorage.removeItem('wissenpur_learning_plan');
+  localStorage.removeItem('wissenpur_learning_history_v1');
+  localStorage.removeItem('wissenpur_learning_history_owner_v1');
   sessionStorage.clear();
   window.dispatchEvent(new CustomEvent('wissenpur:account-storage-reset'));
 };
