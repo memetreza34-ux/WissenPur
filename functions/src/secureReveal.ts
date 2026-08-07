@@ -1,4 +1,5 @@
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import { enforceGlobalCallableRateLimit } from './callableRateLimit.js';
 import { db, enforceAppCheck } from './database.js';
 import { readSessionAnswerKey } from './sessionAnswerKey.js';
 
@@ -24,6 +25,7 @@ export const revealSecureRankedQuiz = onCall<RevealRequest>(
     if (!uid) {
       throw new HttpsError('unauthenticated', 'Bitte melde dich an.');
     }
+    await enforceGlobalCallableRateLimit(uid);
 
     const sessionId = requireText(request.data.sessionId);
     const snapshot = await db.collection('quizSessions').doc(sessionId).get();
