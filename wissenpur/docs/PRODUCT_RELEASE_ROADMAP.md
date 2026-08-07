@@ -4,194 +4,265 @@ Stand: August 2026
 
 ## Produktziel
 
-WissenPur soll keine weitere allgemeine Quiz-App werden. Das Produkt wird als persönliche Lernzentrale positioniert, die aus eigenen Unterlagen einen konkreten Lernweg erstellt und Lernen, Wiederholen, Prüfen und Fortschrittsanalyse verbindet.
+WissenPur wird als persönliche Lernzentrale aufgebaut, die **Lernen, Wiederholen, Prüfen, Lernplanung und Fortschrittsanalyse** in einer Oberfläche verbindet.
 
-Der besondere WissenPur-Vorteil bleibt das **Wissens-Gehirn**: Lernfortschritt wird nicht nur als Punktestand, sondern als verständliche Karte aus Stärken, Schwächen und fälligen Wiederholungen dargestellt.
+Der zentrale Produktvorteil ist das Wissensprofil: Nutzer sollen nicht nur Punkte sehen, sondern verstehen,
 
-## Konkurrenzmuster
+- welche Inhalte fällig sind,
+- welche Bereiche schwach oder stark sind,
+- wie sich ihre Prüfungsleistung entwickelt,
+- und was sie als Nächstes lernen sollten.
 
-### Quizlet
+## Aktueller Architekturstand
 
-Starke Muster:
+### Release-Oberfläche
 
-- Dokumente, Notizen und PDFs in Karteikarten, Study Guides und Probeklausuren umwandeln
-- verschiedene Lernprodukte aus derselben Quelle erzeugen
-- anpassbare Schwierigkeit, Dauer und Fragetypen
-- KI-Erklärungen statt nur richtiger oder falscher Antwort
+Bereits vorhanden:
 
-### StudySmarter
-
-Starke Muster:
-
-- Lernplan aus Prüfungsdatum und Lernziel
-- ein gemeinsamer Bereich für Dokumente, Notizen, Karteikarten und Quizze
-- Erinnerungen, Tagesziele und Lernstatistik
-- Spaced Repetition und verschiedene Abfragemodi
-- Lernsets mit Unterordnern, Tags und Freigabe
-
-### Knowunity
-
-Starke Muster:
-
-- KI-Lernbegleiter als zentraler Einstieg
-- personalisierte Lernpläne, Zusammenfassungen, Quizze und Probeklausuren
-- Antworten auf Fragen mit nachvollziehbaren Erklärungen
-- große, durchsuchbare Themen- und Materialstruktur
-
-### Kahoot
-
-Starke Muster:
-
-- klare Lernfolge: Karteikarten → Lernen → Test
-- Prüfungsmodus ohne sofort eingeblendete Lösungen
-- Wiederholung verpasster Fragen
-- Lerngruppen und gemeinsam nutzbare Sets
-- unterbrochene Sitzungen fortsetzen
-
-## Zielstruktur der App
-
-### 1. Heute
-
-Die Startseite soll eine eindeutige nächste Handlung zeigen:
-
-- heutige Wiederholungen
-- nächste Prüfung und verbleibende Tage
-- empfohlene 10- oder 20-Minuten-Lerneinheit
-- fällige Karteikarten
-- schwächster Wissensbereich
-- aktuelle Serie und Wochenziel
-
-### 2. Lernen
-
-Ein Lernset kann in mehreren Modi verwendet werden:
-
-- Karteikarten
-- adaptives Quiz
-- Prüfungsmodus
+- Heute
+- Lernen
+- Bibliothek
+- Fortschritt
+- Profil
+- Rangliste
+- Shop
 - Fehlertraining
-- Schnellwiederholung
-- mündliche Abfrage
-- Wahr/Falsch
-- Lückentext
-- Zuordnung
+- Daily Challenge
+- Blitz-Prüfung
+- SRS-Karteikarten
+- adaptiver Prüfungs-Lernplan
+- persönliche Lernanalyse
 
-### 3. Erstellen und Importieren
+### Gewertete Prüfungen
 
-Nutzer können Lernmaterial erstellen aus:
+Die frühere client-vertraute Rundenergebnis-Architektur ist **nicht mehr Teil des aktiven Release-Pfads**.
 
-- Thema oder Texteingabe
-- PDF
-- Foto oder Scan
-- Notizen
-- später: Webseite und Video-Transkript
+Gewertete Runden verwenden stattdessen:
 
-Aus einem Import werden erzeugt:
+1. `startRankedQuiz`
+   - Backend wählt die Fragen.
+   - Browser erhält keine Lösungen.
+   - Sitzung erhält einen unveränderlichen Antwort-Snapshot.
 
-- Zusammenfassung
-- Schlüsselbegriffe
-- Karteikarten
-- Quizfragen
-- Probeklausur
-- Lernplan
+2. `submitRankedQuiz`
+   - Antworten werden ausschließlich gegen den Sitzungssnapshot geprüft.
+   - Sitzung ist nutzergebunden, ablaufbegrenzt und einmal wertbar.
+   - Wiederholungsabgaben liefern idempotent das bereits gespeicherte Ergebnis.
 
-### 4. Bibliothek
+3. `revealRankedQuiz`
+   - Lösungen und Erklärungen werden erst nach einer gültigen Abgabe freigegeben.
 
-- Fächer
-- Lernsets
-- Unterordner
-- Tags
-- Suche und Filter
-- Favoriten
-- archivierte Sets
-- eigene und geteilte Sets
+Punkte, Münzen, Streaks, Achievements, Wochenziele und Ranglistenwerte werden serverseitig berechnet.
 
-### 5. Fortschritt
+### Legacy-Economy-Migration
 
-- Wissens-Gehirn
-- Beherrschung pro Thema
-- fällige Wiederholungen
-- Zeitaufwand
-- Genauigkeit
-- Fehlerarten
-- Prüfungsbereitschaft
-- Verlauf über Tage und Wochen
+Alte Dokumente waren historisch teilweise client-schreibbar und werden deshalb nicht als vertrauenswürdige Economy-Basis akzeptiert.
 
-### 6. Gemeinsam lernen
+`normalizeEconomy()` übernimmt Wirtschaftswerte nur, wenn `economyVersion === 1` gilt. Andernfalls wird ein sauberer serververwalteter Ausgangszustand erzeugt.
 
-Erst nach sicherem Backend:
+Dafür existiert ein eigener Regressionstest.
 
-- private Lerngruppen
-- gemeinsames Quiz
-- Duelle
-- Klassen- und Lehreransicht
-- geteilte Lernsets
-- Moderation und Meldefunktion
+### Lernset-Bibliothek
+
+Bereits umgesetzt:
+
+- JSON-, CSV- und TSV-Import
+- Importvorschau
+- deutsche CSV-Vorlage
+- deutsche und englische Spaltennamen
+- Lösung per Index, Buchstabe oder Antworttext
+- Suche
+- Fälligkeitsfilter
+- JSON-Export
+- dauerhaftes Löschen
+- vollständige Kartenstapel
+- ausschließlich fällige Karten
+- ungewertete Probeprüfung
+- falsche Probeprüfungsfragen ins Fehlertraining
+- Offline-first-Speicherung
+- Best-Effort-Cloud-Synchronisierung
+
+Bibliotheksgrenzen:
+
+- maximal 1 MB je Importdatei
+- maximal 100 Fragen je Lernset
+- maximal 100 Lernsets
+- maximal 500 Bibliotheksfragen
+- maximal 700.000 serialisierte Bytes
+
+Doppelte oder ungültige Deck- und Frage-IDs werden zentral normalisiert.
+
+### Persönliche Lernanalyse
+
+Bereits umgesetzt:
+
+- lokale Prüfungshistorie ab dieser Release-Version
+- maximal 80 kompakte Sitzungen
+- keine Antworten oder Fragentexte in der Historie
+- automatische Erkennung neuer serverbestätigter Runden
+- Schutz gegen falsche Historieneinträge während Cloud-Hydrierung
+- gewichteter Vergleich letzte 5 gegen vorherige 5 Prüfungen
+- stärkster und schwächster Wissensbereich
+- Tagesempfehlung
+- Priorisierung fälliger SRS-Karten
+
+Die Analyse ist lokal und gerätegebunden. Sie beeinflusst keine Economy- oder Ranglistenwerte.
+
+### Konto- und Datenschutzgrenzen
+
+Bereits umgesetzt:
+
+- lokaler Statistikzustand besitzt einen Kontobesitzer
+- Lernplan ist kontogebunden
+- Konto- und Authwechsel verwerfen lokalen Kontokontext
+- komplette Produktoberfläche wird bei Kontowechsel neu gemountet
+- komplette Produktoberfläche wird **erst nach aufgelöstem Firebase-Auth-State** gerendert
+- serverseitiger JSON-Datenexport
+- vollständige Kontolöschung
+- Reauth-Pflicht vor Löschung
+
+### KI
+
+Bereits umgesetzt:
+
+- kein direkter Gemini-API-Schlüssel im Browser
+- kein direktes Gemini-SDK als Frontend-Abhängigkeit
+- Firebase AI Logic vorbereitet
+- App Check vorbereitet
+- KI-Ausgaben werden strukturell validiert
+- KI-Lernsets bleiben ungewertete Übungsinhalte
+
+### Firestore und Functions
+
+Bereits umgesetzt:
+
+- Produktion verwendet Firestore `(default)`
+- benannte Datenbank außerhalb des Emulators blockiert Functions-Start
+- App Check kann außerhalb des Emulators nicht deaktiviert werden
+- öffentliche Rangliste liest ausschließlich `trustedLeaderboard`
+- Browser kann keine Quiz-Sitzungen, Rate-Limits oder vertrauenswürdigen Ranglistenwerte schreiben
+- alte Lobbys und Duelle bleiben admin-only bis zur Bereinigung
+
+### PWA und Hosting
+
+Bereits umgesetzt:
+
+- PWA-Manifest
+- Service Worker
+- Network-first für Navigation
+- sicherer Offline-Fallback
+- stale-while-revalidate für statische Ressourcen
+- Cache-Versionierung
+- Service-Worker-Registrierung ohne Inline-JavaScript
+- Security-Header
+- `index.html` und `sw.js` ohne langlebigen Cache
+
+## Automatische Release-Prüfungen
+
+Der verpflichtende Functions-Verifikationspfad kontrolliert:
+
+1. Repository-Secrets
+2. Hosting- und Firebase-Konfiguration
+3. Release-Architektur
+4. Frontend-Paketmanifest
+5. Konto-Isolation
+6. Auth-Hydrierungsgrenze
+7. unveränderliche Ranglisten-Snapshots
+8. PWA-Runtime
+9. Functions-Runtime und App Check
+10. Lernset-Import und Export-Roundtrip
+11. Bibliothekslimits und ID-Idempotenz
+12. Offline-Speicherung und SRS-Persistenz
+13. persönliche Lernanalyse und Trendlogik
+14. Trennung und Qualität der Fragenkataloge
+15. Legacy-Economy-Migration
+16. Unit-Tests und TypeScript
+17. Firestore-Regeln über die Emulator-Test-Suite
 
 ## Release-Prioritäten
 
 ### Release 0 – technische Grundlage
 
 - [x] separater Release-Branch
-- [x] kaputte Flashcard-Imports reparieren
-- [x] zentrale Button-Interaktion korrigieren
-- [x] PWA-Metadaten und Icon reparieren
-- [x] Service-Worker-Lebenszyklus verbessern
-- [x] automatische Frontend- und Functions-Prüfungen hinzufügen
-- [x] Gemini-Schlüssel aus dem Browser entfernen
-- [x] KI-Zugriff auf Firebase AI Logic und App Check umstellen
-- [x] KI-Antworten und Nutzereingaben zur Laufzeit validieren
-- [x] vorhandenen Cloud-Spielstand vor lokalen Schreibvorgängen laden
-- [x] gehärtete Firestore-Regeln und Custom-Claim-Adminzugriff
-- [x] Cloud-Functions-Grundlage für Punkte, Münzen, Erfolge, Shop und Belohnungen
-- [x] serverseitiges tägliches Glücksrad und einmalige Daily Quest
-- [x] statischen Fragenkatalog für verifizierbare Ranglisten-Sitzungen erzeugen
-- [x] begrenzten Übergangsendpunkt für die aktuelle Quizoberfläche anbinden
-- [ ] komplette Quizoberfläche auf `startRankedQuiz` und `submitRankedQuiz` umstellen
-- [ ] App Check, AI Logic, Functions, Quotas und Monitoring im Produktionsprojekt aktivieren
-- [ ] Firestore-Regeln mit Emulator-Tests absichern
-- [ ] Fehlerüberwachung und Datenschutzkonzept
-
-**Vertrauensgrenze:** `recordRoundResult` berechnet Punkte, Coins und Erfolge selbst und verhindert einfache Doppelbuchungen. Der Client meldet dort jedoch noch `correct` und `total`. Erst der vollständige Sitzungsmodus prüft jede Antwort gegen den Server-Fragenkatalog und ist für eine kompetitive Rangliste vorgesehen.
+- [x] alter App-Monolith aus aktivem Release-Pfad entfernt
+- [x] sichere Ranglisten-Sitzungen
+- [x] serververwaltete Economy
+- [x] unveränderliche Antwort-Snapshots
+- [x] client-vertrauten Ergebnis-Übergangspfad entfernen
+- [x] Secret-Scanner
+- [x] App-Check-Laufzeitgrenze
+- [x] Firestore-Produktionsdatenbank absichern
+- [x] Hosting-Security-Header
+- [x] PWA-Laufzeit härten
+- [x] Konto-Isolation
+- [x] Auth-Hydrierung vor Rendering erzwingen
+- [x] Firestore-Regeltests anlegen
+- [ ] GitHub-Actions-Billing beziehungsweise Spending-Limit korrigieren
+- [ ] vollständigen Frontend-Build tatsächlich ausführen
+- [ ] vollständigen Functions-Build tatsächlich ausführen
+- [ ] Firestore-Emulator-Tests tatsächlich ausführen
+- [ ] Frontend-Lockfile neu erzeugen
+- [ ] CI wieder auf `npm ci` umstellen
 
 ### Release 1.0 – verlässliche Kern-Lernapp
 
-- [ ] stabiles Login und Gerätesynchronisierung
-- [ ] Quiz, Daily, Blitz und Fehlertraining vollständig über die neue Wirtschaft
-- [ ] vollständige Karteikarten mit fälligen Wiederholungen
-- [ ] Lernsets und Bibliothek
-- [ ] Wissens-Gehirn und Fortschrittsübersicht
-- [ ] eigene manuelle Quizze als klarer Übungsmodus
-- [ ] echtes Impressum und vollständige Datenschutzerklärung
-- [x] installierbare PWA mit Offline-Grundfunktionen
+- [x] servergeprüfte Standard-, Daily- und Blitz-Runden
+- [x] Fehlertraining
+- [x] SRS-Karteikarten
+- [x] Lernset-Bibliothek
+- [x] JSON-/CSV-/TSV-Import
+- [x] Probeprüfung ohne Sofortlösungen
+- [x] adaptiver Prüfungs-Lernplan
+- [x] persönliche Lernanalyse
+- [x] Stärken-/Schwächenansicht
+- [x] Tagesempfehlung
+- [x] installierbare PWA-Grundlage
+- [ ] echte Produktions-Firebase-Konfiguration
+- [ ] App Check im Zielprojekt aktivieren und verifizieren
+- [ ] AI Logic im Zielprojekt verifizieren
+- [ ] Firestore-Daten kontrolliert nach `(default)` migrieren
+- [ ] alte Lobby-/Duel-Daten bereinigen
+- [ ] Quotas, Budgetwarnungen und Monitoring aktivieren
+- [ ] echte Betreiberangaben eintragen
+- [ ] rechtliche Freigabe bestätigen
 - [ ] mobile und Desktop-End-to-End-Tests
+- [ ] Hosting-Rollback testen
+- [ ] PNG-/Apple-Touch-PWA-Icons ergänzen
 
-### Release 1.1 – konkurrenzfähige KI-Lernwerkzeuge
+### Release 1.1 – Materialimport und KI-Lernwerkzeuge
 
-- [ ] PDF-, Bild- und Notizimport
-- [ ] Zusammenfassung und Schlüsselbegriffe
-- [ ] Karteikarten und Quiz aus derselben Quelle
-- [ ] Probeklausur mit Zeitlimit und versteckten Lösungen
-- [ ] KI-Tutor, der ausschließlich auf dem Lernset antwortet
-- [ ] sichtbare Quellenstellen für KI-Antworten
-- [ ] Kontingent- und Kostenkontrolle
+- [ ] PDF-Import
+- [ ] Bild- und Scanimport
+- [ ] Notizimport
+- [ ] Zusammenfassung
+- [ ] Schlüsselbegriffe
+- [ ] mehrere Lernprodukte aus derselben Quelle
+- [ ] KI-Tutor, der auf das konkrete Lernset begrenzt ist
+- [ ] nachvollziehbare Quellenstellen für KI-Antworten
+- [ ] Kosten- und Nutzungskontingente
 
-### Release 1.2 – persönlicher Lernplan
+### Release 1.2 – stärkere Lernplanung
 
-- [ ] Prüfungsdatum und Zielnote
-- [ ] automatisch berechnete tägliche Einheiten
-- [ ] Tagesansicht mit fälligen Aufgaben
+- [x] Prüfungsdatum und Lernziel
+- [x] tägliche Lernzeit
+- [x] Wochenrhythmus
+- [x] Tagesaufgaben
+- [ ] Zielnote
+- [ ] dynamische Neuplanung nach verpassten Einheiten
 - [ ] Reminder
-- [ ] dynamische Anpassung nach verpassten Einheiten
-- [ ] Prüfungsbereitschaft als verständlicher Wert
+- [ ] geräteübergreifende Analysehistorie mit eigenem Datenschutzvertrag
+- [ ] Prüfungsbereitschaft als transparenter, erklärbarer Wert
 
 ### Release 2.0 – Social und Multiplayer
 
-- [ ] echte Firestore-Lobbys
-- [ ] sichere serverseitige Match-Ergebnisse
-- [ ] Reconnect und Abbruchlogik
-- [ ] Lerngruppen
-- [ ] geteilte Sets
-- [ ] Moderation
+Erst nach neuem serverautoritativen Modell:
+
+- [ ] private Lerngruppen
+- [ ] gemeinsame Quizze
+- [ ] sichere Duelle
+- [ ] Reconnect- und Abbruchlogik
+- [ ] geteilte Lernsets
+- [ ] Moderation und Meldesystem
 - [ ] Lehrer- und Klassenmodus
 
 ## Bewusste Abgrenzung
@@ -199,17 +270,31 @@ Erst nach sicherem Backend:
 Nicht für Version 1.0:
 
 - offene öffentliche Community ohne Moderation
-- Echtgeld-Münzen oder käufliche Ranglistenpunkte
+- Echtgeld-Münzen
+- käufliche Ranglistenpunkte
 - unlimitierte KI-Generierung
 - simulierte Multiplayer-Funktionen, die als echt erscheinen
-- neue Spielmodi ohne nachweisbaren Lernnutzen
+- neue Spielmodi ohne klaren Lernnutzen
 
-## Erfolgskennzahlen
+## Aktuelle externe Blocker
 
-- Nutzer schließen ihre erste Lerneinheit ab
-- Nutzer kehren am nächsten Tag zurück
-- Anteil korrekt beantworteter Wiederholungen steigt
-- mindestens ein eigenes Lernset pro aktivem Nutzer
-- geringe KI-Kosten pro aktivem Nutzer
-- keine clientseitig frei wählbaren Ranglistenwerte
-- stabile Build-, Typecheck- und End-to-End-Prüfungen
+GitHub Actions erzeugt für jeden neuen Head weiterhin drei Jobs, startet aber keinen Runner. Die aktuelle GitHub-Annotation lautet sinngemäß:
+
+- letzte Kontozahlungen fehlgeschlagen oder
+- Actions-Spending-Limit muss erhöht werden
+
+Die Jobs enden daher mit `failure`, obwohl keine Build- oder Testschritte ausgeführt werden.
+
+Bis dieses externe Problem gelöst ist, darf kein fehlgeschlagener Actions-Lauf als tatsächlicher Codefehler interpretiert werden. Umgekehrt darf auch **kein Build als erfolgreich behauptet werden**, solange kein Runner die Schritte wirklich ausgeführt hat.
+
+## Freigabekriterium
+
+Der Draft-PR darf erst auf **Ready for review** gesetzt werden, wenn mindestens:
+
+- alle CI-Jobs tatsächlich ausgeführt und erfolgreich sind,
+- Frontend- und Functions-Lockfiles reproduzierbar sind,
+- Firebase im Zielprojekt getestet ist,
+- Firestore-Regeln und Callables im Emulator bestanden haben,
+- keine technischen Release-Gates mehr offen sind,
+- Rechtstexte und Betreiberangaben vollständig sind,
+- ein realer End-to-End-Smoke-Test erfolgreich durchgeführt wurde.
