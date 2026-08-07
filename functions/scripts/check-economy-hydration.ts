@@ -32,12 +32,13 @@ assert.equal(trusted.totalPoints, 420);
 assert.equal(trusted.coins, 33);
 assert.equal(trusted.roundsPlayed, 7);
 
-const [callable, entry, economyService, firebaseService, storage] = await Promise.all([
+const [callable, entry, economyService, firebaseService, storage, releaseApp] = await Promise.all([
   readFile(resolve(repoRoot, 'functions/src/economyStateCallable.ts'), 'utf8'),
   readFile(resolve(repoRoot, 'functions/src/entry.ts'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/services/economyService.ts'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/services/firebaseService.ts'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/storage.ts'), 'utf8'),
+  readFile(resolve(repoRoot, 'wissenpur/src/ReleaseApp.tsx'), 'utf8'),
 ]);
 
 assert.match(callable, /getMyEconomyState = onCall/);
@@ -63,14 +64,27 @@ assert.match(firebaseService, /let hydratedAuthUid: string \| null = null/);
 assert.match(firebaseService, /onAuthStateChanged\(auth, \(user\) =>/);
 assert.match(firebaseService, /if \(!nextUid \|\| nextUid !== hydratedAuthUid\)/);
 assert.match(firebaseService, /hydratedAuthUid = null;/);
+assert.match(firebaseService, /class AuthSessionChangedError extends Error/);
+assert.match(firebaseService, /const assertActiveAuthUid = \(expectedUid: string\): void/);
+assert.match(firebaseService, /assertActiveAuthUid\(expectedUid\);/);
+assert.match(firebaseService, /if \(error instanceof AuthSessionChangedError\) return undefined;/);
 
 const authoritativeIndex = firebaseService.indexOf('const authoritativeEconomy = (await getServerEconomyState()).stats;');
-const persistIndex = firebaseService.indexOf('const persisted = await persistProfileOnly(hydratedStats);');
-const markHydratedIndex = firebaseService.indexOf('hydratedAuthUid = currentUser.uid;');
+const persistIndex = firebaseService.indexOf('const persisted = await persistProfileOnly(hydratedStats, expectedUid);');
+const markHydratedIndex = firebaseService.indexOf('hydratedAuthUid = expectedUid;');
+const finalLocalSaveIndex = firebaseService.indexOf('saveStats(persisted);', markHydratedIndex);
 assert.ok(authoritativeIndex >= 0 && persistIndex > authoritativeIndex, 'Server-Economy muss vor dem lokalen Persistieren vorliegen.');
 assert.ok(markHydratedIndex > persistIndex, 'Hydrierung darf erst nach erfolgreichem Persistieren als abgeschlossen gelten.');
+assert.ok(finalLocalSaveIndex > markHydratedIndex, 'Der finale lokale Economy-Stand darf erst nach erfolgreicher UID-Prüfung gespeichert werden.');
 
 assert.match(storage, /if \(auth\.currentUser\) return stats;/);
 assert.doesNotMatch(storage, /auth\.currentUser && stats\.economyVersion === 1/);
 
-console.log('Autoritative Economy-Hydrierung pro Auth-Sitzung, Auth-Session-Reset, Legacy-Reset und signierte Local-Mutation-Sperre geprüft.');
+assert.match(releaseApp, /const maskEconomyUntilHydrated =/);
+assert.match(releaseApp, /setStats\(maskEconomyUntilHydrated\(localBeforeHydration\)\)/);
+assert.match(releaseApp, /const \[isAccountHydrating, setIsAccountHydrating\] = useState\(false\)/);
+assert.match(releaseApp, /Kontofortschritt wird sicher geladen/);
+assert.match(releaseApp, /Punkte und Münzen werden erst nach der serverseitigen Prüfung angezeigt/);
+assert.match(releaseApp, /if \(isAccountHydrating\)/);
+
+console.log('Autoritative Economy-Hydrierung, UI-Maskierung, Stale-Session-Sperre, Legacy-Reset und signierte Local-Mutation-Sperre geprüft.');
