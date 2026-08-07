@@ -68,6 +68,13 @@ function handleFirestoreError(
   throw new Error('Die Cloud-Synchronisierung ist momentan nicht verfügbar.');
 }
 
+const logBestEffortSyncFailure = (error: unknown): void => {
+  console.warn('Best-effort profile sync deferred', {
+    errorName: error instanceof Error ? error.name : 'UnknownError',
+    resourceType: 'current-user-profile',
+  });
+};
+
 const sanitizeForFirestore = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
 const mergeProfileContent = (
@@ -174,10 +181,12 @@ const persistProfileOnly = async (
 };
 
 /**
- * The browser only synchronizes profile settings and user-created learning
- * content. Every new authenticated session obtains economy state from the
- * App-Check-protected backend normalizer before it is persisted locally.
- * Late responses from a previous auth session are discarded.
+ * The first sync of each authenticated browser session is strict because it
+ * hydrates the server-authoritative economy. Once that boundary succeeded,
+ * later profile/learning-content writes are best effort: local changes remain
+ * valid offline and a failed background write must not become an unhandled
+ * promise rejection. Late responses from a previous auth session are always
+ * discarded.
  */
 export const syncUserStats = async (stats: UserStats): Promise<UserStats | undefined> => {
   const currentUser = auth.currentUser;
@@ -187,9 +196,10 @@ export const syncUserStats = async (stats: UserStats): Promise<UserStats | undef
   }
   const expectedUid = currentUser.uid;
   const userRef = doc(db, 'users', expectedUid);
+  const requiresHydration = hydratedAuthUid !== expectedUid;
 
   try {
-    if (hydratedAuthUid !== expectedUid) {
+    if (requiresHydration) {
       const existingSnapshot = await getDoc(userRef);
       assertActiveAuthUid(expectedUid);
       const existingData = existingSnapshot.exists()
@@ -212,9 +222,13 @@ export const syncUserStats = async (stats: UserStats): Promise<UserStats | undef
       return persisted;
     }
 
-    return persistProfileOnly(stats, expectedUid);
+    return await persistProfileOnly(stats, expectedUid);
   } catch (error) {
     if (error instanceof AuthSessionChangedError) return undefined;
+    if (!requiresHydration) {
+      logBestEffortSyncFailure(error);
+      return stats;
+    }
     handleFirestoreError(error, OperationType.WRITE, 'current-user-profile');
   }
 };
