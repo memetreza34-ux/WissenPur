@@ -45,6 +45,7 @@ import {
   submitRankedQuizSession,
 } from './services/economyService';
 import { getLeaderboard, syncUserStats } from './services/firebaseService';
+import { getDueQuestionsFromLibrary } from './services/reviewQueue';
 import { getStats, saveStats } from './storage';
 import {
   CategoryId,
@@ -282,13 +283,11 @@ export default function ReleaseApp() {
     )[0]?.[0] as CategoryId | undefined;
   }, [stats.categoryStats]);
 
-  const dueCards = useMemo(() => {
-    const now = Date.now();
-    return (stats.customQuizzes || []).flatMap((deck) => deck.questions).filter((question) => {
-      if (!question.srsData?.nextReviewDate) return true;
-      return new Date(question.srsData.nextReviewDate).getTime() <= now;
-    }).length;
-  }, [stats.customQuizzes]);
+  const dueReviewQuestions = useMemo(
+    () => getDueQuestionsFromLibrary(stats.customQuizzes || []),
+    [stats.customQuizzes],
+  );
+  const dueCards = dueReviewQuestions.length;
 
   const startActiveQuiz = (quiz: ActiveQuiz) => {
     quizGenerationRef.current += 1;
@@ -671,8 +670,8 @@ export default function ReleaseApp() {
             <Button
               className="mt-6 bg-white text-blue-700 hover:bg-blue-50"
               disabled={isAccountHydrating}
-              onClick={() => dueCards > 0 && stats.customQuizzes?.length
-                ? openFlashcards(stats.customQuizzes.flatMap((deck) => deck.questions))
+              onClick={() => dueReviewQuestions.length > 0
+                ? openFlashcards(dueReviewQuestions)
                 : void startRanked('standard', weakCategory || 'all', 'all', 10)}
             >
               Jetzt lernen <ArrowRight size={18} />
@@ -698,7 +697,7 @@ export default function ReleaseApp() {
           <section>
             <div className="mb-3 flex items-end justify-between">
               <div><p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Tagesaufgaben</p><h2 className="text-xl font-black">Dein Fokus</h2></div>
-              {user && !isAccountHydrating && <DailySpinWheel onClaimReward={() => window.setTimeout(() => setStats(getStats() as ReleaseStats), 20)} />}
+              {user && !isAccountHydrating && <DailySpinWheel onClaimReward={() => setStats(getStats() as ReleaseStats)} />}
             </div>
             <div className="space-y-3">
               <Card onClick={() => dailyDone ? startPractice('Daily – Wiederholung', selectLocalQuestions('all', 'all', 10)) : void startRanked('daily', 'all', 'all', 10)} className="flex items-center gap-4 p-5">
