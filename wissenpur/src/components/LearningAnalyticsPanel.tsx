@@ -99,10 +99,12 @@ export const LearningAnalyticsPanel = () => {
   const [history, setHistory] = useState<LearningSessionRecord[]>(() => ensureAnalyticsOwner());
   const [statsRevision, setStatsRevision] = useState(0);
   const baselineRef = useRef<EconomySnapshot>(createEconomySnapshot(getStats()));
+  const hydrationSuppressUntilRef = useRef(Date.now() + 3_000);
 
   useEffect(() => onAuthStateChanged(auth, () => {
     setHistory(ensureAnalyticsOwner());
     baselineRef.current = createEconomySnapshot(getStats());
+    hydrationSuppressUntilRef.current = Date.now() + 5_000;
     setStatsRevision((value) => value + 1);
   }), []);
 
@@ -111,6 +113,7 @@ export const LearningAnalyticsPanel = () => {
       clearAnalytics();
       setHistory([]);
       baselineRef.current = createEconomySnapshot(getStats());
+      hydrationSuppressUntilRef.current = Date.now() + 3_000;
     };
     window.addEventListener('wissenpur:account-storage-reset', reset);
     return () => window.removeEventListener('wissenpur:account-storage-reset', reset);
@@ -131,8 +134,9 @@ export const LearningAnalyticsPanel = () => {
     const check = () => {
       const next = createEconomySnapshot(getStats());
       const before = baselineRef.current;
-      const session = deriveRankedSession(before, next);
       baselineRef.current = next;
+      if (Date.now() < hydrationSuppressUntilRef.current) return;
+      const session = deriveRankedSession(before, next);
       if (!session) return;
       setHistory((current) => writeHistory(appendLearningSession(current, session)));
       setStatsRevision((value) => value + 1);
