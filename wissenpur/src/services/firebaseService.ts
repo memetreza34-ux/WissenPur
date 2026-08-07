@@ -91,9 +91,7 @@ const mergeCloudStats = (
 ): UserStats => {
   const profileMerged = mergeProfileContent(localStats, cloudStats);
 
-  // Only economyVersion 1 is trusted as an authenticated economy source.
-  // Legacy documents were writable by the browser and must never provide
-  // signed-in points, coins, streaks, achievements or inventory.
+  // Authenticated economy values are accepted only from the server callable.
   if (cloudStats.economyVersion !== 1) return profileMerged;
 
   return {
@@ -159,8 +157,8 @@ const persistProfileOnly = async (stats: UserStats): Promise<UserStats> => {
 
 /**
  * The browser only synchronizes profile settings and user-created learning
- * content. Points, coins, streaks, achievements, server inventory, shop
- * avatars and all leaderboard values are exclusively owned by Cloud Functions.
+ * content. Every new authenticated session obtains economy state from the
+ * App-Check-protected backend normalizer before it is persisted locally.
  */
 export const syncUserStats = async (stats: UserStats): Promise<UserStats | undefined> => {
   const currentUser = auth.currentUser;
@@ -178,10 +176,8 @@ export const syncUserStats = async (stats: UserStats): Promise<UserStats | undef
         ? existingSnapshot.data() as Partial<UserStats>
         : {};
       const profileMerged = mergeProfileContent(stats, existingData);
-
-      const hydratedStats = existingData.economyVersion === 1
-        ? mergeCloudStats(profileMerged, existingData)
-        : mergeCloudStats(profileMerged, (await getServerEconomyState()).stats);
+      const authoritativeEconomy = (await getServerEconomyState()).stats;
+      const hydratedStats = mergeCloudStats(profileMerged, authoritativeEconomy);
 
       const persisted = await persistProfileOnly(hydratedStats);
       hydratedAuthUid = currentUser.uid;
