@@ -43,23 +43,34 @@ const [callable, entry, economyService, firebaseService, storage] = await Promis
 assert.match(callable, /getMyEconomyState = onCall/);
 assert.match(callable, /\{ enforceAppCheck \}/);
 assert.match(callable, /normalizeEconomy\(userData, today\)/);
-assert.match(callable, /userData\.economyVersion !== state\.economyVersion/);
 assert.match(callable, /transaction\.set\(userRef/);
+assert.doesNotMatch(
+  callable,
+  /userData\.economyVersion !== state\.economyVersion/,
+  'Auch vertrauenswürdige Economy-Dokumente müssen beim neuen Login durch Tages-/Wochen-Normalisierung laufen.',
+);
 assert.match(entry, /getMyEconomyState/);
 assert.match(economyService, /functions,\s*'getMyEconomyState'/);
 assert.match(economyService, /export const getServerEconomyState/);
-assert.match(firebaseService, /existingData\.economyVersion === 1/);
-assert.match(firebaseService, /\(await getServerEconomyState\(\)\)\.stats/);
+assert.match(firebaseService, /const authoritativeEconomy = \(await getServerEconomyState\(\)\)\.stats;/);
+assert.match(firebaseService, /mergeCloudStats\(profileMerged, authoritativeEconomy\)/);
+assert.doesNotMatch(
+  firebaseService,
+  /existingData\.economyVersion === 1\s*\?/,
+  'Rohe Firestore-Economy darf den Backend-Normalisierer beim Login nicht umgehen.',
+);
 assert.match(firebaseService, /let hydratedAuthUid: string \| null = null/);
 assert.match(firebaseService, /onAuthStateChanged\(auth, \(user\) =>/);
 assert.match(firebaseService, /if \(!nextUid \|\| nextUid !== hydratedAuthUid\)/);
 assert.match(firebaseService, /hydratedAuthUid = null;/);
 
+const authoritativeIndex = firebaseService.indexOf('const authoritativeEconomy = (await getServerEconomyState()).stats;');
 const persistIndex = firebaseService.indexOf('const persisted = await persistProfileOnly(hydratedStats);');
 const markHydratedIndex = firebaseService.indexOf('hydratedAuthUid = currentUser.uid;');
-assert.ok(persistIndex >= 0 && markHydratedIndex > persistIndex, 'Hydrierung darf erst nach erfolgreichem Persistieren als abgeschlossen gelten.');
+assert.ok(authoritativeIndex >= 0 && persistIndex > authoritativeIndex, 'Server-Economy muss vor dem lokalen Persistieren vorliegen.');
+assert.ok(markHydratedIndex > persistIndex, 'Hydrierung darf erst nach erfolgreichem Persistieren als abgeschlossen gelten.');
 
 assert.match(storage, /if \(auth\.currentUser\) return stats;/);
 assert.doesNotMatch(storage, /auth\.currentUser && stats\.economyVersion === 1/);
 
-console.log('Autoritative Economy-Hydrierung, Auth-Session-Reset, Legacy-Reset und signierte Local-Mutation-Sperre geprüft.');
+console.log('Autoritative Economy-Hydrierung pro Auth-Sitzung, Auth-Session-Reset, Legacy-Reset und signierte Local-Mutation-Sperre geprüft.');
