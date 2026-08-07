@@ -6,6 +6,11 @@ import {
   deleteCurrentAccount,
   exportCurrentAccountData,
 } from '../services/accountService';
+import {
+  ANALYTICS_OWNER_KEY,
+  ANALYTICS_STORAGE_KEY,
+  normalizeLearningHistory,
+} from '../services/learningAnalytics';
 import { Button } from './UI';
 
 const getErrorMessage = (error: unknown): string => {
@@ -32,6 +37,16 @@ const downloadJson = (value: unknown, filename: string) => {
   URL.revokeObjectURL(url);
 };
 
+const readLocalAnalyticsForUser = (uid: string) => {
+  if (localStorage.getItem(ANALYTICS_OWNER_KEY) !== uid) return [];
+  try {
+    const raw = localStorage.getItem(ANALYTICS_STORAGE_KEY);
+    return normalizeLearningHistory(raw ? JSON.parse(raw) : []);
+  } catch {
+    return [];
+  }
+};
+
 export const AccountPrivacyPanel = () => {
   const [user, setUser] = useState<User | null>(auth.currentUser);
   const [isOpen, setIsOpen] = useState(false);
@@ -46,10 +61,19 @@ export const AccountPrivacyPanel = () => {
     setIsBusy(true);
     setMessage(null);
     try {
+      if (!user) throw new Error('Bitte melde dich zuerst an.');
       const exported = await exportCurrentAccountData();
+      const localLearningAnalytics = readLocalAnalyticsForUser(user.uid);
+      const completeExport = {
+        ...exported,
+        localDevice: {
+          learningAnalytics: localLearningAnalytics,
+          note: 'Diese Lernanalyse wurde nur in diesem Browser gespeichert und für diesen Export lokal ergänzt.',
+        },
+      };
       const date = exported.exportedAt.slice(0, 10);
-      downloadJson(exported, `wissenpur-datenexport-${date}.json`);
-      setMessage('Dein Datenexport wurde erstellt.');
+      downloadJson(completeExport, `wissenpur-datenexport-${date}.json`);
+      setMessage('Dein Datenexport inklusive lokaler Lernanalyse wurde erstellt.');
     } catch (error) {
       setMessage(getErrorMessage(error));
     } finally {
@@ -65,6 +89,8 @@ export const AccountPrivacyPanel = () => {
       await deleteCurrentAccount();
       localStorage.removeItem('wissenpur_user_stats');
       localStorage.removeItem('wissenpur_learning_plan');
+      localStorage.removeItem(ANALYTICS_STORAGE_KEY);
+      localStorage.removeItem(ANALYTICS_OWNER_KEY);
       sessionStorage.clear();
       window.location.replace('/');
     } catch (error) {
@@ -135,7 +161,7 @@ export const AccountPrivacyPanel = () => {
                   <div>
                     <h3 className="font-black text-slate-950 dark:text-white">Daten exportieren</h3>
                     <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                      Erstellt eine JSON-Datei mit Profil, Lernfortschritt, Rangliste und deinen gespeicherten Sitzungsdaten.
+                      Erstellt eine JSON-Datei mit Serverdaten und ergänzt die nur auf diesem Gerät gespeicherte persönliche Lernanalyse lokal.
                     </p>
                   </div>
                 </div>
@@ -151,7 +177,7 @@ export const AccountPrivacyPanel = () => {
                   <div>
                     <h3 className="font-black text-rose-900 dark:text-rose-100">Konto vollständig löschen</h3>
                     <p className="mt-1 text-sm text-rose-800/80 dark:text-rose-200/80">
-                      Löscht Lernfortschritt, Rangliste, Quiz-Sitzungen, servergespeicherte Inhalte und das Firebase-Login. Die Aktion kann nicht rückgängig gemacht werden.
+                      Löscht servergespeicherten Lernfortschritt, Rangliste, Quiz-Sitzungen und Firebase-Login sowie kontoabhängige lokale Daten dieses Browsers. Die Aktion kann nicht rückgängig gemacht werden.
                     </p>
                   </div>
                 </div>
