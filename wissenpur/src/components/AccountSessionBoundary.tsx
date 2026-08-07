@@ -16,6 +16,11 @@ interface AccountSessionBoundaryProps {
  * auth state. This prevents a signed-in browser from briefly reading account
  * data as anonymous during startup hydration.
  *
+ * Anonymous -> authenticated is the one intentional migration path: learning
+ * data created before the first login is preserved so it can be claimed by the
+ * account the user explicitly signs into. Authenticated -> anonymous and
+ * authenticated -> another account always clear the previous account context.
+ *
  * Library mutations can also request a controlled remount so the main product
  * immediately reloads imported decks, due-card counts and wrong-question data.
  */
@@ -28,8 +33,9 @@ export const AccountSessionBoundary = ({ children }: AccountSessionBoundaryProps
   useEffect(() => onAuthStateChanged(auth, (user) => {
     const nextUid = user?.uid || null;
     const previous = previousUid.current;
+    const anonymousClaim = previous === null && nextUid !== null;
 
-    if (previous !== undefined && previous !== nextUid) {
+    if (previous !== undefined && previous !== nextUid && !anonymousClaim) {
       clearLocalAccountData();
     }
 
