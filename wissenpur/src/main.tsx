@@ -29,7 +29,7 @@ createRoot(document.getElementById('root')!).render(
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('/sw.js').catch((error: unknown) => {
+    void navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : 'unknown registration error';
       console.warn('Service Worker konnte nicht registriert werden:', message);
     });
