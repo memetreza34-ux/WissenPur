@@ -56,7 +56,18 @@ assert.match(firebaseService, /mergeLearningLibraries/);
 assert.match(firebaseService, /mergeWrongQuestions/);
 assert.match(firebaseService, /wrongQuestions: mergedWrongQuestions/);
 assert.match(firebaseService, /customQuizzes: mergedLibrary/);
+assert.match(firebaseService, /const requiresHydration = hydratedAuthUid !== expectedUid;/);
+assert.match(firebaseService, /if \(requiresHydration\) \{/);
+assert.match(firebaseService, /const authoritativeEconomy = \(await getServerEconomyState\(\)\)\.stats;/);
+assert.match(firebaseService, /if \(!requiresHydration\) \{\s*logBestEffortSyncFailure\(error\);\s*return stats;/);
+assert.match(firebaseService, /handleFirestoreError\(error, OperationType\.WRITE, 'current-user-profile'\);/);
+assert.match(firebaseService, /Best-effort profile sync deferred/);
+assert.doesNotMatch(
+  firebaseService,
+  /console\.(?:warn|error)\([^\n]*stats|console\.(?:warn|error)\([^\n]*uid/i,
+  'Best-Effort-Logging darf keine Profilinhalte oder UID ausgeben.',
+);
 assert.match(sessionBoundary, /shouldClearLocalAccountDataForTransition/);
 assert.match(analyticsPanel, /shouldClearLocalAccountDataForTransition/);
 
-console.log('Gast-/Cloud-Merge für Lernsets, Fehlertraining und gemeinsame Konto-Transition geprüft.');
+console.log('Gast-/Cloud-Merge, strikte Erst-Hydrierung, Best-Effort-Folge-Sync und gemeinsame Konto-Transition geprüft.');
