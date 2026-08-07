@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { AccountPrivacyPanel } from './components/AccountPrivacyPanel';
 import { AccountSessionBoundary } from './components/AccountSessionBoundary';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
+import { LearningAnalyticsPanel } from './components/LearningAnalyticsPanel';
 import { LearningLibraryManager } from './components/LearningLibraryManager';
 import { LearningPlanPanel } from './components/LearningPlanPanel';
 import { LegalPanel } from './components/LegalPanel';
@@ -14,6 +15,7 @@ createRoot(document.getElementById('root')!).render(
     <AppErrorBoundary>
       <AccountSessionBoundary>
         <ReleaseApp />
+        <LearningAnalyticsPanel />
         <LearningLibraryManager />
         <LearningPlanPanel />
         <LegalPanel />
