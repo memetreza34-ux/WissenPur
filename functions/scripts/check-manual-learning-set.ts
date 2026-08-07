@@ -31,7 +31,14 @@ assert.match(editor, /question\.id !== editingQuestionId/);
 assert.match(editor, /loadDeck/);
 assert.match(editor, /beginEditQuestion/);
 assert.match(editor, /editingDeckCreatedAt/);
-assert.match(editor, /currentDecks\.map\(\(entry\) => entry\.id === editingDeckId \? deck : entry\)/);
+assert.match(editor, /library\.map\(\(entry\) => entry\.id === editingDeckId \? deck : entry\)/);
+assert.match(editor, /const \[availableDecks, setAvailableDecks\] = useState/);
+assert.match(editor, /window\.addEventListener\('wissenpur:library-updated', refresh\)/);
+assert.doesNotMatch(
+  editor,
+  /const existingDecks\s*=\s*getStats\(\)/,
+  'Der Editor darf getStats() nicht als potenziell schreibenden Render-Nebeneffekt verwenden.',
+);
 assert.match(editor, /previous\?\.imageUrl/);
 assert.doesNotMatch(
   editor,
@@ -46,4 +53,4 @@ assert.match(policy, /MAX_LIBRARY_DECKS/);
 assert.match(policy, /MAX_LIBRARY_QUESTIONS/);
 assert.match(policy, /MAX_LIBRARY_SERIALIZED_BYTES/);
 
-console.log('Manueller Lernset-Editor, Set-/Fragebearbeitung, SRS-Reset, Alt-Daten-Normalisierung und Bibliotheksrichtlinie geprüft.');
+console.log('Manueller Lernset-Editor, Set-/Fragebearbeitung, State-Refresh, SRS-Reset, Alt-Daten-Normalisierung und Bibliotheksrichtlinie geprüft.');
