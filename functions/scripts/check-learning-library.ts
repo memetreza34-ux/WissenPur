@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { applyLearningLibraryPolicy } from '../../wissenpur/src/services/learningLibraryPolicy.ts';
 import {
   estimateLearningLibraryBytes,
   LearningSetImportError,
@@ -45,6 +46,46 @@ assert.equal(new Set(jsonImport.deck.questions.map((question) => question.id)).s
 assert.ok(estimateLearningLibraryBytes([jsonImport.deck]) > 0);
 assert.ok(MAX_LIBRARY_QUESTIONS >= MAX_IMPORTED_QUESTIONS);
 assert.ok(MAX_LIBRARY_SERIALIZED_BYTES < 1_000_000);
+
+const cleanPolicy = applyLearningLibraryPolicy([jsonImport.deck]);
+assert.equal(cleanPolicy.changed, false);
+assert.equal(cleanPolicy.reason, 'none');
+assert.deepEqual(cleanPolicy.decks, [jsonImport.deck]);
+
+const duplicatePolicy = applyLearningLibraryPolicy([
+  jsonImport.deck,
+  { ...jsonImport.deck, id: `${jsonImport.deck.id}-copy`, title: 'Elektrotechnik Kopie' },
+]);
+assert.equal(duplicatePolicy.changed, true);
+assert.equal(duplicatePolicy.reason, 'duplicate-id');
+assert.equal(duplicatePolicy.decks.length, 2);
+const duplicateQuestionIds = duplicatePolicy.decks.flatMap((deck) =>
+  deck.questions.map((question) => question.id),
+);
+assert.equal(new Set(duplicateQuestionIds).size, duplicateQuestionIds.length);
+assert.ok(duplicateQuestionIds.every((id) => id.length <= 150));
+
+const secondPolicyPass = applyLearningLibraryPolicy(duplicatePolicy.decks);
+assert.equal(secondPolicyPass.changed, false, 'Normalisierung muss idempotent sein.');
+assert.deepEqual(secondPolicyPass.decks, duplicatePolicy.decks);
+
+const invalidQuestionPolicy = applyLearningLibraryPolicy([{
+  ...jsonImport.deck,
+  questions: [
+    ...jsonImport.deck.questions,
+    {
+      id: 'invalid-question',
+      category: 'technik',
+      question: 'Ungültig',
+      options: ['gleich', 'gleich'],
+      correctAnswer: 0,
+      explanation: 'Doppelte Optionen.',
+    },
+  ],
+}]);
+assert.equal(invalidQuestionPolicy.changed, true);
+assert.equal(invalidQuestionPolicy.reason, 'invalid-entry');
+assert.equal(invalidQuestionPolicy.decks[0]?.questions.length, 2);
 
 const csvImport = parseLearningSetImport([
   'frage;option1;option2;option3;option4;richtig;erklaerung;kategorie;schwierigkeit',
@@ -92,12 +133,14 @@ const limited = parseLearningSetImport(JSON.stringify({ questions: tooManyRows }
 assert.equal(limited.deck.questions.length, MAX_IMPORTED_QUESTIONS);
 assert.ok(limited.warnings.some((warning) => warning.includes(String(MAX_IMPORTED_QUESTIONS))));
 
-const [main, manager, boundary, flashcards, importPanel] = await Promise.all([
+const [main, manager, boundary, flashcards, importPanel, storage, firebaseService] = await Promise.all([
   readFile(resolve(repoRoot, 'wissenpur/src/main.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/components/LearningLibraryManager.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/components/AccountSessionBoundary.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/pages/Flashcards.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/components/LearningSetImportPanel.tsx'), 'utf8'),
+  readFile(resolve(repoRoot, 'wissenpur/src/storage.ts'), 'utf8'),
+  readFile(resolve(repoRoot, 'wissenpur/src/services/firebaseService.ts'), 'utf8'),
 ]);
 
 assert.match(main, /<LearningLibraryManager\s*\/>/);
@@ -114,8 +157,14 @@ assert.match(importPanel, /MAX_LIBRARY_QUESTIONS/);
 assert.match(importPanel, /MAX_LIBRARY_SERIALIZED_BYTES/);
 assert.match(importPanel, /estimateLearningLibraryBytes/);
 assert.match(flashcards, /persistSrsUpdates/);
+assert.match(flashcards, /sameSrsData/);
 assert.match(flashcards, /wissenpur:stats-updated/);
+assert.match(storage, /applyLearningLibraryPolicy/);
+assert.match(storage, /customQuizzes: library\.decks/);
+assert.match(firebaseService, /applyLearningLibraryPolicy/);
+assert.match(firebaseService, /saveStats\(persistedStats\)/);
+assert.match(firebaseService, /wissenpur:library-updated/);
 assert.match(boundary, /wissenpur:library-updated/);
 assert.match(boundary, /contentRevision/);
 
-console.log('Lernset-Import, Bibliothek, Fälligkeit, Offline-Speicherung und Probeprüfung geprüft.');
+console.log('Lernset-Import, zentrale Bibliotheksrichtlinie, Fälligkeit, Offline-Speicherung und Probeprüfung geprüft.');
