@@ -1,8 +1,10 @@
 # Firebase-Checkliste vor dem WissenPur-Release
 
-Diese Schritte müssen im Produktionsprojekt abgeschlossen sein, bevor KI-Funktionen, Cloud-Fortschritt oder Ranglisten öffentlich beworben werden.
+Stand: August 2026
 
-## 1. Getrennte Projekte
+Diese Schritte müssen im tatsächlichen Produktionsprojekt abgeschlossen sein, bevor WissenPur öffentlich als releasefähig gilt. Repository-Code allein beweist keine korrekt aktivierte Cloud-Konfiguration.
+
+## 1. Getrennte Projekte und Firestore
 
 Empfohlen:
 
@@ -10,32 +12,37 @@ Empfohlen:
 - `wissenpur-staging`
 - `wissenpur-prod`
 
-Entwicklungs- und Produktionsdaten dürfen nicht im selben Firestore-Projekt liegen.
+Pflichtpunkte:
+
+- [ ] Entwicklungs- und Produktionsdaten liegen nicht im selben Projekt.
+- [ ] Produktion verwendet Firestore `(default)`.
+- [ ] `FIRESTORE_DATABASE_ID` wird in Produktion **nicht** auf eine benannte Datenbank gesetzt.
+- [ ] vorhandene Daten einer alten benannten Datenbank wurden kontrolliert migriert oder bewusst verworfen.
+- [ ] Nutzerprofile, Lernpläne, Lernsets, Rangliste und Quiz-Sitzungen wurden nach der Migration stichprobenartig geprüft.
+- [ ] alte Lobby-/Duel-Daten wurden vollständig bereinigt oder mit einer einmaligen Admin-Migration verarbeitet.
 
 ## 2. Firebase AI Logic
 
-1. Firebase-Konsole öffnen.
-2. **Firebase AI Logic** auswählen.
-3. geführte Einrichtung starten.
-4. **Gemini Developer API** als Backend auswählen.
-5. Abrechnung, APIs und Nutzungsbedingungen prüfen.
-6. Testanfrage in der Konsole ausführen.
+- [ ] Firebase AI Logic ist im Zielprojekt aktiviert.
+- [ ] Gemini Developer API beziehungsweise das endgültig gewählte Backend ist korrekt eingerichtet.
+- [ ] Abrechnung, APIs und Nutzungsbedingungen wurden geprüft.
+- [ ] Testanfrage im Staging-Projekt funktioniert.
+- [ ] Kosten-/Quota-Limits sind gesetzt.
+- [ ] kein Gemini-/Google-AI-Schlüssel liegt im Browserbundle oder Repository.
 
-Die Web-App verwendet im Code `gemini-3.5-flash-lite`.
+Die Web-App greift nicht direkt mit einem privaten Gemini-Schlüssel auf die API zu.
 
-## 3. App Check
+## 3. App Check / reCAPTCHA Enterprise
 
-1. In Google Cloud einen score-basierten reCAPTCHA-Enterprise-Websiteschlüssel anlegen.
-2. nur die echten Entwicklungs-, Staging- und Produktionsdomains zulassen.
-3. unter **Firebase → Security → App Check → Apps** die WissenPur-Web-App registrieren.
-4. den Websiteschlüssel als `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` beim Hosting hinterlegen.
-5. die Erzwingung für Firebase AI Logic aktivieren.
-6. die Erzwingung für Callable Functions erst nach erfolgreichen Debug- und Stagingtests aktivieren.
-7. anschließend weitere unterstützte Firebase-Dienste absichern.
+- [ ] score-basierter reCAPTCHA-Enterprise-Websiteschlüssel angelegt.
+- [ ] nur echte Entwicklungs-, Staging- und Produktionsdomains zugelassen.
+- [ ] WissenPur-Web-App unter Firebase App Check registriert.
+- [ ] `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` für den Produktionsbuild gesetzt.
+- [ ] App Check schützt die Callable Functions.
+- [ ] Firebase AI Logic wird ebenfalls durch App Check geschützt.
+- [ ] Debug-App-Check ist ausschließlich lokal aktiv.
 
-### Lokale Entwicklung
-
-In `wissenpur/.env.local`:
+Lokale Entwicklung kann verwenden:
 
 ```env
 VITE_RECAPTCHA_ENTERPRISE_SITE_KEY=dein_site_key
@@ -43,29 +50,26 @@ VITE_ENABLE_APPCHECK_DEBUG=true
 VITE_USE_FUNCTIONS_EMULATOR=true
 ```
 
-Danach den ausgegebenen App-Check-Debugtoken in der Firebase-Konsole registrieren. Debugmodus darf nie in Produktion aktiv sein.
+Debugmodus darf nie in Produktion aktiv sein.
 
 ## 4. Cloud Functions
 
-Die vertrauenswürdige Wirtschaft liegt unter `functions/`.
-
-Lokal prüfen:
+Lokal:
 
 ```bash
 cd functions
 npm install
-cp .env.example .env
-npm run lint
-npm run build
+npm run verify
+npm run compile
 ```
 
-Emulatoren aus dem Repository-Stamm starten:
+Emulatoren aus dem Repository-Stamm:
 
 ```bash
 firebase emulators:start --only auth,functions,firestore,hosting
 ```
 
-Deployment:
+Deployment erst nach grüner Prüfung:
 
 ```bash
 firebase deploy --only functions,firestore
@@ -73,131 +77,188 @@ firebase deploy --only functions,firestore
 
 Vor Produktion kontrollieren:
 
-- Node.js 22 wird verwendet.
-- Region ist `europe-west1`.
-- `FIRESTORE_DATABASE_ID` zeigt auf die richtige benannte Datenbank.
-- `ENFORCE_APP_CHECK=true` ist gesetzt.
-- kein Emulator-Schalter befindet sich in der Hosting-Konfiguration.
-- Funktionsfehler, Latenz, Aufrufzahl und Kosten werden überwacht.
+- [ ] Node.js 22 wird verwendet.
+- [ ] Region ist wie vorgesehen konfiguriert.
+- [ ] Produktion verwendet `(default)` Firestore.
+- [ ] App Check ist außerhalb des Emulators im Code immer aktiv.
+- [ ] Funktionsfehler, Latenz, Aufrufzahl und Kosten werden überwacht.
 
-### Serverseitige Wirtschaft
+## 5. Autoritative Economy-Hydrierung
 
-Die Functions verwalten:
+`getMyEconomyState` ist der sichere Einstieg in den authentifizierten Kontostand.
 
-- Ranglistenpunkte
-- Münzen
-- Streaks
-- Erfolge und Erfolgs-Münzen
-- Daily Quest
-- Glücksrad
-- Shopkäufe
-- Power-up-Verbrauch
-- Ranglisteneinträge
+Prüfen:
 
-`startRankedQuiz` und `submitRankedQuiz` sind der endgültige Ranglistenpfad. `recordRoundResult` ist nur der begrenzte Übergang für die aktuelle monolithische Oberfläche und darf nicht als vollständig cheat-sicher beworben werden.
+- [ ] Callable ist deployed und App-Check-geschützt.
+- [ ] jede neue Auth-Sitzung lädt Economy über den Backend-Normalisierer.
+- [ ] `normalizeEconomy()` wird serverseitig verwendet.
+- [ ] alte/client-schreibbare Werte werden bei fehlender vertrauenswürdiger `economyVersion: 1` nicht übernommen.
+- [ ] Tages- und Wochenwerte werden beim neuen Login serverseitig normalisiert.
+- [ ] während der Hydrierung zeigt die UI keine Gast-/ungeprüften Punkte oder Münzen.
+- [ ] gewertete Quizstarts, Rangliste, Daily-Rewards und Shop sind während der Hydrierung gesperrt.
+- [ ] lokale Übungsrunden verändern bei angemeldeten Nutzern niemals Economy-Werte.
+- [ ] Logout/Kontowechsel während einer langsamen Hydrierung kann keine verspätete Antwort mehr lokal speichern.
 
-## 5. TTL und Datenaufbewahrung
+## 6. Gastdaten beim ersten Login
 
-In Firestore TTL aktivieren für:
+Gast-Lerninhalte dürfen erhalten bleiben, Gast-Economy nicht.
 
-- Collection Group `quizSessions`, Feld `expiresAt`
-- Collection Group `roundReceipts`, Feld `expiresAt`
+Testen:
 
-Ohne TTL bleiben abgelaufene Sitzungen und Idempotenznachweise gespeichert. Zusätzlich Aufbewahrungsfristen in der Datenschutzerklärung dokumentieren.
+- [ ] Gast erstellt Lernset → Login → Lernset bleibt vorhanden.
+- [ ] bestehendes Konto besitzt Cloud-Lernsets + Gast besitzt neue lokale Sets → Login → beide Bibliotheken werden vereinigt.
+- [ ] gleiche Deck-ID lokal/cloud → lokale aktuelle Fassung gewinnt.
+- [ ] lokale und Cloud-Fehlerfragen werden vereinigt; lokale gleiche ID gewinnt.
+- [ ] Lernplan verwendet seine `updatedAt`-Konfliktregel.
+- [ ] lokale Lernanalyse wird beim ersten Login dem Kontokontext zugeordnet.
+- [ ] Gastpunkte, Gastmünzen, Gaststreaks, Erfolge und Inventar werden nicht übernommen.
+- [ ] Konto A → Konto B verwirft lokale Daten von A.
+- [ ] Konto → Logout/Auth-Verlust entfernt kontoabhängige lokale Daten.
 
-## 6. Kontingente und Kosten
+## 7. Sichere Ranglistenprüfungen
 
-Empfohlener Startwert für KI:
+Der endgültige Ranglistenpfad lautet:
 
-- 3 bis 5 Generate-Content-Anfragen pro Nutzer und Minute
-- zusätzlich produktseitiges Tageskontingent pro Tarif
-- maximal 30 Fragen pro Generierung
-- maximale Themenlänge 120 Zeichen
+- `startSecureRankedQuiz`
+- `submitRankedQuiz`
+- `revealSecureRankedQuiz`
 
-Zusätzlich:
+Prüfen:
 
-- Budgetwarnungen einrichten
-- AI Monitoring aktivieren
-- Fehlerquote, Tokens, Latenz und 429-Antworten überwachen
-- Functions-Instanzen und Firestore-Schreibkosten überwachen
-- Modellname später über Remote Config steuerbar machen
+- [ ] Backend wählt die Fragen selbst.
+- [ ] Browser erhält vor Abgabe weder Lösungsindex noch Erklärung.
+- [ ] jede Sitzung besitzt einen unveränderlichen Antwort-Snapshot.
+- [ ] Submit verwendet ausschließlich `readSessionAnswerKey`.
+- [ ] Reveal ist erst nach erfolgreicher Abgabe möglich.
+- [ ] fehlender/beschädigter Snapshot schlägt hart fehl.
+- [ ] kein Fallback auf den aktuellen Fragenkatalog existiert.
+- [ ] wiederholte Submit-Anfrage ist idempotent.
+- [ ] fremde oder manipulierte Session-/Frage-IDs werden abgelehnt.
 
-## 7. Firestore-Regeln
+`recordRoundResult` und der alte client-vertraute Übergang sind **nicht** Teil des aktiven Release-Pfads.
 
-Mindestens testen:
+## 8. Firestore-Regeln
 
-- Nutzer A kann Nutzer B nicht lesen oder verändern.
-- Nutzer kann seine UID im Dokument nicht austauschen.
-- ein Legacy-Client kann `economyVersion: 1` nicht selbst setzen.
-- nach `economyVersion: 1` kann der Client nur Profil, Einstellungen und eigene Lerninhalte ändern.
-- Ranglisteneinträge migrierter Konten können nicht vom Browser geschrieben werden.
-- `quizSessions` und `roundReceipts` sind für Browser vollständig gesperrt.
-- Lobby- und Duel-Schreibzugriffe sind für normale Clients gesperrt.
-- Adminzugriff funktioniert ausschließlich über den Custom Claim `admin: true`.
+Die Emulator-Suite muss tatsächlich ausgeführt werden.
 
-Die Admin SDK in Cloud Functions greift vertrauenswürdig auf Firestore zu und wird nicht durch Clientregeln autorisiert. Deshalb müssen Eingaben in jeder Function separat geprüft werden.
+Mindestens bestätigen:
 
-## 8. Migration vorhandener Testdaten
+- [ ] Nutzer A kann Nutzer B nicht lesen oder verändern.
+- [ ] Browser kann keine Economy-, Inventar-, Shop-Avatar- oder Ranglistenwerte schreiben.
+- [ ] `trustedLeaderboard` ist browser-write-geschützt.
+- [ ] `quizSessions` und `serverRateLimits` sind vollständig für Browser gesperrt.
+- [ ] Lernplan akzeptiert nur die dokumentierte Struktur ohne Zusatzfelder.
+- [ ] `customDifficultyTimes` akzeptiert nur `leicht`, `mittel`, `schwer`, `all` mit Integerwerten 5–120.
+- [ ] `wrongQuestions` ist auf 300 Einträge begrenzt.
+- [ ] `customQuizzes` ist auf 100 Einträge begrenzt.
+- [ ] Lobby-/Duel-Schreibzugriffe bleiben bis zu einem neuen serverautoritativen Modell gesperrt.
+- [ ] Browser-Admin-Claims geben keinen Zugriff auf Antwortschlüssel oder Rate-Limit-Interna.
 
-Die erste erfolgreiche Wirtschaftsfunktion setzt `economyVersion: 1`. Frühere Punkte und Münzen wurden clientseitig berechnet und sind daher nicht automatisch vertrauenswürdig.
+Die Admin SDK in Cloud Functions umgeht Clientregeln. Deshalb müssen Function-Eingaben separat validiert bleiben.
 
-Vor Veröffentlichung eine Entscheidung treffen:
+## 9. Lernset-Bibliothek
 
-- alle Testkonten zurücksetzen, oder
-- ausgewählte Konten durch ein einmaliges Adminskript migrieren, oder
-- Rangliste zum öffentlichen Start vollständig neu beginnen.
+- [ ] JSON-, CSV- und TSV-Import getestet.
+- [ ] Bibliothekslimits bestätigt: 100 Lernsets, 500 Fragen, 700.000 serialisierte Bytes.
+- [ ] doppelte IDs werden stabil normalisiert.
+- [ ] manuelles Erstellen und Bearbeiten funktioniert.
+- [ ] geänderte Frage verwirft alten SRS-Status.
+- [ ] fällige Teilsets schreiben SRS zurück in das Originaldeck.
+- [ ] ungewertete Probeprüfung vergibt keine Ranglistenpunkte.
+- [ ] Cloud-/lokaler Merge verursacht keinen Datenverlust.
 
-Empfehlung für WissenPur: **Rangliste zum öffentlichen Start neu beginnen** und klar als neue Saison kennzeichnen.
+## 10. Kontodaten, Export und Löschung
 
-## 9. Authentifizierung und Datenschutz
+- [ ] JSON-Datenexport funktioniert.
+- [ ] `answerKey` bleibt aus dem Export redigiert.
+- [ ] lokale persönliche Lernanalyse wird erst im Browser in den Download ergänzt und nicht dafür hochgeladen.
+- [ ] Kontolöschung verlangt App Check.
+- [ ] zu alte Auth-Sitzung verlangt Neuauthentifizierung.
+- [ ] Firestore-, Ranglisten-, Quiz- und Auth-Daten werden gelöscht.
+- [ ] lokale Stats, Besitzer-Marker, Lernplan, Analyse und `sessionStorage` werden entfernt.
 
-- nur benötigte Login-Anbieter aktivieren
-- erlaubte Domains kontrollieren
-- Datenschutzerklärung vor dem Login erreichbar machen
-- Kontolöschung und Datenexport bereitstellen
-- Session- und Fehlerverhalten auf Mobilgeräten testen
-- Datenverarbeitung durch Firebase, reCAPTCHA Enterprise, AI Logic und externe Bilddienste aufführen
+## 11. TTL und Datenaufbewahrung
 
-## 10. Hosting-Variablen
+- [ ] TTL für `quizSessions.expiresAt` aktiviert.
+- [ ] weitere serverseitige Ablauf-/Rate-Limit-Daten auf benötigte Aufbewahrung geprüft.
+- [ ] Log-, Session- und Supportfristen technisch und rechtlich bestätigt.
+- [ ] Exportgrenze von 500 Dokumenten pro zugeordneter Sammlung für den erwarteten Betrieb bewertet.
 
-Erforderlich:
+## 12. Frontend-Abhängigkeiten und Lockfile
 
-```env
-VITE_RECAPTCHA_ENTERPRISE_SITE_KEY=...
-VITE_ENABLE_APPCHECK_DEBUG=false
-VITE_USE_FUNCTIONS_EMULATOR=false
+Aktueller Release-Blocker:
+
+`wissenpur/package-lock.json` stammt im Root-Eintrag noch aus der früheren Demo-Abhängigkeitsstruktur und löst direkte aktuelle Pakete wie `@types/react` und `@types/react-dom` nicht vollständig auf.
+
+Sobald Registry-Zugriff verfügbar ist:
+
+```bash
+cd wissenpur
+rm -rf node_modules package-lock.json
+npm install --no-audit --no-fund
+npm run lint
+npm run build
 ```
 
-Nicht mehr verwenden:
+Danach:
 
-```env
-GEMINI_API_KEY=...
-```
+- [ ] neues `package-lock.json` committen.
+- [ ] `npm --prefix functions run check:frontend-lock` läuft grün.
+- [ ] GitHub-Frontend-Job wieder auf `npm ci` umstellen.
+- [ ] Frontend-Typecheck läuft grün.
+- [ ] Produktionsbundle läuft grün.
+- [ ] `npm run check:release` mit Produktionsvariablen läuft grün.
 
-Ein privater Gemini-Schlüssel darf weder als Vite-Variable noch über `define` in das Browser-Bundle gelangen.
+Keine Integritäts-Hashes dürfen manuell erfunden werden.
 
-## 11. Manueller Release-Test
+## 13. PWA / Hosting
 
-- Google-Login auf Desktop, Android und iPhone
-- bestehender Cloud-Spielstand auf einem zweiten Gerät
-- erste Migration auf `economyVersion: 1`
-- dieselbe Runde zweimal einreichen
-- zwei verschiedene Runden innerhalb von 15 Sekunden einreichen
-- abgelaufene Ranglisten-Sitzung einreichen
-- fremde oder manipulierte Frage-ID senden
-- Erfolgsschwelle erreichen und Bonus genau einmal erhalten
-- Daily Quest zweimal abholen
-- Glücksrad zweimal am selben Tag drehen
-- bestätigtes Glücksrad-Ergebnis nach Neuladen kontrollieren
-- Shopkauf mit zu wenigen Münzen
-- Power-up ohne Bestand verwenden
-- Offline-Start mit lokalen Fragen
-- KI-Fallback bei blockierter AI-Logic-Anfrage
-- PWA-Installation und Update einer bestehenden Installation
-- Dark Mode, Ton aus, Zoom und Tastaturbedienung
-- Daily Challenge über einen Datumswechsel
-- Firestore-Zugriff mit einem zweiten Testkonto
+- [ ] Hosting-Header auf echter Domain geprüft.
+- [ ] `index.html` und `sw.js` werden nicht langlebig gecacht.
+- [ ] Offline-Fallback funktioniert nach Erstbesuch.
+- [ ] Service Worker aktualisiert sauber.
+- [ ] PNG-/Apple-Touch-Icons ergänzt.
+- [ ] Installation auf realem iOS und Android getestet.
+- [ ] Hosting-Rollback praktisch getestet.
 
-## 12. Verbleibender Ranglisten-Blocker
+## 14. Monitoring und Kosten
 
-Der Backendkern ist vorhanden. Vor einer öffentlichen kompetitiven Rangliste muss die Quizoberfläche aber vollständig `startRankedQuiz` und `submitRankedQuiz` verwenden. Der Übergangsendpunkt `recordRoundResult` begrenzt und berechnet Belohnungen serverseitig, kann jedoch noch nicht beweisen, dass die vom Client gemeldete Anzahl richtiger Antworten tatsächlich aus den gezeigten Fragen stammt.
+- [ ] Cloud Logging und Error Reporting geprüft.
+- [ ] Budgetwarnungen eingerichtet.
+- [ ] Firestore-/Functions-/AI-Quotas dokumentiert.
+- [ ] Missbrauchs- und Kostenalarme haben verantwortliche Empfänger.
+- [ ] Aufbewahrungsfristen für Logs bestätigt.
+
+## 15. Datenschutz / Recht
+
+- [ ] echte Betreiberangaben eingetragen.
+- [ ] Datenschutz- und Supportkontakt eingetragen.
+- [ ] Datenschutzerklärung rechtlich geprüft.
+- [ ] Impressum rechtlich geprüft.
+- [ ] Nutzungsbedingungen geprüft.
+- [ ] Mindestalter/Einwilligungsmodell festgelegt.
+- [ ] Speicherdauern bestätigt.
+- [ ] lokale Analyse, Gastdatenmigration und clientseitige Exportergänzung transparent beschrieben.
+
+## 16. End-to-End-Abnahme
+
+Mindestens diese Szenarien müssen auf Staging/Produktion getestet werden:
+
+1. Gast erstellt Lernset → Login → Lernset bleibt, Gast-Economy nicht.
+2. bestehendes Konto + lokale Offline-Sets → Login → Union ohne Datenverlust.
+3. Logout während langsamer Economy-Hydrierung → keine alten Daten erscheinen wieder.
+4. Konto A → Konto B → keine Daten von A bei B sichtbar.
+5. gewertete Standardprüfung vollständig.
+6. Daily Challenge nur einmal gewertet.
+7. Blitz-Prüfung mit Timeout.
+8. wiederholte Submit-Anfrage idempotent.
+9. fehlender/beschädigter Antwort-Snapshot scheitert sicher.
+10. Lernset importieren, bearbeiten, SRS lernen und synchronisieren.
+11. Datenexport einschließlich lokaler Analyse.
+12. vollständige Kontolöschung.
+13. Offline-PWA und Wiederverbindung.
+14. Hosting-Rollback.
+
+## Freigaberegel
+
+Der Release darf nicht freigegeben werden, solange GitHub Actions keine echten Schritte ausgeführt hat, Frontend-Lockfile und Builds nicht reproduzierbar bestätigt sind, Rules-/Emulator-Tests fehlen oder Produktions-/Rechtskonfiguration unvollständig ist.
