@@ -26,7 +26,19 @@ Die Historie liegt ausschließlich im lokalen Browser-Speicher:
 
 Sie wird nicht in `users/{uid}` geschrieben und nicht für Ranglistenpunkte, Münzen, Streaks, Achievements oder Shop-Bestände verwendet.
 
-Beim Konto- oder Authwechsel wird der lokale Kontext verworfen. Die gesamte Produktoberfläche wird erst nach der ersten aufgelösten Firebase-Auth-Sitzung gerendert, damit ein angemeldetes Konto während der Start-Hydrierung nicht kurz als anonymer Nutzer behandelt wird.
+## Kontokontext
+
+Die gesamte Produktoberfläche wird erst nach der ersten aufgelösten Firebase-Auth-Sitzung gerendert. Dadurch wird ein bereits angemeldetes Konto während der Start-Hydrierung nicht kurz als anonymer Nutzer behandelt.
+
+Für Wechsel gilt dieselbe zentrale Session-Policy wie für andere lokale Kontodaten:
+
+- erste Auth-Auflösung → vorhandene Daten bleiben erhalten
+- Gast → erster Login → lokale Analyse wird dem neuen Konto zugeordnet
+- gleiches Konto → Daten bleiben erhalten
+- Konto → Logout/Auth-Verlust → Analyse wird gelöscht
+- Konto A → Konto B → Analyse von A wird gelöscht
+
+Die Gast→Login-Übernahme betrifft nur diese persönliche lokale Lernhistorie. Sie verändert keine serververwaltete Economy.
 
 ## Historiengrenze
 
@@ -53,9 +65,9 @@ Eine neue Verlaufssitzung wird nur erzeugt, wenn zwischen zwei Snapshots exakt g
 - `totalQuestionsAnswered` steigt um 1 bis 30
 - `correctAnswers` steigt um einen Wert zwischen 0 und der Zahl neuer Fragen
 
-Mehrere nachgeladene Altrunden, zum Beispiel bei einer Cloud-Hydrierung, erzeugen deshalb keine künstlichen Verlaufseinträge.
+Mehrere nachgeladene Altrunden erzeugen deshalb keine künstlichen Verlaufseinträge.
 
-Nach einem Authwechsel wird zusätzlich eine kurze Hydrierungsphase verwendet, in der nur die Baseline aktualisiert wird.
+Nach einem Authwechsel wird zusätzlich eine kurze Hydrierungsphase verwendet, in der nur die Baseline aktualisiert wird. Die Release-Oberfläche zeigt während der eigentlichen Konto-Hydrierung außerdem keine ungeprüfte Gast-Economy an.
 
 ## Kategorie-Erkennung
 
@@ -99,29 +111,12 @@ Die Empfehlung folgt einer festen Priorität:
 
 Die Empfehlung löst keine automatische Wertung aus und verändert keine Economy-Daten.
 
-## Datenexport
+## Datenschutz und Export
 
-Die Analysehistorie bleibt technisch lokal und wird **nicht auf den Server hochgeladen**, nur um einen Export zu ermöglichen.
+Die Historie ist gerätegebunden und kann beim Löschen lokaler Browserdaten verloren gehen.
 
-Wenn ein angemeldeter Nutzer den JSON-Datenexport aus der App startet, passiert stattdessen Folgendes:
+Beim JSON-Kontoexport lädt die Web-App zunächst den serverseitig geschützten Export und ergänzt anschließend die lokale Analyse **nur im heruntergeladenen Browser-JSON**. Die Analyse wird dafür nicht nach Firestore hochgeladen.
 
-1. Die serverseitigen Kontodaten werden über den geschützten Export-Callable geladen.
-2. Die App prüft, ob der lokale Analyse-Besitzer zur aktuell angemeldeten UID passt.
-3. Nur dann wird die normalisierte lokale Analysehistorie im Browser unter `localDevice.learningAnalytics` an die heruntergeladene JSON-Datei angefügt.
-
-Damit erhält der Nutzer einen möglichst vollständigen Export, ohne die lokale Historie vorher in Firestore zu speichern.
-
-## Löschung
-
-Bei Logout und vollständiger Kontolöschung werden neben Stats und Lernplan auch beide lokalen Analyse-Schlüssel explizit entfernt:
-
-- `wissenpur_learning_history_v1`
-- `wissenpur_learning_history_owner_v1`
-
-Die Löschpfade sind zusätzlich durch die Konto-Isolationsprüfung abgesichert.
-
-## Datenschutz und Grenzen
-
-Die Analysehistorie ist gerätegebunden und kann beim Löschen lokaler Browserdaten verloren gehen. Der Export ergänzt deshalb nur die Daten des aktuell verwendeten Browsers.
+Logout und technische Kontolöschung entfernen die Analysehistorie und ihren Besitzer-Marker explizit.
 
 Falls später geräteübergreifende Analysen eingeführt werden, muss dafür ein eigener Datenvertrag mit klarer Firestore-Regel, Speicherfrist, Export- und Löschlogik erstellt werden. Die aktuelle lokale Historie darf nicht still in bestehende vertrauenswürdige Economy-Felder übernommen werden.
