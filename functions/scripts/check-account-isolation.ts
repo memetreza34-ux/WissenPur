@@ -73,8 +73,14 @@ assertIncludes(
 assertIncludes(
   'wissenpur/src/storage.ts',
   storage,
-  'if (auth.currentUser && stats.economyVersion === 1) return stats;',
-  'Angemeldete Übungsrunden dürfen serververwaltete Economy-Werte nicht lokal erhöhen.',
+  'if (auth.currentUser) return stats;',
+  'Angemeldete Übungsrunden dürfen auch während der Economy-Hydrierung keine lokalen Economy-Werte erzeugen.',
+);
+assertMissing(
+  'wissenpur/src/storage.ts',
+  storage,
+  /auth\.currentUser && stats\.economyVersion === 1/,
+  'Die lokale Economy-Sperre darf nicht von einer bereits hydrierten economyVersion abhängen.',
 );
 assertIncludes(
   'wissenpur/src/storage.ts',
@@ -156,4 +162,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('Gastdaten-Übernahme, Konto-Isolation, Analyse-Löschung, Auth-Hydrierung, Authwechsel, Logout und Löschung geprüft.');
+console.log('Gastdaten-Übernahme, Konto-Isolation, Economy-Hydrierungssperre, Analyse-Löschung, Authwechsel, Logout und Löschung geprüft.');
