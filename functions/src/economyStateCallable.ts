@@ -26,9 +26,9 @@ function requireUser(request: CallableRequest<unknown>): string {
 /**
  * Returns the server-authoritative economy state for the signed-in account.
  *
- * Legacy/user-writable economy documents are never migrated by trusting their
- * values. If economyVersion is missing or outdated, normalizeEconomy() starts
- * from the server defaults and this callable persists that trusted baseline.
+ * Every new authenticated browser session passes through normalizeEconomy().
+ * This applies daily/weekly resets consistently and discards legacy/client-
+ * writable economy values instead of trusting them in the browser.
  */
 export const getMyEconomyState = onCall(
   { enforceAppCheck },
@@ -46,13 +46,11 @@ export const getMyEconomyState = onCall(
         const state = normalizeEconomy(userData, today);
         const publicState = toPublicEconomy(state);
 
-        if (!userData || userData.economyVersion !== state.economyVersion) {
-          transaction.set(userRef, {
-            uid,
-            ...publicState,
-            updatedAt: FieldValue.serverTimestamp(),
-          }, { merge: true });
-        }
+        transaction.set(userRef, {
+          uid,
+          ...publicState,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
 
         return publicState;
       });
@@ -60,7 +58,7 @@ export const getMyEconomyState = onCall(
       return { stats };
     } catch (error) {
       if (error instanceof HttpsError) throw error;
-      logger.error('Failed to hydrate authoritative economy state', { uid, error });
+      logger.error('Failed to hydrate authoritative economy state', error);
       throw new HttpsError(
         'internal',
         'Der sichere Online-Fortschritt konnte nicht geladen werden.',
