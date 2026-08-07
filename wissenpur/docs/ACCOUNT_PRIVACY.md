@@ -4,55 +4,26 @@ Stand: August 2026
 
 ## Technische Selbstbedienung
 
-Angemeldete Nutzer finden in der Release-App die Schaltfläche **Daten**. Dort stehen ein geschützter Datenexport und die vollständige Kontolöschung zur Verfügung.
+Angemeldete Nutzer finden in der Release-App die Schaltfläche **Daten**. Dort stehen geschützte Export- und Löschfunktionen zur Verfügung.
 
-## Datenexport
+### Datenexport
 
-Der Export besteht aus zwei klar getrennten Quellen:
-
-1. **Serverdaten** über den geschützten Callable `exportMyData`.
-2. **Lokale Lernanalyse des aktuellen Browsers**, die erst nach der Serverantwort clientseitig in die heruntergeladene JSON-Datei eingefügt wird.
-
-Die lokale Analyse wird für den Export nicht nach Firestore hochgeladen.
-
-### Serverexport `exportMyData`
-
-Der serverseitige Export enthält:
+`exportMyData` erzeugt serverseitig eine JSON-Grundlage mit:
 
 - Firebase-Konto-ID
 - E-Mail-Adresse, Verifizierungsstatus und Login-Anbieter
 - Nutzerprofil und Einstellungen
 - Lernfortschritt, Punkte, Münzen, Streaks und Erfolge
 - eigene Lernsets, Lernplan und gespeicherte Fehlerfragen, soweit sie im Nutzerdokument liegen
-- serververifizierten Ranglisteneintrag aus `trustedLeaderboard`
-- gegebenenfalls historischen Alt-Ranglisteneintrag, klar getrennt vom verifizierten Eintrag
-- eigene Quiz-Sitzungen und Rundennachweise
-- serverseitiges Quizstart-Limit des eigenen Kontos
-- selbst erstellte Alt-Lobbys sowie zuordenbare Alt-Duelle
+- serververifiziertem Ranglisteneintrag aus `trustedLeaderboard`
+- gegebenenfalls historischem Alt-Ranglisteneintrag, klar getrennt vom verifizierten Eintrag
+- eigenen Quiz-Sitzungen und öffentlichen Rundenergebnissen
+- serverseitigem Quizstart-Limit des eigenen Kontos
+- selbst erstellten Alt-Lobbys sowie zuordenbaren Alt-Duellen
 
-### Lokale Geräteerweiterung
+Die Web-App ergänzt anschließend **nur lokal im Browser** die gerätegebundene persönliche Lernanalyse (`learningAnalytics`). Diese Historie wird für den Export nicht nach Firestore hochgeladen.
 
-Die persönliche Lernanalyse wird ausschließlich in diesem Browser unter folgenden Schlüsseln gespeichert:
-
-- `wissenpur_learning_history_v1`
-- `wissenpur_learning_history_owner_v1`
-
-Vor dem Anhängen an den Download prüft die Web-App, dass der lokale Besitzer-Marker exakt zur aktuell angemeldeten Firebase-UID passt. Anschließend wird die normalisierte lokale Historie unter folgendem Exportpfad ergänzt:
-
-```json
-{
-  "localDevice": {
-    "learningAnalytics": [],
-    "note": "Diese Lernanalyse wurde nur in diesem Browser gespeichert und für diesen Export lokal ergänzt."
-  }
-}
-```
-
-Die Lernanalyse enthält nur kompakte Sitzungsmetriken wie Zeitpunkt, Kategorie, Zahl richtiger Antworten, Gesamtfragen und daraus berechnete Trefferquote. Sie enthält keine Antwortwerte, Frageformulierungen, Erklärungen oder serverinternen Lösungsschlüssel.
-
-Da diese Daten gerätegebunden sind, kann ein Export auf einem anderen Browser oder Gerät eine andere beziehungsweise leere `localDevice.learningAnalytics`-Liste enthalten.
-
-### Sicherheitsredaktion
+#### Sicherheitsredaktion
 
 Der serverinterne `answerKey` einer Quiz-Sitzung wird niemals exportiert. Das gilt auch für eine aktuell laufende Runde. Der Export enthält dafür einen maschinenlesbaren Redaktionshinweis:
 
@@ -68,11 +39,27 @@ Der Lösungsschlüssel ist kein vom Nutzer bereitgestelltes Kontodatum, sondern 
 
 Firestore-Zeitstempel werden als ISO-Datum ausgegeben. Pro zugeordneter Sammlung werden höchstens 500 Dokumente exportiert. Dieser Grenzwert muss vor einem größeren öffentlichen Betrieb durch paginierten Export oder einen Supportprozess ersetzt werden.
 
+## Gastdaten beim ersten Login
+
+WissenPur trennt **Lerninhalte** und **Economy** bewusst voneinander.
+
+Beim ersten Wechsel vom Gastmodus in ein angemeldetes Konto bleiben nutzererstellte Lerninhalte erhalten:
+
+- lokale Lernsets werden mit vorhandenen Cloud-Lernsets vereinigt
+- bei identischer Deck-ID gewinnt die aktuelle lokale Fassung
+- lokale Fehlerfragen werden mit Cloud-Fehlerfragen vereinigt; bei gleicher ID gewinnt lokal
+- der Lernplan verwendet seine Zeitstempel-Konfliktregel
+- die lokale Lernanalyse wird dem neuen Kontokontext zugeordnet
+
+Gastpunkte, Gastmünzen, Gaststreaks, Erfolge, Shop-Bestände und andere Economy-Werte werden **nicht** übernommen.
+
+Jede neue Auth-Sitzung lädt den Economy-Zustand über die App-Check-geschützte Callable Function `getMyEconomyState`. Der Server normalisiert Tages-/Wochenwerte und verwirft Legacy-/client-schreibbare Economy-Werte, wenn kein vertrauenswürdiger `economyVersion: 1`-Zustand vorliegt.
+
+Während dieser Hydrierung zeigt die Web-App keine unbestätigten Gast-Economy-Werte. Verspätete Antworten einer alten Auth-Sitzung werden nach Logout oder Kontowechsel verworfen.
+
 ## Kontolöschung
 
-### Serverseitige Löschung
-
-`deleteMyAccount` löscht:
+`deleteMyAccount` löscht serverseitig:
 
 - `users/{uid}`
 - `trustedLeaderboard/{uid}`
@@ -84,20 +71,12 @@ Firestore-Zeitstempel werden als ISO-Datum ausgegeben. Pro zugeordneter Sammlung
 - zuordenbare Alt-Duelle
 - anschließend den Firebase-Authentication-Nutzer
 
-### Lokale Löschung im aktuellen Browser
+Die Web-App entfernt nach erfolgreicher Löschung zusätzlich die kontoabhängigen lokalen Browserdaten, darunter:
 
-Nach einer erfolgreichen Kontolöschung entfernt die Web-App zusätzlich kontoabhängige lokale Daten, insbesondere:
-
-- `wissenpur_user_stats`
-- `wissenpur_user_stats_owner`
-- `wissenpur_learning_plan`
-- `wissenpur_learning_history_v1`
-- `wissenpur_learning_history_owner_v1`
-- zugehörige Session-Storage-Daten
-
-Auch ein normaler Logout entfernt die lokalen Statistik-, Lernplan- und Analyse-Schlüssel des angemeldeten Kontos.
-
-### Sicherheitsanforderungen
+- lokalen Nutzerstand und Besitzer-Marker
+- lokalen Lernplan
+- lokale Lernanalyse und deren Besitzer-Marker
+- Sitzungsdaten im `sessionStorage`
 
 Die Löschung verlangt:
 
@@ -127,7 +106,6 @@ Die technische Export- und Löschfunktion ersetzt keine Rechtsprüfung. Vor Ver�
 - Impressum mit echten Betreiberangaben
 - Rechtsgrundlagen und Speicherdauern
 - Firebase-, Google-Login-, Firebase-AI-Logic-, reCAPTCHA-Enterprise- und Hosting-Hinweise
-- lokale Speicherung von Lernsets, Lernplan und Lernanalyse
 - Verarbeitung außerhalb der EU beziehungsweise eingesetzte Garantien
 - Verfahren für Auskunft, Berichtigung, Widerspruch und Beschwerden
 - Löschfristen für Logs, Backups und Supportdaten
