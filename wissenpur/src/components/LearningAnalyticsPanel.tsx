@@ -15,6 +15,7 @@ import {
 import { onAuthStateChanged } from 'firebase/auth';
 import { CATEGORIES } from '../data';
 import { auth } from '../firebase';
+import { shouldClearLocalAccountDataForTransition } from '../services/accountSessionPolicy';
 import {
   ANALYTICS_OWNER_KEY,
   ANALYTICS_STORAGE_KEY,
@@ -51,7 +52,14 @@ const writeHistory = (history: readonly LearningSessionRecord[]) => {
 const ensureAnalyticsOwner = (): LearningSessionRecord[] => {
   const nextOwner = ownerKey();
   const previousOwner = localStorage.getItem(ANALYTICS_OWNER_KEY);
-  if (previousOwner && previousOwner !== nextOwner) {
+  const previousIdentity = previousOwner === null
+    ? undefined
+    : previousOwner === 'anonymous'
+      ? null
+      : previousOwner;
+  const nextIdentity = nextOwner === 'anonymous' ? null : nextOwner;
+
+  if (shouldClearLocalAccountDataForTransition(previousIdentity, nextIdentity)) {
     localStorage.removeItem(ANALYTICS_STORAGE_KEY);
   }
   localStorage.setItem(ANALYTICS_OWNER_KEY, nextOwner);
