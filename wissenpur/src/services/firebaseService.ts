@@ -9,10 +9,10 @@ import {
   query,
   setDoc,
 } from 'firebase/firestore';
-import type { User } from 'firebase/auth';
 import { auth, db } from '../firebase';
 import { saveStats } from '../storage';
 import { LeaderboardEntry, UserStats } from '../types';
+import { getServerEconomyState } from './economyService';
 import { mergeLearningLibraries } from './learningLibraryMerge';
 import { applyLearningLibraryPolicy } from './learningLibraryPolicy';
 import { mergeWrongQuestions } from './wrongQuestionMerge';
@@ -29,7 +29,7 @@ interface FirestoreErrorInfo {
   resourceType: string;
 }
 
-let hydratedAuthUser: User | null = null;
+let hydratedAuthUid: string | null = null;
 
 function handleFirestoreError(
   error: unknown,
@@ -83,8 +83,9 @@ const mergeCloudStats = (
 ): UserStats => {
   const profileMerged = mergeProfileContent(localStats, cloudStats);
 
-  // Legacy documents were writable by the browser and therefore cannot be
-  // trusted for points, coins, streaks, achievements, inventory or avatars.
+  // Only economyVersion 1 is trusted as an authenticated economy source.
+  // Legacy documents were writable by the browser and must never provide
+  // signed-in points, coins, streaks, achievements or inventory.
   if (cloudStats.economyVersion !== 1) return profileMerged;
 
   return {
@@ -156,24 +157,33 @@ const persistProfileOnly = async (stats: UserStats): Promise<UserStats> => {
 export const syncUserStats = async (stats: UserStats): Promise<UserStats | undefined> => {
   const currentUser = auth.currentUser;
   if (!currentUser) {
-    hydratedAuthUser = null;
+    hydratedAuthUid = null;
     return undefined;
   }
 
   const userRef = doc(db, 'users', currentUser.uid);
 
   try {
-    if (hydratedAuthUser !== currentUser) {
+    if (hydratedAuthUid !== currentUser.uid) {
       const existingSnapshot = await getDoc(userRef);
-      hydratedAuthUser = currentUser;
+      const existingData = existingSnapshot.exists()
+        ? existingSnapshot.data() as Partial<UserStats>
+        : {};
+      const profileMerged = mergeProfileContent(stats, existingData);
 
-      if (existingSnapshot.exists()) {
-        const mergedStats = mergeCloudStats(
-          stats,
-          existingSnapshot.data() as Partial<UserStats>,
+      const hydratedStats = existingData.economyVersion === 1
+        ? mergeCloudStats(profileMerged, existingData)
+        : mergeCloudStats(profileMerged, (await getServerEconomyState()).stats);
+
+      const persisted = await persistProfileOnly(hydratedStats);
+      hydratedAuthUid = currentUser.uid;
+      saveStats(persisted);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent<UserStats>('wissenpur:stats-updated', { detail: persisted }),
         );
-        return persistProfileOnly(mergedStats);
       }
+      return persisted;
     }
 
     return persistProfileOnly(stats);
