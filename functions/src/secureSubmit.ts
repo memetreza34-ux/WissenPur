@@ -5,6 +5,7 @@ import {
   onCall,
   type CallableRequest,
 } from 'firebase-functions/v2/https';
+import { enforceGlobalCallableRateLimit } from './callableRateLimit.js';
 import { db, enforceAppCheck } from './database.js';
 import {
   applyRankedRound,
@@ -132,6 +133,7 @@ export const submitRankedQuiz = onCall<SubmitQuizRequest>(
   async (request) => {
     try {
       const uid = requireUser(request);
+      await enforceGlobalCallableRateLimit(uid);
       const sessionId = requireString(request.data.sessionId, 'sessionId', 100);
       const answers = parseAnswers(request.data.answers);
       const sessionRef = db.collection('quizSessions').doc(sessionId);
