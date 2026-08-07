@@ -1,4 +1,5 @@
 import { httpsCallable } from 'firebase/functions';
+import { auth } from '../firebase';
 import { Difficulty, UserStats } from '../types';
 import { functions } from './functionsClient';
 
@@ -63,6 +64,29 @@ export interface SpinResponse extends EconomyResponse {
   };
 }
 
+class CallableAuthSessionChangedError extends Error {
+  constructor() {
+    super('Die Kontositzung hat sich während der Online-Aktion geändert. Bitte starte die Aktion erneut.');
+    this.name = 'CallableAuthSessionChangedError';
+  }
+}
+
+const runForCurrentAuthenticatedSession = async <T>(
+  operation: () => Promise<T>,
+): Promise<T> => {
+  const expectedUser = auth.currentUser;
+  if (!expectedUser) throw new Error('Bitte melde dich zuerst an.');
+  const expectedUid = expectedUser.uid;
+
+  const result = await operation();
+
+  if (auth.currentUser !== expectedUser || auth.currentUser?.uid !== expectedUid) {
+    throw new CallableAuthSessionChangedError();
+  }
+
+  return result;
+};
+
 const getMyEconomyStateCallable = httpsCallable<Record<string, never>, EconomyResponse>(
   functions,
   'getMyEconomyState',
@@ -104,7 +128,7 @@ const consumePowerUpCallable = httpsCallable<
 >(functions, 'consumePowerUp');
 
 export const getServerEconomyState = async (): Promise<EconomyResponse> => {
-  const result = await getMyEconomyStateCallable({});
+  const result = await runForCurrentAuthenticatedSession(() => getMyEconomyStateCallable({}));
   return result.data;
 };
 
@@ -114,7 +138,9 @@ export const startSecureRankedQuizSession = async (
   difficulty: RankedDifficulty,
   count: number,
 ): Promise<StartSecureRankedQuizResponse> => {
-  const result = await startSecureRankedQuizCallable({ mode, category, difficulty, count });
+  const result = await runForCurrentAuthenticatedSession(() =>
+    startSecureRankedQuizCallable({ mode, category, difficulty, count }),
+  );
   return result.data;
 };
 
@@ -122,38 +148,42 @@ export const submitRankedQuizSession = async (
   sessionId: string,
   answers: RankedAnswer[],
 ): Promise<SubmitRankedQuizResponse> => {
-  const result = await submitRankedQuizCallable({ sessionId, answers });
+  const result = await runForCurrentAuthenticatedSession(() =>
+    submitRankedQuizCallable({ sessionId, answers }),
+  );
   return result.data;
 };
 
 export const revealSecureRankedQuizSession = async (
   sessionId: string,
 ): Promise<RevealedRankedAnswer[]> => {
-  const result = await revealSecureRankedQuizCallable({ sessionId });
+  const result = await runForCurrentAuthenticatedSession(() =>
+    revealSecureRankedQuizCallable({ sessionId }),
+  );
   return result.data.answers;
 };
 
 export const claimServerDailyReward = async (): Promise<EconomyResponse> => {
-  const result = await claimDailyQuestRewardCallable({});
+  const result = await runForCurrentAuthenticatedSession(() => claimDailyQuestRewardCallable({}));
   return result.data;
 };
 
 export const spinServerDailyWheel = async (): Promise<SpinResponse> => {
-  const result = await spinDailyWheelCallable({});
+  const result = await runForCurrentAuthenticatedSession(() => spinDailyWheelCallable({}));
   return result.data;
 };
 
 export const purchaseServerShopItem = async (
   itemId: string,
 ): Promise<EconomyResponse & { itemId: string; cost: number }> => {
-  const result = await purchaseShopItemCallable({ itemId });
+  const result = await runForCurrentAuthenticatedSession(() => purchaseShopItemCallable({ itemId }));
   return result.data;
 };
 
 export const consumeServerPowerUp = async (
   powerUp: PowerUpId,
 ): Promise<EconomyResponse & { powerUp: PowerUpId }> => {
-  const result = await consumePowerUpCallable({ powerUp });
+  const result = await runForCurrentAuthenticatedSession(() => consumePowerUpCallable({ powerUp }));
   return result.data;
 };
 
