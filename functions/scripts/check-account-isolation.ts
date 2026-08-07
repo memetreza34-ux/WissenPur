@@ -101,6 +101,30 @@ assertIncludes(
   'prepareLocalAccountDataForWrite();',
   'Lernpläne müssen vor lokalen Schreibvorgängen den Kontokontext vorbereiten.',
 );
+assertIncludes(
+  'wissenpur/src/services/learningPlanService.ts',
+  learningPlan,
+  'class LearningPlanAuthSessionChangedError extends Error',
+  'Lernplan-Cloudzugriffe benötigen einen expliziten Fehler für gewechselte Auth-Sitzungen.',
+);
+assertIncludes(
+  'wissenpur/src/services/learningPlanService.ts',
+  learningPlan,
+  'const assertActiveAuthUid = (expectedUid: string): void',
+  'Lernplan-Cloudzugriffe müssen an die beim Start erwartete UID gebunden sein.',
+);
+assertIncludes(
+  'wissenpur/src/services/learningPlanService.ts',
+  learningPlan,
+  "doc(db, 'users', expectedUid)",
+  'Speichern, Laden und Löschen dürfen nach einem await niemals die aktuelle UID neu auswählen.',
+);
+assertMissing(
+  'wissenpur/src/services/learningPlanService.ts',
+  learningPlan,
+  /doc\(db, ['"]users['"], auth\.currentUser\.uid\)/,
+  'Lernplan-Cloudpfade dürfen keine mutable auth.currentUser.uid direkt als Dokumentziel verwenden.',
+);
 
 for (const [file, content] of [
   ['wissenpur/src/firebase.ts', firebase],
@@ -162,4 +186,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('Gastdaten-Übernahme, Konto-Isolation, Economy-Hydrierungssperre, Analyse-Löschung, Authwechsel, Logout und Löschung geprüft.');
+console.log('Gastdaten-Übernahme, Konto-Isolation, Economy-Hydrierungssperre, Lernplan-UID-Bindung, Analyse-Löschung, Authwechsel, Logout und Löschung geprüft.');
