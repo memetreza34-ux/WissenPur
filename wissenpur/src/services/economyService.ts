@@ -63,6 +63,11 @@ export interface SpinResponse extends EconomyResponse {
   };
 }
 
+const getMyEconomyStateCallable = httpsCallable<Record<string, never>, EconomyResponse>(
+  functions,
+  'getMyEconomyState',
+);
+
 const startSecureRankedQuizCallable = httpsCallable<
   { mode: RankedQuizMode; category: string; difficulty: RankedDifficulty; count: number },
   StartSecureRankedQuizResponse
@@ -97,6 +102,11 @@ const consumePowerUpCallable = httpsCallable<
   { powerUp: PowerUpId },
   EconomyResponse & { powerUp: PowerUpId }
 >(functions, 'consumePowerUp');
+
+export const getServerEconomyState = async (): Promise<EconomyResponse> => {
+  const result = await getMyEconomyStateCallable({});
+  return result.data;
+};
 
 export const startSecureRankedQuizSession = async (
   mode: RankedQuizMode,
