@@ -53,9 +53,15 @@ Beim ersten Wechsel vom Gastmodus in ein angemeldetes Konto bleiben nutzererstel
 
 Gastpunkte, Gastmünzen, Gaststreaks, Erfolge, Shop-Bestände und andere Economy-Werte werden **nicht** übernommen.
 
-Jede neue Auth-Sitzung lädt den Economy-Zustand über die App-Check-geschützte Callable Function `getMyEconomyState`. Der Server normalisiert Tages-/Wochenwerte und verwirft Legacy-/client-schreibbare Economy-Werte, wenn kein vertrauenswürdiger `economyVersion: 1`-Zustand vorliegt.
+Jede neue Auth-Sitzung lädt den Economy-Zustand über die App-Check-geschützte Callable Function `getMyEconomyState`. Der Server normalisiert dabei auch bereits vertrauenswürdige Economy-Zustände erneut, damit Tages-/Wochenresets vor der Anzeige konsistent angewendet werden.
 
-Während dieser Hydrierung zeigt die Web-App keine unbestätigten Gast-Economy-Werte. Verspätete Antworten einer alten Auth-Sitzung werden nach Logout oder Kontowechsel verworfen.
+Während dieser Hydrierung:
+
+- zeigt die Web-App keine unbestätigten Gast-Economy-Werte,
+- bleiben gewertete Quizstarts, Rangliste, Daily-Rewards und Shop gesperrt,
+- können lokale Übungsrunden keine Economy-Werte erhöhen.
+
+Jeder asynchrone Sync ist außerdem an die erwartete Firebase-UID gebunden. Ändert sich die Auth-Sitzung während eines laufenden Reads/Callables/Writes, wird die verspätete Antwort verworfen und darf keine alten Kontodaten erneut in LocalStorage speichern.
 
 ## Kontolöschung
 
