@@ -84,6 +84,15 @@ assert.doesNotMatch(storage, /auth\.currentUser && stats\.economyVersion === 1/)
 assert.match(releaseApp, /const maskEconomyUntilHydrated =/);
 assert.match(releaseApp, /setStats\(maskEconomyUntilHydrated\(localBeforeHydration\)\)/);
 assert.match(releaseApp, /const \[isAccountHydrating, setIsAccountHydrating\] = useState\(false\)/);
+assert.match(releaseApp, /const authHydrationGenerationRef = useRef\(0\)/);
+assert.match(releaseApp, /const hydrationGeneration = authHydrationGenerationRef\.current \+ 1;/);
+assert.match(releaseApp, /authHydrationGenerationRef\.current = hydrationGeneration;/);
+assert.match(releaseApp, /if \(authHydrationGenerationRef\.current !== hydrationGeneration\) return;/);
+assert.match(
+  releaseApp,
+  /finally \{\s*if \(authHydrationGenerationRef\.current === hydrationGeneration\) \{\s*setIsAccountHydrating\(false\);/,
+  'Eine alte Auth-Hydrierung darf den UI-Gate einer neueren Sitzung nicht freigeben.',
+);
 assert.match(releaseApp, /Kontofortschritt wird sicher geladen/);
 assert.match(releaseApp, /Punkte und Münzen werden erst nach der serverseitigen Prüfung angezeigt/);
 assert.match(releaseApp, /if \(isAccountHydrating\)/);
@@ -94,4 +103,4 @@ const spinSaveIndex = spinWheel.indexOf('saveStats(preserveLocalLearningData(res
 const spinCallbackIndex = spinWheel.indexOf('onClaimReward(result.reward);');
 assert.ok(spinSaveIndex >= 0 && spinCallbackIndex > spinSaveIndex, 'Das Glücksrad muss den autoritativen Serverstand vor dem Parent-Callback speichern.');
 
-console.log('Autoritative Economy-Hydrierung, UI-Maskierung, Stale-Session-Sperre, Glücksrad-Persistenz, Legacy-Reset und signierte Local-Mutation-Sperre geprüft.');
+console.log('Autoritative Economy-Hydrierung, UI-Generationssperre, Stale-Session-Sperre, Glücksrad-Persistenz, Legacy-Reset und signierte Local-Mutation-Sperre geprüft.');
