@@ -4,6 +4,8 @@ import type { SRSData } from './srsService';
 export const MAX_IMPORT_BYTES = 1_000_000;
 export const MAX_IMPORTED_QUESTIONS = 100;
 export const MAX_LIBRARY_DECKS = 100;
+export const MAX_LIBRARY_QUESTIONS = 500;
+export const MAX_LIBRARY_SERIALIZED_BYTES = 700_000;
 
 export type LearningSetImportFormat = 'json' | 'csv';
 
@@ -30,7 +32,9 @@ const allowedCategories = new Set([
 ]);
 
 const normalizeText = (value: unknown, maxLength: number): string =>
-  typeof value === 'string' ? value.trim().replace(/\s+/g, ' ').slice(0, maxLength) : '';
+  typeof value === 'string'
+    ? value.trim().replace(/\s+/g, ' ').slice(0, maxLength)
+    : '';
 
 const normalizeDifficulty = (value: unknown): Difficulty | undefined => {
   const candidate = normalizeText(value, 20).toLowerCase();
@@ -50,12 +54,14 @@ const normalizeSrsData = (value: unknown): SRSData | undefined => {
   const easeFactor = Number(data.easeFactor);
   const repetitions = Number(data.repetitions);
   const nextReviewDate = Number(data.nextReviewDate);
+
   if (
     !Number.isFinite(interval) || interval < 0 || interval > 36_500 ||
     !Number.isFinite(easeFactor) || easeFactor < 1.3 || easeFactor > 5 ||
     !Number.isInteger(repetitions) || repetitions < 0 || repetitions > 10_000 ||
     !Number.isFinite(nextReviewDate) || nextReviewDate < 0
   ) return undefined;
+
   return { interval, easeFactor, repetitions, nextReviewDate };
 };
 
@@ -106,7 +112,10 @@ const resolveCorrectAnswer = (
 
   const text = normalizeText(value, 300);
   if (!text) return null;
-  const matchingOption = options.findIndex((option) => option.toLocaleLowerCase('de-DE') === text.toLocaleLowerCase('de-DE'));
+
+  const matchingOption = options.findIndex(
+    (option) => option.toLocaleLowerCase('de-DE') === text.toLocaleLowerCase('de-DE'),
+  );
   if (matchingOption >= 0) return matchingOption;
 
   if (/^[A-J]$/i.test(text)) {
@@ -123,6 +132,22 @@ const resolveCorrectAnswer = (
   return null;
 };
 
+const readOptions = (data: Record<string, unknown>): string[] => {
+  const arrayOptions = Array.isArray(data.options)
+    ? data.options.map((entry) => normalizeText(entry, 250)).filter(Boolean)
+    : [];
+  if (arrayOptions.length > 0) return arrayOptions.slice(0, 6);
+
+  return Array.from({ length: 10 }, (_, index) =>
+    normalizeText(
+      data[`option${index + 1}`] ??
+      data[`antwort${index + 1}`] ??
+      data[String.fromCharCode(65 + index)],
+      250,
+    ),
+  ).filter(Boolean).slice(0, 6);
+};
+
 const normalizeQuestion = (
   raw: unknown,
   title: string,
@@ -132,21 +157,10 @@ const normalizeQuestion = (
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const data = raw as Record<string, unknown>;
   const question = normalizeText(data.question ?? data.prompt ?? data.frage, 500);
+  const options = readOptions(data);
+  const normalizedOptions = options.map((entry) => entry.toLocaleLowerCase('de-DE'));
 
-  const arrayOptions = Array.isArray(data.options)
-    ? data.options.map((entry) => normalizeText(entry, 250)).filter(Boolean)
-    : [];
-  const keyedOptions = Array.from({ length: 10 }, (_, index) =>
-    normalizeText(
-      data[`option${index + 1}`] ??
-      data[`antwort${index + 1}`] ??
-      data[String.fromCharCode(65 + index)],
-      250,
-    ),
-  ).filter(Boolean);
-  const options = (arrayOptions.length > 0 ? arrayOptions : keyedOptions).slice(0, 6);
-
-  if (!question || options.length < 2 || new Set(options.map((entry) => entry.toLocaleLowerCase('de-DE'))).size !== options.length) {
+  if (!question || options.length < 2 || new Set(normalizedOptions).size !== options.length) {
     return null;
   }
 
@@ -157,8 +171,10 @@ const normalizeQuestion = (
   );
   if (correctAnswer === null) return null;
 
-  const explanation = normalizeText(data.explanation ?? data.erklaerung ?? data.reason, 2_000)
-    || 'Importierte Lernfrage.';
+  const explanation = normalizeText(
+    data.explanation ?? data.erklaerung ?? data.reason,
+    2_000,
+  ) || 'Importierte Lernfrage.';
   const difficulty = normalizeDifficulty(data.difficulty ?? data.schwierigkeit);
   const srsData = normalizeSrsData(data.srsData);
 
@@ -196,9 +212,8 @@ const parseDelimitedRows = (text: string, delimiter: string): string[][] => {
       continue;
     }
 
-    if (character === '"') {
-      quoted = true;
-    } else if (character === delimiter) {
+    if (character === '"') quoted = true;
+    else if (character === delimiter) {
       row.push(cell.trim());
       cell = '';
     } else if (character === '\n') {
@@ -225,33 +240,42 @@ const normalizeHeader = (value: string): string =>
     .replace(/[^a-z0-9]/g, '');
 
 const rowObject = (headers: string[], row: string[]): Record<string, unknown> => {
+  const aliases: Record<string, string> = {
+    frage: 'question',
+    prompt: 'question',
+    question: 'question',
+    richtig: 'correctAnswer',
+    korrekt: 'correctAnswer',
+    loesung: 'correctAnswer',
+    answer: 'correctAnswer',
+    correct: 'correctAnswer',
+    correctanswer: 'correctAnswer',
+    erklaerung: 'explanation',
+    explanation: 'explanation',
+    reason: 'explanation',
+    kategorie: 'category',
+    category: 'category',
+    schwierigkeit: 'difficulty',
+    difficulty: 'difficulty',
+  };
   const result: Record<string, unknown> = {};
   headers.forEach((header, index) => {
-    const value = row[index] ?? '';
-    const aliases: Record<string, string> = {
-      frage: 'question', prompt: 'question', question: 'question',
-      richtig: 'correctAnswer', korrekt: 'correctAnswer', loesung: 'correctAnswer', answer: 'correctAnswer', correct: 'correctAnswer', correctanswer: 'correctAnswer',
-      erklaerung: 'explanation', explanation: 'explanation', reason: 'explanation',
-      kategorie: 'category', category: 'category',
-      schwierigkeit: 'difficulty', difficulty: 'difficulty',
-    };
-    const canonical = aliases[header] || header;
-    result[canonical] = value;
+    result[aliases[header] || header] = row[index] ?? '';
   });
   return result;
 };
 
 const chooseDelimiter = (text: string): string => {
   const firstLine = text.split(/\r?\n/, 1)[0] || '';
-  const candidates = [';', ',', '\t'];
-  return candidates.sort((left, right) =>
-    firstLine.split(right).length - firstLine.split(left).length,
+  return [';', ',', '\t'].sort(
+    (left, right) => firstLine.split(right).length - firstLine.split(left).length,
   )[0] || ';';
 };
 
 const fileTitle = (fileName: string): string => {
   const withoutExtension = fileName.replace(/\.[^.]+$/, '');
-  return normalizeText(withoutExtension.replace(/[-_]+/g, ' '), 100) || 'Importiertes Lernset';
+  return normalizeText(withoutExtension.replace(/[-_]+/g, ' '), 100)
+    || 'Importiertes Lernset';
 };
 
 const createDeck = (
@@ -265,7 +289,11 @@ const createDeck = (
   createdAt: now,
 });
 
-const parseJson = (text: string, fileName: string, now: number): LearningSetImportResult => {
+const parseJson = (
+  text: string,
+  fileName: string,
+  now: number,
+): LearningSetImportResult => {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -276,12 +304,14 @@ const parseJson = (text: string, fileName: string, now: number): LearningSetImpo
   const container = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
     ? parsed as Record<string, unknown>
     : null;
+  const sourceQuestions = container?.questions;
   const title = normalizeText(container?.title, 100) || fileTitle(fileName);
-  const rows = Array.isArray(parsed)
+  const rows: unknown[] = Array.isArray(parsed)
     ? parsed
-    : Array.isArray(container?.questions)
-      ? container.questions
+    : Array.isArray(sourceQuestions)
+      ? sourceQuestions
       : [];
+
   if (rows.length === 0) {
     throw new LearningSetImportError('Die JSON-Datei enthält kein questions-Array.');
   }
@@ -291,14 +321,19 @@ const parseJson = (text: string, fileName: string, now: number): LearningSetImpo
     .slice(0, MAX_IMPORTED_QUESTIONS)
     .map((row) => normalizeQuestion(row, title, usedIds, false))
     .filter((question): question is Question => Boolean(question));
+
   if (questions.length === 0) {
     throw new LearningSetImportError('Es wurde keine gültige Frage gefunden.');
   }
 
   const skippedRows = rows.length - questions.length;
   const warnings: string[] = [];
-  if (rows.length > MAX_IMPORTED_QUESTIONS) warnings.push(`Es wurden nur die ersten ${MAX_IMPORTED_QUESTIONS} Fragen importiert.`);
-  if (skippedRows > 0) warnings.push(`${skippedRows} ungültige oder unvollständige Fragen wurden übersprungen.`);
+  if (rows.length > MAX_IMPORTED_QUESTIONS) {
+    warnings.push(`Es wurden nur die ersten ${MAX_IMPORTED_QUESTIONS} Fragen importiert.`);
+  }
+  if (skippedRows > 0) {
+    warnings.push(`${skippedRows} ungültige oder unvollständige Fragen wurden übersprungen.`);
+  }
 
   return {
     deck: createDeck(title, questions, now),
@@ -309,16 +344,25 @@ const parseJson = (text: string, fileName: string, now: number): LearningSetImpo
   };
 };
 
-const parseCsv = (text: string, fileName: string, now: number): LearningSetImportResult => {
+const parseCsv = (
+  text: string,
+  fileName: string,
+  now: number,
+): LearningSetImportResult => {
   const rows = parseDelimitedRows(text, chooseDelimiter(text));
   if (rows.length < 2) {
     throw new LearningSetImportError('Die CSV-Datei benötigt eine Kopfzeile und mindestens eine Frage.');
   }
 
-  const headers = rows[0].map(normalizeHeader);
+  const firstRow = rows[0];
+  if (!firstRow) {
+    throw new LearningSetImportError('Die CSV-Kopfzeile fehlt.');
+  }
+  const headers = firstRow.map(normalizeHeader);
   if (!headers.includes('question') && !headers.includes('frage')) {
     throw new LearningSetImportError('Die CSV-Kopfzeile benötigt die Spalte question oder frage.');
   }
+
   const title = fileTitle(fileName);
   const dataRows = rows.slice(1);
   const usedIds = new Set<string>();
@@ -326,14 +370,19 @@ const parseCsv = (text: string, fileName: string, now: number): LearningSetImpor
     .slice(0, MAX_IMPORTED_QUESTIONS)
     .map((row) => normalizeQuestion(rowObject(headers, row), title, usedIds, true))
     .filter((question): question is Question => Boolean(question));
+
   if (questions.length === 0) {
     throw new LearningSetImportError('Es wurde keine gültige CSV-Frage gefunden.');
   }
 
   const skippedRows = dataRows.length - questions.length;
   const warnings: string[] = [];
-  if (dataRows.length > MAX_IMPORTED_QUESTIONS) warnings.push(`Es wurden nur die ersten ${MAX_IMPORTED_QUESTIONS} Fragen importiert.`);
-  if (skippedRows > 0) warnings.push(`${skippedRows} ungültige oder unvollständige Zeilen wurden übersprungen.`);
+  if (dataRows.length > MAX_IMPORTED_QUESTIONS) {
+    warnings.push(`Es wurden nur die ersten ${MAX_IMPORTED_QUESTIONS} Fragen importiert.`);
+  }
+  if (skippedRows > 0) {
+    warnings.push(`${skippedRows} ungültige oder unvollständige Zeilen wurden übersprungen.`);
+  }
 
   return {
     deck: createDeck(title, questions, now),
@@ -344,6 +393,9 @@ const parseCsv = (text: string, fileName: string, now: number): LearningSetImpor
   };
 };
 
+export const estimateLearningLibraryBytes = (decks: readonly CustomQuiz[]): number =>
+  new TextEncoder().encode(JSON.stringify(decks)).byteLength;
+
 export const parseLearningSetImport = (
   text: string,
   fileName: string,
@@ -351,11 +403,15 @@ export const parseLearningSetImport = (
 ): LearningSetImportResult => {
   const bytes = new TextEncoder().encode(text).byteLength;
   if (bytes === 0) throw new LearningSetImportError('Die ausgewählte Datei ist leer.');
-  if (bytes > MAX_IMPORT_BYTES) throw new LearningSetImportError('Die Datei ist größer als 1 MB.');
+  if (bytes > MAX_IMPORT_BYTES) {
+    throw new LearningSetImportError('Die Datei ist größer als 1 MB.');
+  }
 
   const extension = fileName.toLowerCase().split('.').pop();
   if (extension === 'json') return parseJson(text, fileName, now);
-  if (extension === 'csv' || extension === 'tsv' || extension === 'txt') return parseCsv(text, fileName, now);
+  if (extension === 'csv' || extension === 'tsv' || extension === 'txt') {
+    return parseCsv(text, fileName, now);
+  }
   throw new LearningSetImportError('Unterstützt werden JSON-, CSV- und TSV-Dateien.');
 };
 
