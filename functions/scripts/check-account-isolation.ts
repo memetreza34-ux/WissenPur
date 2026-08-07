@@ -119,8 +119,20 @@ assertIncludes(
 assertIncludes(
   'wissenpur/src/components/AccountSessionBoundary.tsx',
   sessionBoundary,
-  '<Fragment key={sessionKey}>',
-  'Die vollständige Produktoberfläche muss bei einem Authwechsel neu gemountet werden.',
+  'const [authResolved, setAuthResolved] = useState(false);',
+  'Kontoabhängige Oberflächen dürfen erst nach der ersten Firebase-Auth-Auflösung gerendert werden.',
+);
+assertIncludes(
+  'wissenpur/src/components/AccountSessionBoundary.tsx',
+  sessionBoundary,
+  'if (!authResolved)',
+  'Die Auth-Hydrierung muss die Produktoberfläche bis zur Auflösung sperren.',
+);
+assertIncludes(
+  'wissenpur/src/components/AccountSessionBoundary.tsx',
+  sessionBoundary,
+  '<Fragment key={`${sessionKey}:${contentRevision}`}>',
+  'Die vollständige Produktoberfläche muss bei Auth- und Bibliothekswechseln neu gemountet werden.',
 );
 assertIncludes(
   'wissenpur/src/main.tsx',
@@ -136,4 +148,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('Lokale Konto-Isolation, Authwechsel, Logout und Löschung geprüft.');
+console.log('Lokale Konto-Isolation, Auth-Hydrierung, Authwechsel, Logout und Löschung geprüft.');
