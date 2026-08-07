@@ -39,6 +39,7 @@ Die Release-Oberfläche bündelt inzwischen:
 - Der Server normalisiert Tages-/Wochenwerte bei jeder neuen Sitzung.
 - Alte oder client-schreibbare Economy-Dokumente werden nicht übernommen, wenn `economyVersion !== 1`.
 - Während der Hydrierung zeigt die Web-App keine Gast- oder unbestätigten Punkte an.
+- Gewertete Quizstarts, Daily-Rewards, Rangliste und Shop warten auf die sichere Hydrierung.
 - Lokale Übungsrunden können bei angemeldeten Nutzern niemals Economy-Werte erhöhen – auch nicht während der Hydrierung.
 - Verspätete Hydrierungsantworten einer alten Auth-Sitzung werden nach Logout oder Kontowechsel verworfen.
 
@@ -71,6 +72,7 @@ Beim ersten Login werden nutzererstellte Lerninhalte erhalten, ohne Gast-Economy
 - [x] Gast→Login-Migration für Lernsets und Fehlertraining ohne Economy-Übernahme
 - [x] Auth-Hydrierung gegen verspätete Antworten nach Logout/Kontowechsel absichern
 - [x] Firestore-Profilregeln für Lernplanstruktur, Listenlimits und Zeit-Einstellungen verschärfen
+- [x] statischen Gate für Frontend-Lockfile-Konsistenz ergänzen
 - [ ] Frontend-Lockfile aus dem aktuellen Manifest vollständig regenerieren
 - [ ] GitHub-Actions-Billing/Spending-Limit korrigieren
 - [ ] App Check, AI Logic, Functions, Quotas und Monitoring im Produktionsprojekt aktivieren
@@ -133,7 +135,7 @@ Der Functions-Verifikationspfad prüft unter anderem:
 - Frontend-Paketmanifest
 - **Frontend-Lockfile-Konsistenz**
 - Konto-Isolation und Gast→Login-Regeln
-- autoritative Economy-Hydrierung und Auth-Race-Schutz
+- autoritative Economy-Hydrierung, UI-Maskierung und Auth-Race-Schutz
 - unveränderliche Ranglisten-Snapshots
 - PWA-/Service-Worker-Laufzeit
 - Functions-Runtime und Produktions-App-Check
@@ -144,7 +146,7 @@ Der Functions-Verifikationspfad prüft unter anderem:
 - Fragenkataloggrenzen und Inhaltsqualität
 - Unit-Tests und TypeScript
 
-Das Lockfile-Gate ist derzeit absichtlich rot, bis `wissenpur/package-lock.json` mit Registry-Zugriff aus dem bereinigten `package.json` neu erzeugt wurde. Es fehlen dort unter anderem die direkten Pakete `@types/react` und `@types/react-dom`, während alte Demo-Abhängigkeiten noch im Root-Eintrag stehen.
+Das Lockfile-Gate ist derzeit absichtlich rot, bis `wissenpur/package-lock.json` mit Registry-Zugriff aus dem bereinigten `package.json` neu erzeugt wurde. Es fehlen dort unter anderem die direkten Pakete `@types/react` und `@types/react-dom`, während alte Demo-Abhängigkeiten noch im Root-Eintrag stehen. Integritäts-Hashes werden nicht manuell erfunden.
 
 ## Bewusste Abgrenzung
 
