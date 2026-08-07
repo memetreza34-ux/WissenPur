@@ -41,7 +41,8 @@ Die Release-Oberfläche bündelt inzwischen:
 - Während der Hydrierung zeigt die Web-App keine Gast- oder unbestätigten Punkte an.
 - Gewertete Quizstarts, Daily-Rewards, Rangliste und Shop warten auf die sichere Hydrierung.
 - Lokale Übungsrunden können bei angemeldeten Nutzern niemals Economy-Werte erhöhen – auch nicht während der Hydrierung.
-- Verspätete Hydrierungsantworten einer alten Auth-Sitzung werden nach Logout oder Kontowechsel verworfen.
+- Asynchrone Profil-/Economy-Synchronisierung ist an die erwartete Firebase-UID gebunden.
+- Verspätete Antworten einer alten Auth-Sitzung werden nach Logout oder Kontowechsel verworfen und dürfen LocalStorage nicht wieder auffüllen.
 
 ### Gastdaten und erster Login
 
