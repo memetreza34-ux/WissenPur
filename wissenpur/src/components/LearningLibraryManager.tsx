@@ -24,6 +24,7 @@ import {
   MAX_LIBRARY_SERIALIZED_BYTES,
   serializeLearningSet,
 } from '../services/learningSetImport';
+import { getDueQuestionsFromDeck, getDueQuestionsFromLibrary } from '../services/reviewQueue';
 import { getStats, saveStats } from '../storage';
 import type { CustomQuiz, Question, UserStats } from '../types';
 import { Button, Card, ProgressBar } from './UI';
@@ -45,12 +46,6 @@ interface MockExamState {
   selectedAnswer: number | null;
   completed: boolean;
 }
-
-const questionIsDue = (question: Question, now = Date.now()): boolean =>
-  !question.srsData || question.srsData.nextReviewDate <= now;
-
-const dueQuestions = (deck: CustomQuiz, now = Date.now()): Question[] =>
-  deck.questions.filter((question) => questionIsDue(question, now));
 
 const shuffle = <T,>(items: readonly T[]): T[] => {
   const result = [...items];
@@ -148,7 +143,7 @@ export const LearningLibraryManager = () => {
   };
 
   const totalDue = useMemo(
-    () => decks.reduce((total, deck) => total + dueQuestions(deck).length, 0),
+    () => getDueQuestionsFromLibrary(decks).length,
     [decks],
   );
 
@@ -156,7 +151,7 @@ export const LearningLibraryManager = () => {
     const query = search.trim().toLocaleLowerCase('de-DE');
     return [...decks]
       .filter((deck) => !query || deck.title.toLocaleLowerCase('de-DE').includes(query))
-      .filter((deck) => filter === 'all' || dueQuestions(deck).length > 0)
+      .filter((deck) => filter === 'all' || getDueQuestionsFromDeck(deck).length > 0)
       .sort((left, right) => right.createdAt - left.createdAt);
   }, [decks, filter, search]);
 
@@ -184,7 +179,7 @@ export const LearningLibraryManager = () => {
   };
 
   const openDueCards = (deck: CustomQuiz) => {
-    const questions = dueQuestions(deck);
+    const questions = getDueQuestionsFromDeck(deck);
     if (questions.length === 0) {
       setMessage('In diesem Lernset ist aktuell keine Karte fällig.');
       return;
@@ -445,7 +440,7 @@ export const LearningLibraryManager = () => {
             ) : (
               <div className="space-y-3">
                 {visibleDecks.map((deck) => {
-                  const due = dueQuestions(deck);
+                  const due = getDueQuestionsFromDeck(deck);
                   return (
                     <Card key={deck.id} className="p-5">
                       <div className="flex items-start justify-between gap-4">
