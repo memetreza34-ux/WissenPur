@@ -93,14 +93,26 @@ for (const [file, content] of [
   assertIncludes(
     file,
     content,
-    "localStorage.removeItem('wissenpur_user_stats_owner');",
+    "wissenpur_user_stats_owner",
     'Logout und Kontolöschung müssen den lokalen Besitzer-Marker entfernen.',
   );
   assertIncludes(
     file,
     content,
-    "localStorage.removeItem('wissenpur_learning_plan');",
+    "wissenpur_learning_plan",
     'Logout und Kontolöschung müssen den lokalen Lernplan entfernen.',
+  );
+  assertIncludes(
+    file,
+    content,
+    "wissenpur_learning_history_v1",
+    'Logout und Kontolöschung müssen die lokale Lernanalyse entfernen.',
+  );
+  assertIncludes(
+    file,
+    content,
+    "wissenpur_learning_history_owner_v1",
+    'Logout und Kontolöschung müssen auch den Besitzer der lokalen Lernanalyse entfernen.',
   );
 }
 
@@ -148,4 +160,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('Lokale Konto-Isolation, Auth-Hydrierung, Authwechsel, Logout und Löschung geprüft.');
+console.log('Lokale Konto-Isolation, Analyse-Löschung, Auth-Hydrierung, Authwechsel, Logout und Löschung geprüft.');
