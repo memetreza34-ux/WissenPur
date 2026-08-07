@@ -85,11 +85,11 @@ export const DailySpinWheel: React.FC<DailySpinWheelProps> = ({ onClaimReward })
         setWonReward(reward);
         soundManager.playLevelUp();
 
-        // Keep the existing App callback for immediate React UI feedback, then
-        // persist the authoritative server balance after that callback's local
-        // write so it cannot be overwritten by the optimistic value.
-        onClaimReward(result.reward);
+        // Persist the authoritative backend state before notifying the parent.
+        // The parent may immediately re-read local storage for React feedback;
+        // it must never observe an older optimistic balance in that window.
         saveStats(preserveLocalLearningData(result.stats));
+        onClaimReward(result.reward);
       }, 4000);
     } catch (error) {
       setIsSpinning(false);
