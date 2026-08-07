@@ -6,6 +6,7 @@ import {
   purchaseServerShopItem,
   type PowerUpId,
 } from './services/economyService';
+import { applyLearningLibraryPolicy } from './services/learningLibraryPolicy';
 
 const STORAGE_KEY = 'wissenpur_user_stats';
 const STORAGE_OWNER_KEY = 'wissenpur_user_stats_owner';
@@ -146,6 +147,12 @@ export const getStats = (): UserStats => {
     const today = berlinDateKey();
     let changed = false;
 
+    const library = applyLearningLibraryPolicy(stats.customQuizzes);
+    if (library.changed) {
+      stats.customQuizzes = library.decks;
+      changed = true;
+    }
+
     if (stats.lastDailyQuestionsDate !== today) {
       stats.dailyQuestionsAnswered = 0;
       stats.dailyRewardClaimed = false;
@@ -182,7 +189,14 @@ export const getStats = (): UserStats => {
 export const saveStats = (stats: UserStats): void => {
   prepareLocalAccountDataForWrite();
   const activeUid = auth.currentUser?.uid;
-  const scopedStats = activeUid ? { ...stats, uid: activeUid } : { ...stats, uid: undefined };
+  const library = applyLearningLibraryPolicy(stats.customQuizzes);
+  const normalizedStats: UserStats = {
+    ...stats,
+    customQuizzes: library.decks,
+  };
+  const scopedStats = activeUid
+    ? { ...normalizedStats, uid: activeUid }
+    : { ...normalizedStats, uid: undefined };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(scopedStats));
 };
 
