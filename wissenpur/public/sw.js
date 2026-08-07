@@ -1,7 +1,8 @@
-const CACHE_VERSION = 'wissenpur-v3';
+const CACHE_VERSION = 'wissenpur-v4';
 const APP_SHELL_CACHE = `${CACHE_VERSION}-app-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
-const APP_SHELL = ['/', '/index.html', '/manifest.json', '/wissenpur-icon.svg'];
+const APP_SHELL = ['/manifest.json', '/wissenpur-icon.svg'];
+const VITE_ASSET_PATTERN = /(?:src|href)=["'](\/assets\/[^"']+)["']/g;
 
 const offlineResponse = () => new Response(
   'WissenPur ist momentan offline und diese Seite wurde noch nicht zwischengespeichert.',
@@ -12,14 +13,36 @@ const offlineResponse = () => new Response(
   },
 );
 
+const reloadRequest = (url) => new Request(url, { cache: 'reload' });
+
+const cacheBuiltAppShell = async () => {
+  const cache = await caches.open(APP_SHELL_CACHE);
+  await cache.addAll(APP_SHELL.map(reloadRequest));
+
+  const indexResponse = await fetch(reloadRequest('/index.html'));
+  if (!indexResponse.ok) {
+    throw new Error(`App-Shell konnte nicht geladen werden (${indexResponse.status}).`);
+  }
+
+  await Promise.all([
+    cache.put('/index.html', indexResponse.clone()),
+    cache.put('/', indexResponse.clone()),
+  ]);
+
+  const html = await indexResponse.text();
+  const assetUrls = [...html.matchAll(VITE_ASSET_PATTERN)]
+    .map((match) => match[1])
+    .filter((url) => typeof url === 'string');
+  const uniqueAssetUrls = [...new Set(assetUrls)];
+
+  if (uniqueAssetUrls.length > 0) {
+    await cache.addAll(uniqueAssetUrls.map(reloadRequest));
+  }
+};
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches
-      .open(APP_SHELL_CACHE)
-      .then((cache) => cache.addAll(
-        APP_SHELL.map((url) => new Request(url, { cache: 'reload' })),
-      ))
-      .then(() => self.skipWaiting()),
+    cacheBuiltAppShell().then(() => self.skipWaiting()),
   );
 });
 
@@ -75,7 +98,7 @@ async function networkFirstNavigation(request) {
 
 async function staleWhileRevalidate(request, event) {
   const cache = await caches.open(RUNTIME_CACHE);
-  const cachedResponse = await cache.match(request);
+  const cachedResponse = await caches.match(request);
   const networkResponsePromise = fetch(request)
     .then(async (response) => {
       if (response.ok) {
