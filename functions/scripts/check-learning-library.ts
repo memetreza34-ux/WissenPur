@@ -14,6 +14,12 @@ import {
   parseLearningSetImport,
   serializeLearningSet,
 } from '../../wissenpur/src/services/learningSetImport.ts';
+import {
+  getDueQuestions,
+  getDueQuestionsFromDeck,
+  getDueQuestionsFromLibrary,
+  isQuestionDue,
+} from '../../wissenpur/src/services/reviewQueue.ts';
 import type { CustomQuiz, Question } from '../../wissenpur/src/types.ts';
 
 const currentDir = resolve(fileURLToPath(new URL('.', import.meta.url)));
@@ -148,6 +154,37 @@ const makeDeck = (id: string, title: string, questionId: string, text = title): 
   questions: [cloneQuestion(jsonImport.deck.questions[0]!, questionId, text)],
 });
 
+const reviewNow = 100_000;
+const newQuestion = cloneQuestion(jsonImport.deck.questions[0]!, 'review-new');
+const dueQuestion: Question = {
+  ...cloneQuestion(jsonImport.deck.questions[0]!, 'review-due'),
+  srsData: { interval: 1, easeFactor: 2.5, repetitions: 1, nextReviewDate: reviewNow },
+};
+const futureQuestion: Question = {
+  ...cloneQuestion(jsonImport.deck.questions[0]!, 'review-future'),
+  srsData: { interval: 6, easeFactor: 2.5, repetitions: 2, nextReviewDate: reviewNow + 1 },
+};
+const invalidDateQuestion: Question = {
+  ...cloneQuestion(jsonImport.deck.questions[0]!, 'review-invalid'),
+  srsData: { interval: 1, easeFactor: 2.5, repetitions: 1, nextReviewDate: Number.NaN },
+};
+assert.equal(isQuestionDue(newQuestion, reviewNow), true, 'Neue Karten müssen sofort fällig sein.');
+assert.equal(isQuestionDue(dueQuestion, reviewNow), true, 'Karten am exakten Termin müssen fällig sein.');
+assert.equal(isQuestionDue(futureQuestion, reviewNow), false, 'Karten nach dem Termin dürfen nicht vorzeitig geöffnet werden.');
+assert.equal(isQuestionDue(invalidDateQuestion, reviewNow), true, 'Ungültige SRS-Termine müssen sicher als fällig behandelt werden.');
+assert.deepEqual(
+  getDueQuestions([newQuestion, dueQuestion, futureQuestion, invalidDateQuestion], reviewNow).map((question) => question.id),
+  ['review-new', 'review-due', 'review-invalid'],
+);
+const reviewDeck: CustomQuiz = {
+  id: 'review-deck',
+  title: 'Review Deck',
+  createdAt: reviewNow,
+  questions: [newQuestion, dueQuestion, futureQuestion, invalidDateQuestion],
+};
+assert.equal(getDueQuestionsFromDeck(reviewDeck, reviewNow).length, 3);
+assert.equal(getDueQuestionsFromLibrary([reviewDeck], reviewNow).length, 3);
+
 const cloudDeck = makeDeck('cloud-set', 'Cloud Set', 'cloud-question');
 const localDeck = makeDeck('local-set', 'Gast Set', 'local-question');
 assert.deepEqual(mergeLearningLibraries([], [cloudDeck]).decks, [cloudDeck]);
@@ -184,8 +221,9 @@ assert.deepEqual(
   'Lokale Decks dürfen durch das globale Limit nicht hinter Cloud-Decks verdrängt werden.',
 );
 
-const [main, manager, boundary, flashcards, importPanel, storage, firebaseService] = await Promise.all([
+const [main, releaseApp, manager, boundary, flashcards, importPanel, storage, firebaseService] = await Promise.all([
   readFile(resolve(repoRoot, 'wissenpur/src/main.tsx'), 'utf8'),
+  readFile(resolve(repoRoot, 'wissenpur/src/ReleaseApp.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/components/LearningLibraryManager.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/components/AccountSessionBoundary.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/pages/Flashcards.tsx'), 'utf8'),
@@ -195,9 +233,19 @@ const [main, manager, boundary, flashcards, importPanel, storage, firebaseServic
 ]);
 
 assert.match(main, /<LearningLibraryManager\s*\/>/);
+assert.match(releaseApp, /getDueQuestionsFromLibrary/);
+assert.match(releaseApp, /const dueReviewQuestions = useMemo/);
+assert.match(releaseApp, /openFlashcards\(dueReviewQuestions\)/);
+assert.doesNotMatch(
+  releaseApp,
+  /openFlashcards\(stats\.customQuizzes\.flatMap\(\(deck\) => deck\.questions\)\)/,
+  'Der Heute-CTA darf nicht wieder ungefiltert alle Bibliothekskarten öffnen.',
+);
 assert.match(manager, /LearningSetImportPanel/);
 assert.match(manager, /serializeLearningSet/);
-assert.match(manager, /questionIsDue/);
+assert.match(manager, /getDueQuestionsFromDeck/);
+assert.match(manager, /getDueQuestionsFromLibrary/);
+assert.doesNotMatch(manager, /const questionIsDue/);
 assert.match(manager, /Probeprüfung/);
 assert.match(manager, /keine Ranglistenpunkte/);
 assert.match(manager, /validateLibraryLimits/);
@@ -219,4 +267,4 @@ assert.match(firebaseService, /wissenpur:library-updated/);
 assert.match(boundary, /wissenpur:library-updated/);
 assert.match(boundary, /contentRevision/);
 
-console.log('Lernset-Import, lokale/Cloud-Merge-Policy, zentrale Bibliotheksrichtlinie, Fälligkeit, Offline-Speicherung und Probeprüfung geprüft.');
+console.log('Lernset-Import, lokale/Cloud-Merge-Policy, zentrale Bibliotheksrichtlinie, fällige Heute-Queue, Offline-Speicherung und Probeprüfung geprüft.');
