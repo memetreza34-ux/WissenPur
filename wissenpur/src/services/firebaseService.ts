@@ -1,3 +1,4 @@
+import { onAuthStateChanged } from 'firebase/auth';
 import {
   collection,
   doc,
@@ -30,6 +31,13 @@ interface FirestoreErrorInfo {
 }
 
 let hydratedAuthUid: string | null = null;
+
+onAuthStateChanged(auth, (user) => {
+  const nextUid = user?.uid || null;
+  if (!nextUid || nextUid !== hydratedAuthUid) {
+    hydratedAuthUid = null;
+  }
+});
 
 function handleFirestoreError(
   error: unknown,
