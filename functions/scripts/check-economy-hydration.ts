@@ -99,8 +99,16 @@ assert.match(releaseApp, /if \(isAccountHydrating\)/);
 assert.match(releaseApp, /DailySpinWheel onClaimReward=\{\(\) => setStats\(getStats\(\) as ReleaseStats\)\}/);
 assert.doesNotMatch(releaseApp, /DailySpinWheel[\s\S]{0,160}setTimeout/);
 
+assert.match(spinWheel, /const expectedUid = auth\.currentUser\?\.uid;/);
+assert.match(spinWheel, /if \(auth\.currentUser\?\.uid !== expectedUid\) \{\s*setIsSpinning\(false\);\s*return;/);
+assert.match(spinWheel, /useEffect\(\(\) => \(\) => clearAnimationTimers\(\), \[\]\)/);
 const spinSaveIndex = spinWheel.indexOf('saveStats(preserveLocalLearningData(result.stats));');
 const spinCallbackIndex = spinWheel.indexOf('onClaimReward(result.reward);');
+const spinFinishTimeoutIndex = spinWheel.indexOf('finishTimeoutRef.current = window.setTimeout');
 assert.ok(spinSaveIndex >= 0 && spinCallbackIndex > spinSaveIndex, 'Das Glücksrad muss den autoritativen Serverstand vor dem Parent-Callback speichern.');
+assert.ok(spinFinishTimeoutIndex > spinCallbackIndex, 'Die Animation darf erst nach dem accountgebundenen Datencommit geplant werden.');
+const timeoutBody = spinWheel.slice(spinFinishTimeoutIndex);
+assert.doesNotMatch(timeoutBody, /saveStats\(/, 'Ein Animationstimeout darf niemals verzögert Kontodaten schreiben.');
+assert.match(timeoutBody, /auth\.currentUser\?\.uid !== expectedUid/);
 
-console.log('Autoritative Economy-Hydrierung, UI-Generationssperre, Stale-Session-Sperre, Glücksrad-Persistenz, Legacy-Reset und signierte Local-Mutation-Sperre geprüft.');
+console.log('Autoritative Economy-Hydrierung, UI-Generationssperre, Stale-Session-Sperre, accountgebundene Glücksrad-Persistenz, Legacy-Reset und signierte Local-Mutation-Sperre geprüft.');
