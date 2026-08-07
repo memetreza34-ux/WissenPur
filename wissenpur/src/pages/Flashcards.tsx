@@ -1,15 +1,42 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { X, Brain, Check, Frown, Meh, Smile } from 'lucide-react';
-import { Question } from '../types';
-import { Button } from '../components/UI';
+import { auth } from '../firebase';
+import { syncUserStats } from '../services/firebaseService';
 import { calculateNextReview, initSRSData, Quality } from '../services/srsService';
+import { getStats, saveStats } from '../storage';
+import { Question, type UserStats } from '../types';
 
 interface FlashcardsProps {
   questions: Question[];
   onClose: () => void;
   onQuestionsUpdated?: (updatedQuestions: Question[]) => void;
 }
+
+const persistSrsUpdates = (updatedQuestions: Question[]) => {
+  const updates = new Map(updatedQuestions.map((question) => [question.id, question]));
+  const stats = getStats();
+  let changed = false;
+  const customQuizzes = (stats.customQuizzes || []).map((deck) => ({
+    ...deck,
+    questions: deck.questions.map((question) => {
+      const updated = updates.get(question.id);
+      if (!updated) return question;
+      changed = true;
+      return updated;
+    }),
+  }));
+
+  if (!changed) return;
+  const next: UserStats = { ...stats, customQuizzes };
+  saveStats(next);
+  window.dispatchEvent(new CustomEvent<UserStats>('wissenpur:stats-updated', { detail: next }));
+  if (auth.currentUser) {
+    void syncUserStats(next).catch((error: unknown) => {
+      console.warn('Karteikartenfortschritt konnte nicht mit der Cloud synchronisiert werden.', error);
+    });
+  }
+};
 
 export const Flashcards: React.FC<FlashcardsProps> = ({ questions, onClose, onQuestionsUpdated }) => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -27,6 +54,10 @@ export const Flashcards: React.FC<FlashcardsProps> = ({ questions, onClose, onQu
     updatedQuestions[currentQuestionIndex] = { ...q, srsData: newSrsData };
     setLocalQuestions(updatedQuestions);
 
+    // Persist independently from the screen-specific callback. This keeps SRS
+    // progress intact even when a caller opened only a due-card subset or did
+    // not supply a deck identifier.
+    persistSrsUpdates(updatedQuestions);
     onQuestionsUpdated?.(updatedQuestions);
 
     setIsFlipped(false);
@@ -70,7 +101,7 @@ export const Flashcards: React.FC<FlashcardsProps> = ({ questions, onClose, onQu
           <div className="backface-hidden glass-card absolute inset-0 flex flex-col items-center rounded-[2.5rem] p-6 text-center">
             {q.imageUrl ? (
               <div className="mb-6 h-48 w-full shrink-0 overflow-hidden rounded-2xl bg-slate-100 shadow-inner dark:bg-slate-800">
-                <img src={q.imageUrl} alt="Illustration zur Frage" className="h-full w-full object-cover" />
+                <img src={q.imageUrl} alt="Illustration zur Frage" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
               </div>
             ) : (
               <div className="mb-6 flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-blue-500 dark:bg-blue-900/30">
