@@ -12,6 +12,7 @@ import {
 import type { User } from 'firebase/auth';
 import { auth, db } from '../firebase';
 import { LeaderboardEntry, UserStats } from '../types';
+import { applyLearningLibraryPolicy } from './learningLibraryPolicy';
 
 enum OperationType {
   LIST = 'list',
@@ -48,19 +49,24 @@ const sanitizeForFirestore = <T>(value: T): T => JSON.parse(JSON.stringify(value
 const mergeProfileContent = (
   localStats: UserStats,
   cloudStats: Partial<UserStats>,
-): UserStats => ({
-  ...localStats,
-  uid: cloudStats.uid ?? localStats.uid,
-  displayName: cloudStats.displayName ?? localStats.displayName,
-  photoURL: cloudStats.photoURL ?? localStats.photoURL,
-  customName: cloudStats.customName ?? localStats.customName,
-  age: cloudStats.age ?? localStats.age,
-  wrongQuestions: cloudStats.wrongQuestions ?? localStats.wrongQuestions ?? [],
-  customDifficultyTimes:
-    cloudStats.customDifficultyTimes ?? localStats.customDifficultyTimes,
-  darkMode: cloudStats.darkMode ?? localStats.darkMode,
-  customQuizzes: cloudStats.customQuizzes ?? localStats.customQuizzes ?? [],
-});
+): UserStats => {
+  const localLibrary = applyLearningLibraryPolicy(localStats.customQuizzes).decks;
+  const cloudLibrary = applyLearningLibraryPolicy(cloudStats.customQuizzes).decks;
+
+  return {
+    ...localStats,
+    uid: cloudStats.uid ?? localStats.uid,
+    displayName: cloudStats.displayName ?? localStats.displayName,
+    photoURL: cloudStats.photoURL ?? localStats.photoURL,
+    customName: cloudStats.customName ?? localStats.customName,
+    age: cloudStats.age ?? localStats.age,
+    wrongQuestions: cloudStats.wrongQuestions ?? localStats.wrongQuestions ?? [],
+    customDifficultyTimes:
+      cloudStats.customDifficultyTimes ?? localStats.customDifficultyTimes,
+    darkMode: cloudStats.darkMode ?? localStats.darkMode,
+    customQuizzes: cloudStats.customQuizzes === undefined ? localLibrary : cloudLibrary,
+  };
+};
 
 const mergeCloudStats = (
   localStats: UserStats,
@@ -88,6 +94,13 @@ const getProfileUpdate = (stats: UserStats): Partial<UserStats> & { uid: string 
   const currentUser = auth.currentUser;
   if (!currentUser) throw new Error('Profil-Synchronisierung erfordert eine Anmeldung.');
 
+  const library = applyLearningLibraryPolicy(stats.customQuizzes);
+  if (library.changed) {
+    console.warn('Lernset-Bibliothek wurde vor der Cloud-Synchronisierung normalisiert.', {
+      reason: library.reason,
+    });
+  }
+
   return sanitizeForFirestore({
     uid: currentUser.uid,
     displayName: currentUser.displayName || 'Anonym',
@@ -97,7 +110,7 @@ const getProfileUpdate = (stats: UserStats): Partial<UserStats> & { uid: string 
     wrongQuestions: stats.wrongQuestions || [],
     customDifficultyTimes: stats.customDifficultyTimes,
     darkMode: stats.darkMode,
-    customQuizzes: stats.customQuizzes || [],
+    customQuizzes: library.decks,
   });
 };
 
