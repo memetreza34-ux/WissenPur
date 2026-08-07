@@ -37,6 +37,19 @@ export interface LearningPlanRecommendation {
 
 const STORAGE_KEY = 'wissenpur_learning_plan';
 
+class LearningPlanAuthSessionChangedError extends Error {
+  constructor() {
+    super('Die Kontositzung hat sich während der Lernplan-Synchronisierung geändert.');
+    this.name = 'LearningPlanAuthSessionChangedError';
+  }
+}
+
+const assertActiveAuthUid = (expectedUid: string): void => {
+  if (auth.currentUser?.uid !== expectedUid) {
+    throw new LearningPlanAuthSessionChangedError();
+  }
+};
+
 const isCategory = (value: unknown): value is CategoryId | 'all' =>
   typeof value === 'string' && [
     'all', 'allgemein', 'geschichte', 'geografie', 'wissenschaft', 'technik',
@@ -83,9 +96,10 @@ const normalizePlan = (value: unknown): LearningPlan | null => {
   };
 };
 
-const ensureCloudProfile = async () => {
-  if (!auth.currentUser) return;
+const ensureCloudProfile = async (expectedUid: string) => {
+  assertActiveAuthUid(expectedUid);
   await syncUserStats(getStats());
+  assertActiveAuthUid(expectedUid);
 };
 
 export const getLocalLearningPlan = (): LearningPlan | null => {
@@ -105,29 +119,35 @@ export const saveLearningPlan = async (plan: LearningPlan): Promise<LearningPlan
   const normalized = normalizePlan(plan);
   if (!normalized) throw new Error('Der Lernplan enthält ungültige Angaben.');
 
+  const expectedUid = auth.currentUser?.uid || null;
   prepareLocalAccountDataForWrite();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
 
-  if (auth.currentUser) {
-    await ensureCloudProfile();
+  if (expectedUid) {
+    await ensureCloudProfile(expectedUid);
+    assertActiveAuthUid(expectedUid);
     await setDoc(
-      doc(db, 'users', auth.currentUser.uid),
+      doc(db, 'users', expectedUid),
       { learningPlan: normalized },
       { merge: true },
     );
+    assertActiveAuthUid(expectedUid);
   }
   return normalized;
 };
 
 export const loadLearningPlan = async (): Promise<LearningPlan | null> => {
-  if (auth.currentUser) prepareLocalAccountDataForWrite();
+  const expectedUid = auth.currentUser?.uid || null;
+  if (expectedUid) prepareLocalAccountDataForWrite();
   const local = getLocalLearningPlan();
-  if (!auth.currentUser) return local;
+  if (!expectedUid) return local;
 
-  const snapshot = await getDoc(doc(db, 'users', auth.currentUser.uid));
+  const snapshot = await getDoc(doc(db, 'users', expectedUid));
+  assertActiveAuthUid(expectedUid);
   const cloud = snapshot.exists() ? normalizePlan(snapshot.data().learningPlan) : null;
   const selected = cloud && (!local || cloud.updatedAt >= local.updatedAt) ? cloud : local;
 
+  assertActiveAuthUid(expectedUid);
   if (selected) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(selected));
   } else {
@@ -137,15 +157,18 @@ export const loadLearningPlan = async (): Promise<LearningPlan | null> => {
 };
 
 export const removeLearningPlan = async (): Promise<void> => {
+  const expectedUid = auth.currentUser?.uid || null;
   prepareLocalAccountDataForWrite();
   localStorage.removeItem(STORAGE_KEY);
-  if (auth.currentUser) {
-    await ensureCloudProfile();
+  if (expectedUid) {
+    await ensureCloudProfile(expectedUid);
+    assertActiveAuthUid(expectedUid);
     await setDoc(
-      doc(db, 'users', auth.currentUser.uid),
+      doc(db, 'users', expectedUid),
       { learningPlan: null },
       { merge: true },
     );
+    assertActiveAuthUid(expectedUid);
   }
 };
 
