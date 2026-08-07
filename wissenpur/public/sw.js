@@ -1,7 +1,7 @@
 const CACHE_VERSION = 'wissenpur-v4';
 const APP_SHELL_CACHE = `${CACHE_VERSION}-app-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
-const APP_SHELL = ['/manifest.json', '/wissenpur-icon.svg'];
+const APP_SHELL = ['/manifest.json', '/wissenpur-icon.svg', '/wissenpur-maskable-icon.svg'];
 const VITE_ASSET_PATTERN = /(?:src|href)=["'](\/assets\/[^"']+)["']/g;
 
 const offlineResponse = () => new Response(
