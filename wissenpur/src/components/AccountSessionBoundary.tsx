@@ -11,9 +11,13 @@ interface AccountSessionBoundaryProps {
  * Remounts the complete product surface whenever the authenticated Firebase
  * account changes. This prevents React state from one account surviving a
  * logout, token loss or switch to another Google account.
+ *
+ * Library mutations can also request a controlled remount so the main product
+ * immediately reloads imported decks, due-card counts and wrong-question data.
  */
 export const AccountSessionBoundary = ({ children }: AccountSessionBoundaryProps) => {
   const [sessionKey, setSessionKey] = useState('auth-loading');
+  const [contentRevision, setContentRevision] = useState(0);
   const previousUid = useRef<string | null | undefined>(undefined);
 
   useEffect(() => onAuthStateChanged(auth, (user) => {
@@ -28,5 +32,11 @@ export const AccountSessionBoundary = ({ children }: AccountSessionBoundaryProps
     setSessionKey(nextUid ? `account:${nextUid}` : 'anonymous');
   }), []);
 
-  return <Fragment key={sessionKey}>{children}</Fragment>;
+  useEffect(() => {
+    const refreshProductContent = () => setContentRevision((value) => value + 1);
+    window.addEventListener('wissenpur:library-updated', refreshProductContent);
+    return () => window.removeEventListener('wissenpur:library-updated', refreshProductContent);
+  }, []);
+
+  return <Fragment key={`${sessionKey}:${contentRevision}`}>{children}</Fragment>;
 };
