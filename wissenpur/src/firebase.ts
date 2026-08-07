@@ -15,6 +15,8 @@ const LOCAL_ACCOUNT_KEYS = [
   'wissenpur_user_stats',
   'wissenpur_user_stats_owner',
   'wissenpur_learning_plan',
+  'wissenpur_learning_history_v1',
+  'wissenpur_learning_history_owner_v1',
 ] as const;
 
 const clearLocalAccountCache = () => {
