@@ -1,9 +1,14 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Gift, Sparkles } from 'lucide-react';
+import { auth } from '../firebase';
 import { soundManager } from '../lib/sound';
 import { getStats, saveStats } from '../storage';
-import { getCallableErrorMessage, spinServerDailyWheel } from '../services/economyService';
+import {
+  getCallableErrorMessage,
+  spinServerDailyWheel,
+  type ServerEconomyStats,
+} from '../services/economyService';
 import { Button } from './UI';
 
 interface DailySpinWheelProps {
@@ -31,7 +36,7 @@ export const SPIN_REWARDS: SpinReward[] = [
   { id: 5, label: '1× zweite Chance', type: 'secondChance', amount: 1, color: '#ec4899', icon: '🛡️' },
 ];
 
-const preserveLocalLearningData = (serverStats: ReturnType<typeof getStats>) => {
+const preserveLocalLearningData = (serverStats: ServerEconomyStats) => {
   const localStats = getStats();
   return {
     ...localStats,
@@ -52,46 +57,82 @@ export const DailySpinWheel: React.FC<DailySpinWheelProps> = ({ onClaimReward })
   const [wonReward, setWonReward] = useState<SpinReward | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const tickIntervalRef = useRef<number | null>(null);
+  const finishTimeoutRef = useRef<number | null>(null);
+
+  const clearAnimationTimers = () => {
+    if (tickIntervalRef.current !== null) {
+      window.clearInterval(tickIntervalRef.current);
+      tickIntervalRef.current = null;
+    }
+    if (finishTimeoutRef.current !== null) {
+      window.clearTimeout(finishTimeoutRef.current);
+      finishTimeoutRef.current = null;
+    }
+  };
+
+  useEffect(() => () => clearAnimationTimers(), []);
 
   const handleSpin = async () => {
     if (isSpinning || wonReward) return;
 
+    const expectedUid = auth.currentUser?.uid;
+    if (!expectedUid) {
+      setErrorMessage('Bitte melde dich erneut an, um das Glücksrad zu verwenden.');
+      return;
+    }
+
     soundManager.init();
     setErrorMessage(null);
     setIsSpinning(true);
+    clearAnimationTimers();
 
     try {
       const result = await spinServerDailyWheel();
+      if (auth.currentUser?.uid !== expectedUid) {
+        setIsSpinning(false);
+        return;
+      }
+
       const selectedIndex = SPIN_REWARDS.findIndex(
         (reward) => reward.type === result.reward.type && reward.amount === result.reward.amount,
       );
       const safeIndex = selectedIndex >= 0 ? selectedIndex : 0;
       const reward = SPIN_REWARDS[safeIndex];
 
+      // Commit the authoritative server state immediately while the original
+      // authenticated session is still active. The animation is presentation
+      // only and must never own a delayed account-data write.
+      saveStats(preserveLocalLearningData(result.stats));
+      onClaimReward(result.reward);
+
       const fullSpins = 5;
       const targetDegree = rotation + fullSpins * 360 + (360 - safeIndex * 60 - 30);
       setRotation(targetDegree);
 
       let tickCount = 0;
-      const interval = window.setInterval(() => {
+      tickIntervalRef.current = window.setInterval(() => {
         soundManager.playSpin();
         tickCount += 1;
-        if (tickCount > 20) window.clearInterval(interval);
+        if (tickCount > 20 && tickIntervalRef.current !== null) {
+          window.clearInterval(tickIntervalRef.current);
+          tickIntervalRef.current = null;
+        }
       }, 150);
 
-      window.setTimeout(() => {
-        window.clearInterval(interval);
+      finishTimeoutRef.current = window.setTimeout(() => {
+        if (tickIntervalRef.current !== null) {
+          window.clearInterval(tickIntervalRef.current);
+          tickIntervalRef.current = null;
+        }
+        finishTimeoutRef.current = null;
+        if (auth.currentUser?.uid !== expectedUid) return;
         setIsSpinning(false);
         setWonReward(reward);
         soundManager.playLevelUp();
-
-        // Persist the authoritative backend state before notifying the parent.
-        // The parent may immediately re-read local storage for React feedback;
-        // it must never observe an older optimistic balance in that window.
-        saveStats(preserveLocalLearningData(result.stats));
-        onClaimReward(result.reward);
       }, 4000);
     } catch (error) {
+      clearAnimationTimers();
       setIsSpinning(false);
       setErrorMessage(getCallableErrorMessage(error));
     }
