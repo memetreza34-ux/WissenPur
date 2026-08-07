@@ -7,6 +7,7 @@ import { LearningAnalyticsPanel } from './components/LearningAnalyticsPanel';
 import { LearningLibraryManager } from './components/LearningLibraryManager';
 import { LearningPlanPanel } from './components/LearningPlanPanel';
 import { LegalPanel } from './components/LegalPanel';
+import { ManualLearningSetPanel } from './components/ManualLearningSetPanel';
 import ReleaseApp from './ReleaseApp';
 import './index.css';
 
@@ -17,6 +18,7 @@ createRoot(document.getElementById('root')!).render(
         <ReleaseApp />
         <LearningAnalyticsPanel />
         <LearningLibraryManager />
+        <ManualLearningSetPanel />
         <LearningPlanPanel />
         <LegalPanel />
         <AccountPrivacyPanel />
