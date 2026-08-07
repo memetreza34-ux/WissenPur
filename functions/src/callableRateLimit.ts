@@ -3,20 +3,40 @@ import { HttpsError } from 'firebase-functions/v2/https';
 import { db } from './database.js';
 import { evaluateFixedWindowRate } from './rateLimitCore.js';
 
-const globalWindowMs = 60 * 1000;
-const maxGlobalCallsPerWindow = 120;
+type RateBucket = 'global' | 'accountExport';
 
-/**
- * Shared abuse/cost guard for authenticated callable endpoints.
- *
- * This intentionally lives in the existing top-level serverRateLimits/{uid}
- * document so account export/deletion can still discover and delete all
- * rate-limit metadata without orphaned subcollections.
- */
-export const enforceGlobalCallableRateLimit = async (
+const RATE_BUCKETS: Record<RateBucket, {
+  windowMs: number;
+  maxActions: number;
+  windowField: string;
+  countField: string;
+  updatedField: string;
+  message: string;
+}> = {
+  global: {
+    windowMs: 60 * 1000,
+    maxActions: 120,
+    windowField: 'globalCallWindowStartedAt',
+    countField: 'globalCalls',
+    updatedField: 'globalRateUpdatedAt',
+    message: 'Zu viele geschützte Anfragen in kurzer Zeit.',
+  },
+  accountExport: {
+    windowMs: 10 * 60 * 1000,
+    maxActions: 5,
+    windowField: 'accountExportWindowStartedAt',
+    countField: 'accountExports',
+    updatedField: 'accountExportRateUpdatedAt',
+    message: 'Zu viele Datenexporte in kurzer Zeit.',
+  },
+};
+
+const enforceBucket = async (
   uid: string,
+  bucket: RateBucket,
   now = Date.now(),
 ): Promise<void> => {
+  const config = RATE_BUCKETS[bucket];
   const rateLimitRef = db.collection('serverRateLimits').doc(uid);
 
   await db.runTransaction(async (transaction) => {
@@ -24,34 +44,53 @@ export const enforceGlobalCallableRateLimit = async (
     const data = snapshot.exists
       ? snapshot.data() as Record<string, unknown>
       : undefined;
-    const previousWindow = data?.globalCallWindowStartedAt;
+    const previousWindow = data?.[config.windowField];
     const previousWindowMs = previousWindow instanceof Timestamp
       ? previousWindow.toMillis()
       : 0;
-    const previousCount = typeof data?.globalCalls === 'number'
-      ? data.globalCalls
+    const previousCountValue = data?.[config.countField];
+    const previousCount = typeof previousCountValue === 'number'
+      ? previousCountValue
       : 0;
     const decision = evaluateFixedWindowRate(
       previousWindowMs,
       previousCount,
       now,
-      globalWindowMs,
-      maxGlobalCallsPerWindow,
+      config.windowMs,
+      config.maxActions,
     );
 
     if (!decision.allowed) {
       const retrySeconds = Math.max(1, Math.ceil(decision.retryAfterMs / 1000));
       throw new HttpsError(
         'resource-exhausted',
-        `Zu viele geschützte Anfragen in kurzer Zeit. Versuche es in ${retrySeconds} Sekunden erneut.`,
+        `${config.message} Versuche es in ${retrySeconds} Sekunden erneut.`,
       );
     }
 
     transaction.set(rateLimitRef, {
       uid,
-      globalCallWindowStartedAt: Timestamp.fromMillis(decision.windowStartedAtMs),
-      globalCalls: decision.count,
-      globalRateUpdatedAt: FieldValue.serverTimestamp(),
+      [config.windowField]: Timestamp.fromMillis(decision.windowStartedAtMs),
+      [config.countField]: decision.count,
+      [config.updatedField]: FieldValue.serverTimestamp(),
     }, { merge: true });
   });
 };
+
+/**
+ * Shared abuse/cost guard for normal authenticated callable endpoints.
+ * The intentionally generous limit avoids affecting legitimate study flows.
+ */
+export const enforceGlobalCallableRateLimit = (
+  uid: string,
+  now = Date.now(),
+): Promise<void> => enforceBucket(uid, 'global', now);
+
+/**
+ * Account exports can read several collections, so they have a much stricter
+ * independent bucket. Account deletion intentionally does not use this bucket.
+ */
+export const enforceAccountExportRateLimit = (
+  uid: string,
+  now = Date.now(),
+): Promise<void> => enforceBucket(uid, 'accountExport', now);
