@@ -18,7 +18,10 @@ import { auth } from '../firebase';
 import { Flashcards } from '../pages/Flashcards';
 import { syncUserStats } from '../services/firebaseService';
 import {
+  estimateLearningLibraryBytes,
   MAX_LIBRARY_DECKS,
+  MAX_LIBRARY_QUESTIONS,
+  MAX_LIBRARY_SERIALIZED_BYTES,
   serializeLearningSet,
 } from '../services/learningSetImport';
 import { getStats, saveStats } from '../storage';
@@ -91,6 +94,26 @@ const mergeQuestionUpdates = (
   };
 };
 
+const syncStatsBestEffort = (stats: UserStats) => {
+  if (!auth.currentUser) return;
+  void syncUserStats(stats).catch((error: unknown) => {
+    console.warn('Bibliotheksdaten wurden lokal gespeichert, konnten aber nicht mit der Cloud synchronisiert werden.', error);
+  });
+};
+
+const validateLibraryLimits = (decks: readonly CustomQuiz[]) => {
+  if (decks.length > MAX_LIBRARY_DECKS) {
+    throw new Error(`Die Bibliothek kann höchstens ${MAX_LIBRARY_DECKS} Lernsets enthalten.`);
+  }
+  const totalQuestions = decks.reduce((total, deck) => total + deck.questions.length, 0);
+  if (totalQuestions > MAX_LIBRARY_QUESTIONS) {
+    throw new Error(`Die Bibliothek kann höchstens ${MAX_LIBRARY_QUESTIONS} Fragen enthalten.`);
+  }
+  if (estimateLearningLibraryBytes(decks) > MAX_LIBRARY_SERIALIZED_BYTES) {
+    throw new Error('Die Bibliothek ist zu groß für eine zuverlässige Cloud-Synchronisierung.');
+  }
+};
+
 export const LearningLibraryManager = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
@@ -113,13 +136,14 @@ export const LearningLibraryManager = () => {
     return () => window.removeEventListener('wissenpur:stats-updated', refresh);
   }, []);
 
-  const persistDecks = async (nextDecks: CustomQuiz[], remountProduct = false) => {
+  const persistDecks = (nextDecks: CustomQuiz[], remountProduct = false) => {
+    validateLibraryLimits(nextDecks);
     const current = getStats();
     const next: UserStats = { ...current, customQuizzes: nextDecks };
     saveStats(next);
     setDecks(nextDecks);
     window.dispatchEvent(new CustomEvent<UserStats>('wissenpur:stats-updated', { detail: next }));
-    if (auth.currentUser) await syncUserStats(next);
+    syncStatsBestEffort(next);
     if (remountProduct) window.dispatchEvent(new Event('wissenpur:library-updated'));
   };
 
@@ -137,21 +161,18 @@ export const LearningLibraryManager = () => {
   }, [decks, filter, search]);
 
   const importDeck = async (deck: CustomQuiz) => {
-    if (decks.length >= MAX_LIBRARY_DECKS) {
-      throw new Error(`Die Bibliothek kann höchstens ${MAX_LIBRARY_DECKS} Lernsets enthalten.`);
-    }
     const existingTitles = new Set(decks.map((entry) => entry.title.trim().toLocaleLowerCase('de-DE')));
     const normalizedTitle = existingTitles.has(deck.title.trim().toLocaleLowerCase('de-DE'))
       ? `${deck.title} (Import)`
       : deck.title;
-    await persistDecks([...decks, { ...deck, title: normalizedTitle }], true);
+    persistDecks([...decks, { ...deck, title: normalizedTitle }], true);
   };
 
   const removeDeck = async (deck: CustomQuiz) => {
     const confirmed = window.confirm(`Lernset „${deck.title}“ dauerhaft aus deiner Bibliothek löschen?`);
     if (!confirmed) return;
     try {
-      await persistDecks(decks.filter((entry) => entry.id !== deck.id), true);
+      persistDecks(decks.filter((entry) => entry.id !== deck.id), true);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Das Lernset konnte nicht gelöscht werden.');
     }
@@ -178,7 +199,7 @@ export const LearningLibraryManager = () => {
         ? mergeQuestionUpdates(deck, updatedQuestions)
         : deck,
     );
-    void persistDecks(nextDecks);
+    persistDecks(nextDecks);
     setFlashcardSession((current) => current ? { ...current, questions: updatedQuestions } : null);
   };
 
@@ -232,7 +253,7 @@ export const LearningLibraryManager = () => {
     };
     saveStats(nextStats);
     window.dispatchEvent(new CustomEvent<UserStats>('wissenpur:stats-updated', { detail: nextStats }));
-    if (auth.currentUser) void syncUserStats(nextStats);
+    syncStatsBestEffort(nextStats);
     setExam({ ...exam, completed: true });
   };
 
