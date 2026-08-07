@@ -396,9 +396,9 @@ export const updateStatsAfterRound = (
 ) => {
   const stats = getStats();
 
-  // Authenticated economy values are written only by verified Cloud Functions.
-  // Local practice rounds must not create points, coins, streaks or leaderboard progress.
-  if (auth.currentUser && stats.economyVersion === 1) return stats;
+  // Every signed-in economy is server-owned, including first-login and legacy
+  // migration windows before economyVersion has reached the browser.
+  if (auth.currentUser) return stats;
 
   const today = berlinDateKey();
   let newStreak = stats.currentStreak;
