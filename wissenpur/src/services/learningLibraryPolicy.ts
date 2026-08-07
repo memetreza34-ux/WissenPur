@@ -58,20 +58,27 @@ const safeHttpsUrl = (value: unknown): string | undefined => {
   }
 };
 
-const makeUniqueId = (base: string, usedIds: Set<string>): { id: string; duplicate: boolean } => {
-  if (!usedIds.has(base)) {
-    usedIds.add(base);
-    return { id: base, duplicate: false };
+const makeUniqueId = (
+  base: string,
+  usedIds: Set<string>,
+  maxLength = 150,
+): { id: string; duplicate: boolean } => {
+  const normalizedBase = base.slice(0, maxLength);
+  if (!usedIds.has(normalizedBase)) {
+    usedIds.add(normalizedBase);
+    return { id: normalizedBase, duplicate: false };
   }
 
   let suffix = 2;
-  let candidate = `${base}-${suffix}`;
-  while (usedIds.has(candidate)) {
+  while (true) {
+    const suffixText = `-${suffix}`;
+    const candidate = `${normalizedBase.slice(0, maxLength - suffixText.length)}${suffixText}`;
+    if (!usedIds.has(candidate)) {
+      usedIds.add(candidate);
+      return { id: candidate, duplicate: true };
+    }
     suffix += 1;
-    candidate = `${base}-${suffix}`;
   }
-  usedIds.add(candidate);
-  return { id: candidate.slice(0, 180), duplicate: true };
 };
 
 const normalizeQuestion = (
