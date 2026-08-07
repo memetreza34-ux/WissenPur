@@ -15,6 +15,7 @@ import { saveStats } from '../storage';
 import { LeaderboardEntry, UserStats } from '../types';
 import { mergeLearningLibraries } from './learningLibraryMerge';
 import { applyLearningLibraryPolicy } from './learningLibraryPolicy';
+import { mergeWrongQuestions } from './wrongQuestionMerge';
 
 enum OperationType {
   LIST = 'list',
@@ -56,6 +57,10 @@ const mergeProfileContent = (
     localStats.customQuizzes,
     cloudStats.customQuizzes,
   ).decks;
+  const mergedWrongQuestions = mergeWrongQuestions(
+    localStats.wrongQuestions,
+    cloudStats.wrongQuestions,
+  );
 
   return {
     ...localStats,
@@ -64,7 +69,7 @@ const mergeProfileContent = (
     photoURL: cloudStats.photoURL ?? localStats.photoURL,
     customName: cloudStats.customName ?? localStats.customName,
     age: cloudStats.age ?? localStats.age,
-    wrongQuestions: cloudStats.wrongQuestions ?? localStats.wrongQuestions ?? [],
+    wrongQuestions: mergedWrongQuestions,
     customDifficultyTimes:
       cloudStats.customDifficultyTimes ?? localStats.customDifficultyTimes,
     darkMode: cloudStats.darkMode ?? localStats.darkMode,
@@ -99,13 +104,14 @@ const getProfileUpdate = (stats: UserStats): Partial<UserStats> & { uid: string 
   if (!currentUser) throw new Error('Profil-Synchronisierung erfordert eine Anmeldung.');
 
   const library = applyLearningLibraryPolicy(stats.customQuizzes);
+  const wrongQuestions = mergeWrongQuestions(stats.wrongQuestions, []);
   return sanitizeForFirestore({
     uid: currentUser.uid,
     displayName: currentUser.displayName || 'Anonym',
     photoURL: currentUser.photoURL || '',
     customName: stats.customName,
     age: stats.age,
-    wrongQuestions: stats.wrongQuestions || [],
+    wrongQuestions,
     customDifficultyTimes: stats.customDifficultyTimes,
     darkMode: stats.darkMode,
     customQuizzes: library.decks,
@@ -117,22 +123,24 @@ const persistProfileOnly = async (stats: UserStats): Promise<UserStats> => {
   if (!currentUser) return stats;
 
   const library = applyLearningLibraryPolicy(stats.customQuizzes);
-  const normalizedStats: UserStats = library.changed
-    ? { ...stats, customQuizzes: library.decks }
+  const wrongQuestions = mergeWrongQuestions(stats.wrongQuestions, []);
+  const profileNormalized = library.changed || wrongQuestions.length !== (stats.wrongQuestions || []).length;
+  const normalizedStats: UserStats = profileNormalized
+    ? { ...stats, customQuizzes: library.decks, wrongQuestions }
     : stats;
   const profileUpdate = getProfileUpdate(normalizedStats);
   const persistedStats = { ...normalizedStats, ...profileUpdate } as UserStats;
 
-  if (library.changed) {
-    console.warn('Lernset-Bibliothek wurde vor der Cloud-Synchronisierung normalisiert.', {
-      reason: library.reason,
+  if (profileNormalized) {
+    console.warn('Lokale Lerninhalte wurden vor der Cloud-Synchronisierung normalisiert.', {
+      libraryReason: library.reason,
     });
     saveStats(persistedStats);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(
         new CustomEvent<UserStats>('wissenpur:stats-updated', { detail: persistedStats }),
       );
-      window.dispatchEvent(new Event('wissenpur:library-updated'));
+      if (library.changed) window.dispatchEvent(new Event('wissenpur:library-updated'));
     }
   }
 
