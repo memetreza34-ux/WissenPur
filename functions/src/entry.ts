@@ -4,6 +4,7 @@ export {
   purchaseShopItem,
   consumePowerUp,
 } from './economyCallables.js';
+export { getMyEconomyState } from './economyStateCallable.js';
 export { submitRankedQuiz } from './secureSubmit.js';
 export { startSecureRankedQuiz } from './secureStart.js';
 export { revealSecureRankedQuiz } from './secureReveal.js';
