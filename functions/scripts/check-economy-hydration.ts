@@ -51,6 +51,9 @@ assert.match(economyService, /export const getServerEconomyState/);
 assert.match(firebaseService, /existingData\.economyVersion === 1/);
 assert.match(firebaseService, /\(await getServerEconomyState\(\)\)\.stats/);
 assert.match(firebaseService, /let hydratedAuthUid: string \| null = null/);
+assert.match(firebaseService, /onAuthStateChanged\(auth, \(user\) =>/);
+assert.match(firebaseService, /if \(!nextUid \|\| nextUid !== hydratedAuthUid\)/);
+assert.match(firebaseService, /hydratedAuthUid = null;/);
 
 const persistIndex = firebaseService.indexOf('const persisted = await persistProfileOnly(hydratedStats);');
 const markHydratedIndex = firebaseService.indexOf('hydratedAuthUid = currentUser.uid;');
@@ -59,4 +62,4 @@ assert.ok(persistIndex >= 0 && markHydratedIndex > persistIndex, 'Hydrierung dar
 assert.match(storage, /if \(auth\.currentUser\) return stats;/);
 assert.doesNotMatch(storage, /auth\.currentUser && stats\.economyVersion === 1/);
 
-console.log('Autoritative Economy-Hydrierung, Legacy-Reset und signierte Local-Mutation-Sperre geprüft.');
+console.log('Autoritative Economy-Hydrierung, Auth-Session-Reset, Legacy-Reset und signierte Local-Mutation-Sperre geprüft.');
