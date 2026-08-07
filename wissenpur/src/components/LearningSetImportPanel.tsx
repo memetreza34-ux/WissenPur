@@ -8,13 +8,17 @@ import {
   Upload,
   X,
 } from 'lucide-react';
-import type { CustomQuiz } from '../types';
 import {
+  estimateLearningLibraryBytes,
   MAX_IMPORT_BYTES,
   MAX_LIBRARY_DECKS,
+  MAX_LIBRARY_QUESTIONS,
+  MAX_LIBRARY_SERIALIZED_BYTES,
   parseLearningSetImport,
   type LearningSetImportResult,
 } from '../services/learningSetImport';
+import { getStats } from '../storage';
+import type { CustomQuiz } from '../types';
 import { Button } from './UI';
 
 interface LearningSetImportPanelProps {
@@ -85,7 +89,24 @@ export const LearningSetImportPanel = ({
     setIsBusy(true);
     try {
       const text = await file.text();
-      setPreview(parseLearningSetImport(text, file.name));
+      const result = parseLearningSetImport(text, file.name);
+      const currentDecks = getStats().customQuizzes || [];
+      const nextDecks = [...currentDecks, result.deck];
+      const totalQuestions = nextDecks.reduce(
+        (total, deck) => total + deck.questions.length,
+        0,
+      );
+      if (totalQuestions > MAX_LIBRARY_QUESTIONS) {
+        throw new Error(
+          `Die Bibliothek ist auf insgesamt ${MAX_LIBRARY_QUESTIONS} Fragen begrenzt. Lösche zuerst ein altes Lernset.`,
+        );
+      }
+      if (estimateLearningLibraryBytes(nextDecks) > MAX_LIBRARY_SERIALIZED_BYTES) {
+        throw new Error(
+          'Die Bibliothek wäre nach diesem Import zu groß für eine zuverlässige Cloud-Synchronisierung. Kürze Erklärungen oder lösche ein altes Lernset.',
+        );
+      }
+      setPreview(result);
     } catch (importError) {
       setError(importError instanceof Error ? importError.message : 'Die Datei konnte nicht importiert werden.');
     } finally {
