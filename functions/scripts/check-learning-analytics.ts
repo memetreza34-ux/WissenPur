@@ -85,8 +85,9 @@ const malformed = normalizeLearningHistory([
   ranked,
   ranked,
   { id: '', label: '', completedAt: -1, correct: 99, total: 0 },
+  { id: 'unknown-kind', label: 'Manipuliert', completedAt: 4_000, correct: 1, total: 1, kind: 'other' },
 ]);
-assert.equal(malformed.length, 1, 'Doppelte und ungültige Verlaufseinträge müssen entfernt werden.');
+assert.equal(malformed.length, 1, 'Doppelte, ungültige und unbekannte Verlaufseinträge müssen entfernt werden.');
 
 let history: LearningSessionRecord[] = [];
 for (let index = 0; index < MAX_LEARNING_HISTORY + 10; index += 1) {
@@ -142,17 +143,24 @@ const dueSummary = buildLearningAnalytics(trendHistory, undefined, 7);
 assert.equal(dueSummary.recommendation.type, 'review');
 assert.match(dueSummary.recommendation.title, /7 fällige Karten/);
 
-const [main, panel, accountBoundary] = await Promise.all([
+const [main, panel, accountBoundary, privacyPanel] = await Promise.all([
   readFile(resolve(repoRoot, 'wissenpur/src/main.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/components/LearningAnalyticsPanel.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/components/AccountSessionBoundary.tsx'), 'utf8'),
+  readFile(resolve(repoRoot, 'wissenpur/src/components/AccountPrivacyPanel.tsx'), 'utf8'),
 ]);
 assert.match(main, /<LearningAnalyticsPanel\s*\/>/);
 assert.match(panel, /deriveRankedSession/);
 assert.match(panel, /MAX_LEARNING_HISTORY|analytics-updated/);
 assert.match(panel, /keine Antworten oder Fragentexte/);
 assert.match(panel, /beeinflusst weder Punkte noch Rangliste/);
+assert.match(panel, /hydrationSuppressUntilRef/);
 assert.match(panel, /setInterval\(check, 1500\)/);
 assert.match(accountBoundary, /wissenpur:account-storage-reset/);
+assert.match(accountBoundary, /authResolved/);
+assert.match(privacyPanel, /readLocalAnalyticsForUser/);
+assert.match(privacyPanel, /localDevice/);
+assert.match(privacyPanel, /learningAnalytics: localLearningAnalytics/);
+assert.match(privacyPanel, /nur auf diesem Gerät gespeicherte persönliche Lernanalyse/);
 
-console.log('Lernanalyse, Verlauf, Trend und Tagesempfehlungen geprüft.');
+console.log('Lernanalyse, Verlauf, Trend, lokaler Datenexport und Tagesempfehlungen geprüft.');
