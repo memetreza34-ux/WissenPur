@@ -13,6 +13,12 @@ interface FlashcardsProps {
   onQuestionsUpdated?: (updatedQuestions: Question[]) => void;
 }
 
+const sameSrsData = (left: Question['srsData'], right: Question['srsData']): boolean =>
+  left?.interval === right?.interval &&
+  left?.easeFactor === right?.easeFactor &&
+  left?.repetitions === right?.repetitions &&
+  left?.nextReviewDate === right?.nextReviewDate;
+
 const persistSrsUpdates = (updatedQuestions: Question[]) => {
   const updates = new Map(updatedQuestions.map((question) => [question.id, question]));
   const stats = getStats();
@@ -21,7 +27,7 @@ const persistSrsUpdates = (updatedQuestions: Question[]) => {
     ...deck,
     questions: deck.questions.map((question) => {
       const updated = updates.get(question.id);
-      if (!updated) return question;
+      if (!updated || sameSrsData(question.srsData, updated.srsData)) return question;
       changed = true;
       return updated;
     }),
@@ -54,11 +60,11 @@ export const Flashcards: React.FC<FlashcardsProps> = ({ questions, onClose, onQu
     updatedQuestions[currentQuestionIndex] = { ...q, srsData: newSrsData };
     setLocalQuestions(updatedQuestions);
 
-    // Persist independently from the screen-specific callback. This keeps SRS
-    // progress intact even when a caller opened only a due-card subset or did
-    // not supply a deck identifier.
-    persistSrsUpdates(updatedQuestions);
+    // Let the active screen persist first. The global fallback then checks the
+    // stored SRS values and writes only when the caller had no usable deck
+    // context, such as the older global due-card entry point.
     onQuestionsUpdated?.(updatedQuestions);
+    persistSrsUpdates(updatedQuestions);
 
     setIsFlipped(false);
     window.setTimeout(() => {
