@@ -6,15 +6,27 @@ const currentDir = resolve(fileURLToPath(new URL('.', import.meta.url)));
 const repoRoot = resolve(currentDir, '../..');
 const failures: string[] = [];
 
-const [serviceWorker, main, indexHtml, manifestText, firebaseText] = await Promise.all([
+const [serviceWorker, main, indexHtml, manifestText, iconSvg, maskableSvg, firebaseText] = await Promise.all([
   readFile(resolve(repoRoot, 'wissenpur/public/sw.js'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/main.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/index.html'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/public/manifest.json'), 'utf8'),
+  readFile(resolve(repoRoot, 'wissenpur/public/wissenpur-icon.svg'), 'utf8'),
+  readFile(resolve(repoRoot, 'wissenpur/public/wissenpur-maskable-icon.svg'), 'utf8'),
   readFile(resolve(repoRoot, 'firebase.json'), 'utf8'),
 ]);
 
-const manifest = JSON.parse(manifestText) as Record<string, unknown>;
+const manifest = JSON.parse(manifestText) as {
+  id?: unknown;
+  start_url?: unknown;
+  scope?: unknown;
+  display?: unknown;
+  name?: unknown;
+  short_name?: unknown;
+  background_color?: unknown;
+  theme_color?: unknown;
+  icons?: Array<Record<string, unknown>>;
+};
 const firebase = JSON.parse(firebaseText) as {
   hosting?: {
     headers?: Array<{
@@ -45,8 +57,44 @@ const forbid = (
 requireText(
   'wissenpur/public/sw.js',
   serviceWorker,
-  "const CACHE_VERSION = 'wissenpur-v3';",
-  'Sicherheits- und Offlineänderungen benötigen eine neue Cache-Version.',
+  "const CACHE_VERSION = 'wissenpur-v4';",
+  'Der neue Build-Asset-Precache benötigt die aktuelle Cache-Version.',
+);
+requireText(
+  'wissenpur/public/sw.js',
+  serviceWorker,
+  'const VITE_ASSET_PATTERN =',
+  'Der Installpfad muss die von Vite erzeugten gehashten Assets erkennen.',
+);
+requireText(
+  'wissenpur/public/sw.js',
+  serviceWorker,
+  "const indexResponse = await fetch(reloadRequest('/index.html'));",
+  'Der Installpfad muss die tatsächlich gebaute index.html frisch laden.',
+);
+requireText(
+  'wissenpur/public/sw.js',
+  serviceWorker,
+  'const assetUrls = [...html.matchAll(VITE_ASSET_PATTERN)]',
+  'Gehashtes JavaScript und CSS müssen aus der gebauten App-Shell extrahiert werden.',
+);
+requireText(
+  'wissenpur/public/sw.js',
+  serviceWorker,
+  'await cache.addAll(uniqueAssetUrls.map(reloadRequest));',
+  'Die beim Build referenzierten Assets müssen bereits während der Installation gecacht werden.',
+);
+requireText(
+  'wissenpur/public/sw.js',
+  serviceWorker,
+  "cache.put('/index.html', indexResponse.clone())",
+  'Die Offline-App-Shell muss die gebaute index.html enthalten.',
+);
+requireText(
+  'wissenpur/public/sw.js',
+  serviceWorker,
+  "cache.put('/', indexResponse.clone())",
+  'Die Root-Navigation muss direkt durch die gecachte App-Shell abgedeckt sein.',
 );
 requireText(
   'wissenpur/public/sw.js',
@@ -60,12 +108,6 @@ requireText(
   'return networkResponse || offlineResponse();',
   'Ein Netzfehler ohne Cache muss immer eine gültige Response liefern.',
 );
-requireText(
-  'wissenpur/public/sw.js',
-  serviceWorker,
-  "new Request(url, { cache: 'reload' })",
-  'Die App-Shell darf beim Installieren nicht aus einem veralteten HTTP-Cache stammen.',
-);
 forbid(
   'wissenpur/public/sw.js',
   serviceWorker,
@@ -77,7 +119,7 @@ requireText(
   'wissenpur/src/main.tsx',
   main,
   "navigator.serviceWorker.register('/sw.js', { scope: '/' })",
-  'Die gebündelte Anwendung muss den Service Worker mit Root-Scope registrieren.',
+  'Die gebündelte Anwendung muss den Service Worker explizit mit Root-Scope registrieren.',
 );
 forbid(
   'wissenpur/index.html',
@@ -85,12 +127,15 @@ forbid(
   /<script(?![^>]*type=["']module["'][^>]*src=)[^>]*>[\s\S]*?<\/script>/i,
   'Die statische App-Shell darf kein Inline-JavaScript enthalten.',
 );
-requireText(
-  'wissenpur/index.html',
-  indexHtml,
-  '<link rel="manifest" href="/manifest.json" />',
-  'Die App-Shell muss das Web-App-Manifest verknüpfen.',
-);
+for (const [expected, explanation] of [
+  ['<link rel="manifest" href="/manifest.json" />', 'Die App-Shell muss das Web-App-Manifest verknüpfen.'],
+  ['<meta name="mobile-web-app-capable" content="yes" />', 'Die mobile Installationsmetadaten fehlen.'],
+  ['<meta name="apple-mobile-web-app-capable" content="yes" />', 'Der iOS-Standalone-Hinweis fehlt.'],
+  ['<meta name="apple-mobile-web-app-title" content="WissenPur" />', 'Der iOS-App-Name fehlt.'],
+  ['<meta name="color-scheme" content="light dark" />', 'Browser-Oberflächen sollen beide Farbschemata kennen.'],
+] as const) {
+  requireText('wissenpur/index.html', indexHtml, expected, explanation);
+}
 
 if (manifest.start_url !== '/' || manifest.scope !== '/' || manifest.id !== '/') {
   failures.push('wissenpur/public/manifest.json: id, start_url und scope müssen konsistent auf / zeigen.');
@@ -98,9 +143,43 @@ if (manifest.start_url !== '/' || manifest.scope !== '/' || manifest.id !== '/')
 if (manifest.display !== 'standalone') {
   failures.push('wissenpur/public/manifest.json: Die PWA muss im standalone-Modus starten.');
 }
-if (!Array.isArray(manifest.icons) || manifest.icons.length < 1) {
-  failures.push('wissenpur/public/manifest.json: Mindestens ein App-Icon fehlt.');
+if (typeof manifest.name !== 'string' || typeof manifest.short_name !== 'string') {
+  failures.push('wissenpur/public/manifest.json: name und short_name müssen gesetzt sein.');
 }
+if (typeof manifest.background_color !== 'string' || typeof manifest.theme_color !== 'string') {
+  failures.push('wissenpur/public/manifest.json: Hintergrund- und Theme-Farbe fehlen.');
+}
+if (!Array.isArray(manifest.icons) || manifest.icons.length < 2) {
+  failures.push('wissenpur/public/manifest.json: Normales und maskierbares App-Icon werden benötigt.');
+} else {
+  const anyIcon = manifest.icons.find((icon) => icon.purpose === 'any');
+  const maskableIcon = manifest.icons.find((icon) => icon.purpose === 'maskable');
+  if (anyIcon?.src !== '/wissenpur-icon.svg' || anyIcon.type !== 'image/svg+xml') {
+    failures.push('wissenpur/public/manifest.json: Das normale SVG-App-Icon ist falsch konfiguriert.');
+  }
+  if (maskableIcon?.src !== '/wissenpur-maskable-icon.svg' || maskableIcon.type !== 'image/svg+xml') {
+    failures.push('wissenpur/public/manifest.json: Das dedizierte maskierbare SVG-Icon ist falsch konfiguriert.');
+  }
+}
+
+requireText(
+  'wissenpur/public/wissenpur-icon.svg',
+  iconSvg,
+  'viewBox="0 0 512 512"',
+  'Das normale SVG-Icon benötigt eine quadratische 512er Zeichenfläche.',
+);
+requireText(
+  'wissenpur/public/wissenpur-maskable-icon.svg',
+  maskableSvg,
+  '<rect width="512" height="512" fill="url(#background)"/>',
+  'Das maskierbare Icon benötigt einen vollflächigen Hintergrund ohne transparente Randzone.',
+);
+requireText(
+  'wissenpur/public/sw.js',
+  serviceWorker,
+  "'/wissenpur-maskable-icon.svg'",
+  'Das maskierbare Icon muss Teil der Offline-App-Shell sein.',
+);
 
 const serviceWorkerHeaders = firebase.hosting?.headers?.find(
   (entry) => entry.source === '/sw.js',
@@ -120,4 +199,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('PWA-App-Shell, Offline-Antworten, Cachewechsel und Hosting-Header geprüft.');
+console.log('PWA-App-Shell, Build-Asset-Precache, Installationsmetadaten, Icons, Offline-Antworten, Cachewechsel und Hosting-Header geprüft.');
