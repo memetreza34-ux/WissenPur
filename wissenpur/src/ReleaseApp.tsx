@@ -128,6 +128,8 @@ const SHOP_ITEMS = [
   { id: 'Quiz-Gott', title: 'Titel Quiz-Gott', cost: 500, description: 'Profil-Auszeichnung.' },
 ] as const;
 
+const REVIEW_REFRESH_MS = 60_000;
+
 const berlinDateKey = () =>
   new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Europe/Berlin',
@@ -228,6 +230,8 @@ export default function ReleaseApp() {
   const [aiTopic, setAiTopic] = useState('');
   const [flashcardQuestions, setFlashcardQuestions] = useState<Question[]>([]);
   const [flashcardDeckId, setFlashcardDeckId] = useState<string | null>(null);
+  const [flashcardReturnScreen, setFlashcardReturnScreen] = useState<ReleaseScreen>('library');
+  const [reviewNow, setReviewNow] = useState(() => Date.now());
 
   const persistStats = (next: ReleaseStats) => {
     setStats(next);
@@ -269,6 +273,11 @@ export default function ReleaseApp() {
   }, [stats.darkMode]);
 
   useEffect(() => {
+    const timer = window.setInterval(() => setReviewNow(Date.now()), REVIEW_REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
     if (screen !== 'leaderboard' || isAccountHydrating) return;
     getLeaderboard(100)
       .then(setLeaderboard)
@@ -284,8 +293,8 @@ export default function ReleaseApp() {
   }, [stats.categoryStats]);
 
   const dueReviewQuestions = useMemo(
-    () => getDueQuestionsFromLibrary(stats.customQuizzes || []),
-    [stats.customQuizzes],
+    () => getDueQuestionsFromLibrary(stats.customQuizzes || [], reviewNow),
+    [reviewNow, stats.customQuizzes],
   );
   const dueCards = dueReviewQuestions.length;
 
@@ -604,14 +613,26 @@ export default function ReleaseApp() {
     if (user) void syncUserStats(next);
   };
 
-  const openFlashcards = (questions: Question[], deckId: string | null = null) => {
+  const openFlashcards = (
+    questions: Question[],
+    deckId: string | null = null,
+    returnScreen: ReleaseScreen = 'library',
+  ) => {
     if (questions.length === 0) {
       setNotice('Dieses Lernset enthält noch keine Karteikarten.');
       return;
     }
     setFlashcardQuestions(questions);
     setFlashcardDeckId(deckId);
+    setFlashcardReturnScreen(returnScreen);
     setScreen('flashcards');
+  };
+
+  const closeFlashcards = () => {
+    setReviewNow(Date.now());
+    setFlashcardDeckId(null);
+    setFlashcardQuestions([]);
+    setScreen(flashcardReturnScreen);
   };
 
   const renderHeader = (title: string, back?: ReleaseScreen) => (
@@ -671,7 +692,7 @@ export default function ReleaseApp() {
               className="mt-6 bg-white text-blue-700 hover:bg-blue-50"
               disabled={isAccountHydrating}
               onClick={() => dueReviewQuestions.length > 0
-                ? openFlashcards(dueReviewQuestions)
+                ? openFlashcards(dueReviewQuestions, null, 'today')
                 : void startRanked('standard', weakCategory || 'all', 'all', 10)}
             >
               Jetzt lernen <ArrowRight size={18} />
@@ -754,7 +775,7 @@ export default function ReleaseApp() {
                   <div className={`flex h-11 w-11 items-center justify-center rounded-2xl text-white ${category.color}`}><BookOpen size={20} /></div>
                   <h3 className="mt-4 font-black">{category.title}</h3><p className="mt-1 text-xs text-slate-500">{category.description}</p>
                 </button>
-                <div className="mt-4 grid grid-cols-2 gap-2"><Button size="sm" disabled={isAccountHydrating} onClick={() => void startRanked('standard', category.id, selectedDifficulty, questionCount)}>Quiz</Button><Button size="sm" variant="outline" onClick={() => openFlashcards(selectLocalQuestions(category.id, selectedDifficulty, Math.min(20, QUESTIONS.length)))}>Karten</Button></div>
+                <div className="mt-4 grid grid-cols-2 gap-2"><Button size="sm" disabled={isAccountHydrating} onClick={() => void startRanked('standard', category.id, selectedDifficulty, questionCount)}>Quiz</Button><Button size="sm" variant="outline" onClick={() => openFlashcards(selectLocalQuestions(category.id, selectedDifficulty, Math.min(20, QUESTIONS.length)), null, 'learn')}>Karten</Button></div>
               </Card>
             ))}
           </div>
@@ -788,7 +809,7 @@ export default function ReleaseApp() {
                 {decks.map((deck) => (
                   <Card key={deck.id} className="p-5">
                     <div className="flex items-start justify-between"><div><h3 className="font-black">{deck.title}</h3><p className="mt-1 text-xs text-slate-500">{deck.questions.length} Karten · {new Date(deck.createdAt).toLocaleDateString('de-DE')}</p></div><Library className="text-purple-500" /></div>
-                    <div className="mt-4 grid grid-cols-2 gap-2"><Button size="sm" onClick={() => startPractice(`${deck.title} – Übung`, deck.questions)}>Quiz</Button><Button size="sm" variant="outline" onClick={() => openFlashcards(deck.questions, deck.id)}>Karteikarten</Button></div>
+                    <div className="mt-4 grid grid-cols-2 gap-2"><Button size="sm" onClick={() => startPractice(`${deck.title} – Übung`, deck.questions)}>Quiz</Button><Button size="sm" variant="outline" onClick={() => openFlashcards(deck.questions, deck.id, 'library')}>Karteikarten</Button></div>
                   </Card>
                 ))}
               </div>
@@ -938,7 +959,7 @@ export default function ReleaseApp() {
     if (screen === 'ai-create') return renderAiCreate();
     if (screen === 'quiz') return renderQuiz();
     if (screen === 'result') return renderResult();
-    if (screen === 'flashcards') return <Flashcards questions={flashcardQuestions} onClose={() => setScreen('library')} onQuestionsUpdated={updateFlashcards} />;
+    if (screen === 'flashcards') return <Flashcards questions={flashcardQuestions} onClose={closeFlashcards} onQuestionsUpdated={updateFlashcards} />;
     return renderToday();
   };
 
