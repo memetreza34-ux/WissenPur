@@ -211,6 +211,7 @@ export default function ReleaseApp() {
   const [stats, setStats] = useState<ReleaseStats>(() => getStats() as ReleaseStats);
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [isAccountHydrating, setIsAccountHydrating] = useState(false);
+  const authHydrationGenerationRef = useRef(0);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<CategoryId | 'all'>('all');
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty | 'all'>('all');
@@ -246,6 +247,8 @@ export default function ReleaseApp() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (nextUser) => {
+      const hydrationGeneration = authHydrationGenerationRef.current + 1;
+      authHydrationGenerationRef.current = hydrationGeneration;
       setUser(nextUser);
       if (!nextUser) {
         setIsAccountHydrating(false);
@@ -258,11 +261,15 @@ export default function ReleaseApp() {
       setNotice(null);
       try {
         const hydrated = await syncUserStats(localBeforeHydration);
+        if (authHydrationGenerationRef.current !== hydrationGeneration) return;
         if (hydrated) persistStats(hydrated as ReleaseStats);
       } catch (error) {
+        if (authHydrationGenerationRef.current !== hydrationGeneration) return;
         setNotice(`Kontodaten konnten nicht sicher geladen werden: ${safeError(error)}`);
       } finally {
-        setIsAccountHydrating(false);
+        if (authHydrationGenerationRef.current === hydrationGeneration) {
+          setIsAccountHydrating(false);
+        }
       }
     });
     return unsubscribe;
@@ -629,6 +636,7 @@ export default function ReleaseApp() {
   };
 
   const closeFlashcards = () => {
+    setStats(getStats() as ReleaseStats);
     setReviewNow(Date.now());
     setFlashcardDeckId(null);
     setFlashcardQuestions([]);
