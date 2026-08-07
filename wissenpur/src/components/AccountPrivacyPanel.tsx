@@ -62,8 +62,13 @@ export const AccountPrivacyPanel = () => {
     setMessage(null);
     try {
       if (!user) throw new Error('Bitte melde dich zuerst an.');
+      const expectedUid = user.uid;
       const exported = await exportCurrentAccountData();
-      const localLearningAnalytics = readLocalAnalyticsForUser(user.uid);
+      if (auth.currentUser?.uid !== expectedUid || exported.account.uid !== expectedUid) {
+        throw new Error('Die Kontositzung hat sich während des Exports geändert. Bitte starte den Export erneut.');
+      }
+
+      const localLearningAnalytics = readLocalAnalyticsForUser(exported.account.uid);
       const completeExport = {
         ...exported,
         localDevice: {
@@ -87,11 +92,6 @@ export const AccountPrivacyPanel = () => {
     setMessage(null);
     try {
       await deleteCurrentAccount();
-      localStorage.removeItem('wissenpur_user_stats');
-      localStorage.removeItem('wissenpur_learning_plan');
-      localStorage.removeItem(ANALYTICS_STORAGE_KEY);
-      localStorage.removeItem(ANALYTICS_OWNER_KEY);
-      sessionStorage.clear();
       window.location.replace('/');
     } catch (error) {
       setMessage(getErrorMessage(error));
