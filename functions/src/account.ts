@@ -7,6 +7,7 @@ import {
 } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { sanitizeQuizSessionForExport } from './accountExportCore.js';
+import { enforceAccountExportRateLimit } from './callableRateLimit.js';
 import { db, enforceAppCheck, firebaseApp } from './database.js';
 
 const adminAuth = getAuth(firebaseApp);
@@ -115,6 +116,7 @@ export const exportMyData = onCall(
   { enforceAppCheck, timeoutSeconds: 60, memory: '256MiB' },
   async (request) => {
     const uid = requireUid(request);
+    await enforceAccountExportRateLimit(uid);
     const userRef = db.collection('users').doc(uid);
     const trustedLeaderboardRef = db.collection('trustedLeaderboard').doc(uid);
     const legacyLeaderboardRef = db.collection('leaderboard').doc(uid);
