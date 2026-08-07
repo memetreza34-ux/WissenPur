@@ -143,11 +143,13 @@ const dueSummary = buildLearningAnalytics(trendHistory, undefined, 7);
 assert.equal(dueSummary.recommendation.type, 'review');
 assert.match(dueSummary.recommendation.title, /7 fällige Karten/);
 
-const [main, panel, accountBoundary, privacyPanel] = await Promise.all([
+const [main, panel, accountBoundary, privacyPanel, legalPanel, privacyDoc] = await Promise.all([
   readFile(resolve(repoRoot, 'wissenpur/src/main.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/components/LearningAnalyticsPanel.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/components/AccountSessionBoundary.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/components/AccountPrivacyPanel.tsx'), 'utf8'),
+  readFile(resolve(repoRoot, 'wissenpur/src/components/LegalPanel.tsx'), 'utf8'),
+  readFile(resolve(repoRoot, 'wissenpur/docs/ACCOUNT_PRIVACY.md'), 'utf8'),
 ]);
 assert.match(main, /<LearningAnalyticsPanel\s*\/>/);
 assert.match(panel, /deriveRankedSession/);
@@ -162,5 +164,11 @@ assert.match(privacyPanel, /readLocalAnalyticsForUser/);
 assert.match(privacyPanel, /localDevice/);
 assert.match(privacyPanel, /learningAnalytics: localLearningAnalytics/);
 assert.match(privacyPanel, /nur auf diesem Gerät gespeicherte persönliche Lernanalyse/);
+assert.match(legalPanel, /kompakte persönliche Lernanalyse/);
+assert.match(legalPanel, /wird nicht für Punkte oder Ranglisten verwendet/);
+assert.match(legalPanel, /nicht in Firestore hochgeladen/);
+assert.match(privacyDoc, /localDevice\.learningAnalytics/);
+assert.match(privacyDoc, /wissenpur_learning_history_v1/);
+assert.match(privacyDoc, /Logout und Kontolöschung/);
 
-console.log('Lernanalyse, Verlauf, Trend, lokaler Datenexport und Tagesempfehlungen geprüft.');
+console.log('Lernanalyse, Verlauf, Trend, Datenschutzangaben, lokaler Datenexport und Tagesempfehlungen geprüft.');
