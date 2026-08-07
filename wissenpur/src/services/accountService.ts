@@ -39,6 +39,28 @@ const deleteMyAccountCallable = httpsCallable<Record<string, never>, AccountDele
   'deleteMyAccount',
 );
 
+class AccountAuthSessionChangedError extends Error {
+  constructor(message = 'Die Kontositzung hat sich während der Kontoaktion geändert. Bitte starte die Aktion erneut.') {
+    super(message);
+    this.name = 'AccountAuthSessionChangedError';
+  }
+}
+
+const assertActiveAccountUid = (expectedUid: string): void => {
+  if (auth.currentUser?.uid !== expectedUid) {
+    throw new AccountAuthSessionChangedError();
+  }
+};
+
+const assertNoDifferentAccountUid = (expectedUid: string): void => {
+  const activeUid = auth.currentUser?.uid || null;
+  if (activeUid && activeUid !== expectedUid) {
+    throw new AccountAuthSessionChangedError(
+      'Die ursprüngliche Kontoaktion wurde beendet, aber inzwischen ist ein anderes Konto aktiv. Das neue Konto wurde lokal nicht verändert.',
+    );
+  }
+};
+
 const clearDeletedAccountCache = () => {
   localStorage.removeItem('wissenpur_user_stats');
   localStorage.removeItem('wissenpur_user_stats_owner');
@@ -47,6 +69,23 @@ const clearDeletedAccountCache = () => {
   localStorage.removeItem('wissenpur_learning_history_owner_v1');
   sessionStorage.clear();
   window.dispatchEvent(new CustomEvent('wissenpur:account-storage-reset'));
+};
+
+const finalizeDeletedAccount = (
+  expectedUid: string,
+  result: AccountDeletionResult,
+): AccountDeletionResult => {
+  assertNoDifferentAccountUid(expectedUid);
+
+  // If Firebase still exposes the deleted account, these values belong to the
+  // operation that just completed and can be removed safely. If the client is
+  // already signed out, the central auth-transition cleanup owns local state;
+  // do not wipe newly created guest data after a delayed server response.
+  if (auth.currentUser?.uid === expectedUid) {
+    clearDeletedAccountCache();
+  }
+
+  return result;
 };
 
 const isRecentAuthenticationRequired = (error: unknown): boolean => {
@@ -62,27 +101,39 @@ const isRecentAuthenticationRequired = (error: unknown): boolean => {
 };
 
 export const exportCurrentAccountData = async (): Promise<AccountDataExport> => {
-  if (!auth.currentUser) throw new Error('Bitte melde dich zuerst an.');
+  const expectedUid = auth.currentUser?.uid;
+  if (!expectedUid) throw new Error('Bitte melde dich zuerst an.');
+
   const response = await exportMyDataCallable({});
+  assertActiveAccountUid(expectedUid);
+
+  if (response.data.account.uid !== expectedUid) {
+    throw new Error('Der Datenexport konnte dem aktuellen Konto nicht sicher zugeordnet werden.');
+  }
+
   return response.data;
 };
 
 export const deleteCurrentAccount = async (): Promise<AccountDeletionResult> => {
   const currentUser = auth.currentUser;
   if (!currentUser) throw new Error('Bitte melde dich zuerst an.');
+  const expectedUid = currentUser.uid;
 
   try {
+    assertActiveAccountUid(expectedUid);
     const response = await deleteMyAccountCallable({});
-    clearDeletedAccountCache();
-    return response.data;
+    return finalizeDeletedAccount(expectedUid, response.data);
   } catch (error) {
+    if (error instanceof AccountAuthSessionChangedError) throw error;
     if (!isRecentAuthenticationRequired(error)) throw error;
 
+    assertActiveAccountUid(expectedUid);
     await reauthenticateWithPopup(currentUser, googleProvider);
+    assertActiveAccountUid(expectedUid);
     await getIdToken(currentUser, true);
+    assertActiveAccountUid(expectedUid);
 
     const retry = await deleteMyAccountCallable({});
-    clearDeletedAccountCache();
-    return retry.data;
+    return finalizeDeletedAccount(expectedUid, retry.data);
   }
 };
