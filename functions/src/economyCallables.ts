@@ -6,6 +6,7 @@ import {
   onCall,
   type CallableRequest,
 } from 'firebase-functions/v2/https';
+import { enforceGlobalCallableRateLimit } from './callableRateLimit.js';
 import { db, enforceAppCheck } from './database.js';
 import {
   applySpinReward,
@@ -105,6 +106,7 @@ export const claimDailyQuestReward = onCall(
   async (request) => {
     try {
       const uid = requireUser(request);
+      await enforceGlobalCallableRateLimit(uid);
       const userRef = db.collection('users').doc(uid);
       const leaderboardRef = db.collection('trustedLeaderboard').doc(uid);
       const today = berlinDateKey();
@@ -149,6 +151,7 @@ export const spinDailyWheel = onCall(
   async (request) => {
     try {
       const uid = requireUser(request);
+      await enforceGlobalCallableRateLimit(uid);
       const userRef = db.collection('users').doc(uid);
       const today = berlinDateKey();
 
@@ -181,6 +184,7 @@ export const purchaseShopItem = onCall<PurchaseRequest>(
   async (request) => {
     try {
       const uid = requireUser(request);
+      await enforceGlobalCallableRateLimit(uid);
       const itemId = requireString(request.data.itemId, 'itemId', 100);
       const userRef = db.collection('users').doc(uid);
       const today = berlinDateKey();
@@ -217,6 +221,7 @@ export const consumePowerUp = onCall<ConsumePowerUpRequest>(
   async (request) => {
     try {
       const uid = requireUser(request);
+      await enforceGlobalCallableRateLimit(uid);
       const powerUp = requireString(request.data.powerUp, 'powerUp', 50);
       const userRef = db.collection('users').doc(uid);
       const today = berlinDateKey();
