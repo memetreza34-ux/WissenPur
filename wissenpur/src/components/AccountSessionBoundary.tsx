@@ -1,6 +1,7 @@
 import { Fragment, type ReactNode, useEffect, useRef, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebase';
+import { shouldClearLocalAccountDataForTransition } from '../services/accountSessionPolicy';
 import { clearLocalAccountData } from '../storage';
 
 interface AccountSessionBoundaryProps {
@@ -33,9 +34,8 @@ export const AccountSessionBoundary = ({ children }: AccountSessionBoundaryProps
   useEffect(() => onAuthStateChanged(auth, (user) => {
     const nextUid = user?.uid || null;
     const previous = previousUid.current;
-    const anonymousClaim = previous === null && nextUid !== null;
 
-    if (previous !== undefined && previous !== nextUid && !anonymousClaim) {
+    if (shouldClearLocalAccountDataForTransition(previous, nextUid)) {
       clearLocalAccountData();
     }
 
