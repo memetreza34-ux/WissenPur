@@ -11,6 +11,7 @@ import {
 } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
 import { auth, db } from '../firebase';
+import { saveStats } from '../storage';
 import { LeaderboardEntry, UserStats } from '../types';
 import { applyLearningLibraryPolicy } from './learningLibraryPolicy';
 
@@ -95,12 +96,6 @@ const getProfileUpdate = (stats: UserStats): Partial<UserStats> & { uid: string 
   if (!currentUser) throw new Error('Profil-Synchronisierung erfordert eine Anmeldung.');
 
   const library = applyLearningLibraryPolicy(stats.customQuizzes);
-  if (library.changed) {
-    console.warn('Lernset-Bibliothek wurde vor der Cloud-Synchronisierung normalisiert.', {
-      reason: library.reason,
-    });
-  }
-
   return sanitizeForFirestore({
     uid: currentUser.uid,
     displayName: currentUser.displayName || 'Anonym',
@@ -118,9 +113,28 @@ const persistProfileOnly = async (stats: UserStats): Promise<UserStats> => {
   const currentUser = auth.currentUser;
   if (!currentUser) return stats;
 
-  const profileUpdate = getProfileUpdate(stats);
+  const library = applyLearningLibraryPolicy(stats.customQuizzes);
+  const normalizedStats: UserStats = library.changed
+    ? { ...stats, customQuizzes: library.decks }
+    : stats;
+  const profileUpdate = getProfileUpdate(normalizedStats);
+  const persistedStats = { ...normalizedStats, ...profileUpdate } as UserStats;
+
+  if (library.changed) {
+    console.warn('Lernset-Bibliothek wurde vor der Cloud-Synchronisierung normalisiert.', {
+      reason: library.reason,
+    });
+    saveStats(persistedStats);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent<UserStats>('wissenpur:stats-updated', { detail: persistedStats }),
+      );
+      window.dispatchEvent(new Event('wissenpur:library-updated'));
+    }
+  }
+
   await setDoc(doc(db, 'users', currentUser.uid), profileUpdate, { merge: true });
-  return { ...stats, ...profileUpdate } as UserStats;
+  return persistedStats;
 };
 
 /**
