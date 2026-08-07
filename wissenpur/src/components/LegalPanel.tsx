@@ -121,6 +121,7 @@ export const LegalPanel = () => {
                       <li>Kontodaten aus Firebase Authentication, insbesondere UID, Anzeigename, E-Mail-Adresse, Profilbild und Login-Anbieter.</li>
                       <li>Lernfortschritt, Antworten, Punkte, Münzen, Streaks, Erfolge, Lernpläne, eigene Lernsets und gespeicherte Fehlerfragen.</li>
                       <li>Quiz-Sitzungen, Sicherheitsnachweise und technische Metadaten zur Verhinderung doppelter oder manipulierter Wertungen.</li>
+                      <li>Auf dem aktuellen Gerät eine kompakte persönliche Lernanalyse mit Zeitpunkten, Kategorien und Ergebniskennzahlen neuer Prüfungen. Sie enthält keine Fragentexte, Antworten oder Lösungsschlüssel.</li>
                       <li>Texteingaben für KI-Lernsets sowie die daraus erzeugten Fragen und Erklärungen.</li>
                       <li>Technische Verbindungs-, Sicherheits- und Fehlerdaten, soweit sie durch Hosting, Functions, Firestore, App Check oder reCAPTCHA Enterprise anfallen.</li>
                     </ul>
@@ -139,12 +140,14 @@ export const LegalPanel = () => {
                   </Section>
 
                   <Section title="Lokale Speicherung">
-                    <p>Die App verwendet Browser-Speicher für Offline-Fortschritt, Einstellungen, Lernplan und Sitzungszustand. Diese Daten bleiben auf dem Gerät, bis sie durch die App, den Nutzer oder den Browser entfernt werden.</p>
+                    <p>Die App verwendet Browser-Speicher für Offline-Fortschritt, Einstellungen, Lernplan, Lernsets und die persönliche Lernanalyse. Kontoabhängige lokale Daten werden beim Logout und bei der vollständigen Kontolöschung entfernt.</p>
+                    <p>Die Lernanalyse bleibt gerätegebunden und wird nicht für Punkte oder Ranglisten verwendet. Bei einem JSON-Datenexport wird sie nach Prüfung des lokalen Besitzer-Markers ausschließlich im Browser an die heruntergeladene Datei angefügt; dafür wird sie nicht in Firestore hochgeladen.</p>
                   </Section>
 
                   <Section title="Speicherdauer">
                     <ul className="list-disc space-y-2 pl-5">
-                      <li>Kontodaten und Lernfortschritt: bis zur Kontolöschung oder bis eine andere erforderliche Frist abläuft.</li>
+                      <li>Kontodaten und servergespeicherter Lernfortschritt: bis zur Kontolöschung oder bis eine andere erforderliche Frist abläuft.</li>
+                      <li>Lokale Lernanalyse: höchstens 80 neue Sitzungen auf dem aktuellen Gerät, bis Logout, Kontolöschung oder Browserdaten-Löschung sie entfernt.</li>
                       <li>Quiz-Sitzungen und Rundennachweise: höchstens {legalConfig.sessionRetentionDays || '[Frist fehlt]'} Tage, zusätzlich technisch über Ablaufzeit und TTL begrenzt.</li>
                       <li>Technische Sicherheits- und Fehlerlogs: höchstens {legalConfig.logRetentionDays || '[Frist fehlt]'} Tage, soweit der jeweilige Dienst dies unterstützt.</li>
                       <li>Supportanfragen: höchstens {legalConfig.supportRetentionDays || '[Frist fehlt]'} Tage nach Abschluss, sofern keine gesetzlichen Pflichten entgegenstehen.</li>
@@ -152,8 +155,9 @@ export const LegalPanel = () => {
                   </Section>
 
                   <Section title="Rechte und Selbstbedienung">
-                    <p>Angemeldete Nutzer können über „Daten“ einen JSON-Export anfordern und ihr Konto technisch selbst löschen. Darüber hinaus können Auskunft, Berichtigung, Einschränkung, Widerspruch und weitere anwendbare Rechte über den Datenschutzkontakt geltend gemacht werden.</p>
-                    <p>Eine Beschwerde bei einer zuständigen Datenschutzaufsichtsbehörde bleibt möglich.</p>
+                    <p>Angemeldete Nutzer können über „Daten“ einen JSON-Export anfordern. Der Download enthält die serverseitig exportierbaren Kontodaten und ergänzt die zu diesem Konto gehörende lokale Lernanalyse des aktuell verwendeten Browsers.</p>
+                    <p>Über dieselbe Oberfläche kann das Konto technisch selbst gelöscht werden. Dabei werden nach erfolgreicher Serverlöschung auch kontoabhängige lokale Daten dieses Browsers entfernt.</p>
+                    <p>Darüber hinaus können Auskunft, Berichtigung, Einschränkung, Widerspruch und weitere anwendbare Rechte über den Datenschutzkontakt geltend gemacht werden. Eine Beschwerde bei einer zuständigen Datenschutzaufsichtsbehörde bleibt möglich.</p>
                   </Section>
 
                   <Section title="Minderjährige">
