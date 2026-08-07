@@ -95,7 +95,7 @@ export const Badge: React.FC<{ icon: React.ReactNode; label: string | number; co
     amber: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 glow-amber backdrop-blur-md',
     blue: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 glow-blue backdrop-blur-md',
     emerald: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 glow-emerald backdrop-blur-md',
-    rose: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30 shadow-[0_0_15px_-3px_rgba(244,63,94,0.5)] backdrop-blur-md',
+    rose: 'bg-rose-500/10 text-rose-600 dark:text-rose-300 border-rose-500/30 shadow-[0_0_15px_-3px_rgba(244,63,94,0.5)] backdrop-blur-md',
     slate: 'bg-slate-500/10 text-slate-600 dark:text-slate-300 border-slate-500/30 backdrop-blur-md shadow-lg'
   };
 
@@ -120,8 +120,22 @@ export const Badge: React.FC<{ icon: React.ReactNode; label: string | number; co
   );
 };
 
-export const ProgressBar: React.FC<{ progress: number; color?: string; glow?: boolean; label?: string }> = ({ progress, color = 'bg-gradient-to-r from-blue-500 to-indigo-600', glow = true, label = 'Fortschritt' }) => {
-  const normalizedProgress = Math.min(100, Math.max(0, progress));
+interface ProgressBarProps {
+  progress?: number;
+  value?: number;
+  color?: string;
+  glow?: boolean;
+  label?: string;
+}
+
+export const ProgressBar: React.FC<ProgressBarProps> = ({
+  progress,
+  value,
+  color = 'bg-gradient-to-r from-blue-500 to-indigo-600',
+  glow = true,
+  label = 'Fortschritt',
+}) => {
+  const normalizedProgress = Math.min(100, Math.max(0, progress ?? value ?? 0));
 
   return (
     <div
