@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   BookPlus,
   CheckCircle2,
@@ -38,8 +38,11 @@ const syncBestEffort = (stats: UserStats) => {
 const isCategoryId = (value: string): value is CategoryId =>
   CATEGORIES.some((entry) => entry.id === value);
 
+const currentDecks = (): CustomQuiz[] => getStats().customQuizzes || [];
+
 export const ManualLearningSetPanel = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const [availableDecks, setAvailableDecks] = useState<CustomQuiz[]>(() => currentDecks());
   const [editingDeckId, setEditingDeckId] = useState<string | null>(null);
   const [editingDeckCreatedAt, setEditingDeckCreatedAt] = useState<number | null>(null);
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
@@ -54,7 +57,16 @@ export const ManualLearningSetPanel = () => {
   const [message, setMessage] = useState<string | null>(null);
 
   const maxQuestions = editingDeckId ? MAX_IMPORTED_QUESTIONS : MAX_NEW_MANUAL_QUESTIONS;
-  const existingDecks = getStats().customQuizzes || [];
+
+  useEffect(() => {
+    const refresh = () => setAvailableDecks(currentDecks());
+    window.addEventListener('wissenpur:stats-updated', refresh);
+    window.addEventListener('wissenpur:library-updated', refresh);
+    return () => {
+      window.removeEventListener('wissenpur:stats-updated', refresh);
+      window.removeEventListener('wissenpur:library-updated', refresh);
+    };
+  }, []);
 
   const canCommitQuestion = useMemo(() => {
     const normalizedOptions = options.map((option) => option.trim());
@@ -93,7 +105,7 @@ export const ManualLearningSetPanel = () => {
       resetAll();
       return;
     }
-    const deck = (getStats().customQuizzes || []).find((entry) => entry.id === deckId);
+    const deck = currentDecks().find((entry) => entry.id === deckId);
     if (!deck) {
       setMessage('Das Lernset wurde nicht gefunden.');
       return;
@@ -200,10 +212,10 @@ export const ManualLearningSetPanel = () => {
       createdAt: editingDeckCreatedAt || Date.now(),
       questions,
     };
-    const currentDecks = currentStats.customQuizzes || [];
+    const library = currentStats.customQuizzes || [];
     const candidateDecks = editingDeckId
-      ? currentDecks.map((entry) => entry.id === editingDeckId ? deck : entry)
-      : [...currentDecks, deck];
+      ? library.map((entry) => entry.id === editingDeckId ? deck : entry)
+      : [...library, deck];
 
     try {
       const policy = applyLearningLibraryPolicy(candidateDecks);
@@ -214,6 +226,7 @@ export const ManualLearningSetPanel = () => {
 
       const nextStats: UserStats = { ...currentStats, customQuizzes: policy.decks };
       saveStats(nextStats);
+      setAvailableDecks(policy.decks);
       window.dispatchEvent(new CustomEvent<UserStats>('wissenpur:stats-updated', { detail: nextStats }));
       window.dispatchEvent(new Event('wissenpur:library-updated'));
       syncBestEffort(nextStats);
@@ -230,6 +243,7 @@ export const ManualLearningSetPanel = () => {
         type="button"
         onClick={() => {
           resetAll();
+          setAvailableDecks(currentDecks());
           setIsOpen(true);
         }}
         className="fixed bottom-60 left-4 z-[80] flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 text-xs font-black text-slate-700 shadow-xl backdrop-blur-xl hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-700 dark:bg-slate-900/95 dark:text-slate-100"
@@ -258,12 +272,12 @@ export const ManualLearningSetPanel = () => {
 
             {message && <div role="status" className="rounded-2xl bg-blue-50 p-4 text-sm font-bold text-blue-900 dark:bg-blue-950/30 dark:text-blue-100">{message}</div>}
 
-            {existingDecks.length > 0 && (
+            {availableDecks.length > 0 && (
               <Card className="p-5">
                 <label htmlFor="existing-learning-set" className="text-xs font-black uppercase tracking-widest text-slate-500">Vorhandenes Lernset bearbeiten</label>
                 <select id="existing-learning-set" value={editingDeckId || ''} onChange={(event) => loadDeck(event.target.value)} className="mt-2 w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 font-bold outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-900">
                   <option value="">Neues Lernset erstellen</option>
-                  {existingDecks.map((deck) => <option key={deck.id} value={deck.id}>{deck.title} · {deck.questions.length} Fragen</option>)}
+                  {availableDecks.map((deck) => <option key={deck.id} value={deck.id}>{deck.title} · {deck.questions.length} Fragen</option>)}
                 </select>
               </Card>
             )}
@@ -292,7 +306,7 @@ export const ManualLearningSetPanel = () => {
               </div>
               {options.length < MAX_OPTIONS && <Button size="sm" variant="outline" onClick={addOption}><Plus size={16} /> Antwort hinzufügen</Button>}
               <textarea value={explanation} maxLength={2000} onChange={(event) => setExplanation(event.target.value)} placeholder="Kurze Erklärung, warum die Antwort richtig ist" rows={3} className="w-full resize-none rounded-2xl border-2 border-slate-200 bg-transparent px-4 py-3 font-medium outline-none focus:border-indigo-500 dark:border-slate-700" />
-              <div className="grid grid-cols-2 gap-3">
+              <div className={editingQuestionId ? 'grid grid-cols-2 gap-3' : ''}>
                 {editingQuestionId && <Button variant="outline" onClick={resetQuestionForm}>Bearbeitung abbrechen</Button>}
                 <Button fullWidth={!editingQuestionId} disabled={!canCommitQuestion} onClick={commitQuestion}><Plus size={18} /> {editingQuestionId ? 'Frage aktualisieren' : 'Frage hinzufügen'}</Button>
               </div>
