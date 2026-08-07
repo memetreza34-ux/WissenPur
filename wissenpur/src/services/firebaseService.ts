@@ -13,6 +13,7 @@ import type { User } from 'firebase/auth';
 import { auth, db } from '../firebase';
 import { saveStats } from '../storage';
 import { LeaderboardEntry, UserStats } from '../types';
+import { mergeLearningLibraries } from './learningLibraryMerge';
 import { applyLearningLibraryPolicy } from './learningLibraryPolicy';
 
 enum OperationType {
@@ -51,8 +52,10 @@ const mergeProfileContent = (
   localStats: UserStats,
   cloudStats: Partial<UserStats>,
 ): UserStats => {
-  const localLibrary = applyLearningLibraryPolicy(localStats.customQuizzes).decks;
-  const cloudLibrary = applyLearningLibraryPolicy(cloudStats.customQuizzes).decks;
+  const mergedLibrary = mergeLearningLibraries(
+    localStats.customQuizzes,
+    cloudStats.customQuizzes,
+  ).decks;
 
   return {
     ...localStats,
@@ -65,7 +68,7 @@ const mergeProfileContent = (
     customDifficultyTimes:
       cloudStats.customDifficultyTimes ?? localStats.customDifficultyTimes,
     darkMode: cloudStats.darkMode ?? localStats.darkMode,
-    customQuizzes: cloudStats.customQuizzes === undefined ? localLibrary : cloudLibrary,
+    customQuizzes: mergedLibrary,
   };
 };
 
