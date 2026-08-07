@@ -99,8 +99,29 @@ Die Empfehlung folgt einer festen Priorität:
 
 Die Empfehlung löst keine automatische Wertung aus und verändert keine Economy-Daten.
 
+## Datenexport
+
+Die Analysehistorie bleibt technisch lokal und wird **nicht auf den Server hochgeladen**, nur um einen Export zu ermöglichen.
+
+Wenn ein angemeldeter Nutzer den JSON-Datenexport aus der App startet, passiert stattdessen Folgendes:
+
+1. Die serverseitigen Kontodaten werden über den geschützten Export-Callable geladen.
+2. Die App prüft, ob der lokale Analyse-Besitzer zur aktuell angemeldeten UID passt.
+3. Nur dann wird die normalisierte lokale Analysehistorie im Browser unter `localDevice.learningAnalytics` an die heruntergeladene JSON-Datei angefügt.
+
+Damit erhält der Nutzer einen möglichst vollständigen Export, ohne die lokale Historie vorher in Firestore zu speichern.
+
+## Löschung
+
+Bei Logout und vollständiger Kontolöschung werden neben Stats und Lernplan auch beide lokalen Analyse-Schlüssel explizit entfernt:
+
+- `wissenpur_learning_history_v1`
+- `wissenpur_learning_history_owner_v1`
+
+Die Löschpfade sind zusätzlich durch die Konto-Isolationsprüfung abgesichert.
+
 ## Datenschutz und Grenzen
 
-Die lokale Analysehistorie ist bewusst nicht Teil des Cloud-Datenexports, weil sie nicht auf dem Server gespeichert wird. Sie ist gerätegebunden und kann beim Löschen lokaler Browserdaten verloren gehen.
+Die Analysehistorie ist gerätegebunden und kann beim Löschen lokaler Browserdaten verloren gehen. Der Export ergänzt deshalb nur die Daten des aktuell verwendeten Browsers.
 
 Falls später geräteübergreifende Analysen eingeführt werden, muss dafür ein eigener Datenvertrag mit klarer Firestore-Regel, Speicherfrist, Export- und Löschlogik erstellt werden. Die aktuelle lokale Historie darf nicht still in bestehende vertrauenswürdige Economy-Felder übernommen werden.
