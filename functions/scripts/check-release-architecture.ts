@@ -106,6 +106,7 @@ for (const file of functionFiles) {
 const entryPath = resolve(functionsSource, 'entry.ts');
 const entry = await readFile(entryPath, 'utf8');
 for (const requiredExport of [
+  'getMyEconomyState',
   'startSecureRankedQuiz',
   'submitRankedQuiz',
   'revealSecureRankedQuiz',
@@ -123,19 +124,19 @@ assertIncludes(
   economyCallablesPath,
   economyCallables,
   "db.collection('trustedLeaderboard')",
-  'Serverwertungen müssen in trustedLeaderboard geschrieben werden.',
+  'Serverbelohnungen mit Punktwirkung müssen trustedLeaderboard aktualisieren.',
 );
 assertMissing(
   economyCallablesPath,
   economyCallables,
   /db\.collection\(['"]leaderboard['"]\)/,
-  'Aktives Scoring darf die historische Client-Rangliste nicht schreiben.',
+  'Aktive Economy darf die historische Client-Rangliste nicht schreiben.',
 );
-assertIncludes(
+assertMissing(
   economyCallablesPath,
   economyCallables,
-  'readSessionAnswerKey',
-  'Gewertete Abgaben müssen den unveränderlichen Sitzungs-Snapshot verwenden.',
+  /export const submitRankedQuiz|QUESTION_BANK|fallbackAnswerKey/,
+  'Gewertete Abgaben und Fragenkatalog-Fallbacks dürfen nicht in economyCallables zurückkehren.',
 );
 assertIncludes(
   economyCallablesPath,
@@ -148,6 +149,42 @@ assertMissing(
   economyCallables,
   /userData\?\.photoURL/,
   'Öffentliche Ranglistenbilder dürfen nicht aus clientbeschreibbaren Profildaten stammen.',
+);
+
+const secureSubmitPath = resolve(functionsSource, 'secureSubmit.ts');
+const secureSubmit = await readFile(secureSubmitPath, 'utf8');
+assertIncludes(
+  secureSubmitPath,
+  secureSubmit,
+  'readSessionAnswerKey',
+  'Gewertete Abgaben müssen den unveränderlichen Sitzungs-Snapshot verwenden.',
+);
+assertIncludes(
+  secureSubmitPath,
+  secureSubmit,
+  "db.collection('trustedLeaderboard')",
+  'Gewertete Abgaben müssen die serververifizierte Rangliste aktualisieren.',
+);
+assertMissing(
+  secureSubmitPath,
+  secureSubmit,
+  /QUESTION_BANK|fallbackAnswerKey/,
+  'Gewertete Abgaben dürfen keinen aktuellen Katalog als Antwort-Fallback verwenden.',
+);
+
+const economyStatePath = resolve(functionsSource, 'economyStateCallable.ts');
+const economyState = await readFile(economyStatePath, 'utf8');
+assertIncludes(
+  economyStatePath,
+  economyState,
+  'normalizeEconomy(userData, today)',
+  'Die Login-Hydrierung muss ausschließlich die serverseitige Economy-Normalisierung verwenden.',
+);
+assertIncludes(
+  economyStatePath,
+  economyState,
+  '{ enforceAppCheck }',
+  'Die Economy-Hydrierung muss App Check erzwingen.',
 );
 
 const accountPath = resolve(functionsSource, 'account.ts');
@@ -265,6 +302,12 @@ assertIncludes(
   firebaseService,
   "collection(db, 'trustedLeaderboard')",
   'Der Client darf nur die serververifizierte Rangliste lesen.',
+);
+assertIncludes(
+  firebaseServicePath,
+  firebaseService,
+  'getServerEconomyState',
+  'Der erste Login muss eine autoritative Economy-Hydrierung durchführen können.',
 );
 assertMissing(
   firebaseServicePath,
