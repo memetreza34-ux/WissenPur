@@ -1,5 +1,5 @@
 import { getAI, getGenerativeModel, GoogleAIBackend, Schema } from 'firebase/ai';
-import { app } from '../firebase';
+import { app, auth } from '../firebase';
 import { CategoryId, Difficulty, Question } from '../types';
 
 const MODEL_NAME = 'gemini-3.5-flash-lite';
@@ -123,6 +123,7 @@ export const generateQuestions = async (
   difficulty: Difficulty | 'all',
   count: number = 10
 ): Promise<Question[] | null> => {
+  const expectedUser = auth.currentUser;
   const safeCategory = normalizeTopic(category);
   const questionCategory = resolveQuestionCategory(safeCategory);
   const safeCount = Math.min(MAX_QUESTION_COUNT, Math.max(1, Math.trunc(count) || 10));
@@ -161,6 +162,11 @@ Variations-Seed: ${seed}`;
     });
 
     const result = await model.generateContent(prompt);
+    if (auth.currentUser !== expectedUser) {
+      console.warn('KI-Ergebnis wurde verworfen, weil sich die Kontositzung geändert hat.');
+      return null;
+    }
+
     const jsonText = result.response.text().trim();
     if (!jsonText) return null;
 
