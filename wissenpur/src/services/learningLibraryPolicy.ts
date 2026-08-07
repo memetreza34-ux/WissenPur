@@ -1,4 +1,5 @@
-import type { CustomQuiz, Question } from '../types';
+import type { CustomQuiz, Difficulty, Question } from '../types';
+import type { SRSData } from './srsService';
 import {
   estimateLearningLibraryBytes,
   MAX_IMPORTED_QUESTIONS,
@@ -10,50 +11,213 @@ import {
 export interface LearningLibraryPolicyResult {
   decks: CustomQuiz[];
   changed: boolean;
-  reason: 'none' | 'deck-limit' | 'question-limit' | 'byte-limit' | 'invalid-entry';
+  reason: 'none' | 'deck-limit' | 'question-limit' | 'byte-limit' | 'invalid-entry' | 'duplicate-id';
 }
 
-const validQuestion = (value: unknown): value is Question => {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  const question = value as Partial<Question>;
-  return typeof question.id === 'string' && question.id.length > 0 && question.id.length <= 150 &&
-    typeof question.question === 'string' && question.question.length > 0 && question.question.length <= 500 &&
-    Array.isArray(question.options) && question.options.length >= 2 && question.options.length <= 6 &&
-    question.options.every((option) => typeof option === 'string' && option.length > 0 && option.length <= 250) &&
-    typeof question.correctAnswer === 'number' && Number.isInteger(question.correctAnswer) &&
-    question.correctAnswer >= 0 && question.correctAnswer < question.options.length &&
-    typeof question.explanation === 'string' && question.explanation.length <= 2_000;
+interface NormalizedValue<T> {
+  value: T | null;
+  changed: boolean;
+  duplicateId: boolean;
+}
+
+const normalizeString = (value: unknown, maxLength: number): string =>
+  typeof value === 'string'
+    ? value.trim().replace(/\s+/g, ' ').slice(0, maxLength)
+    : '';
+
+const normalizeDifficulty = (value: unknown): Difficulty | undefined =>
+  value === 'leicht' || value === 'mittel' || value === 'schwer'
+    ? value
+    : undefined;
+
+const normalizeSrsData = (value: unknown): SRSData | undefined => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const data = value as Record<string, unknown>;
+  if (
+    typeof data.interval !== 'number' || !Number.isFinite(data.interval) || data.interval < 0 || data.interval > 36_500 ||
+    typeof data.easeFactor !== 'number' || !Number.isFinite(data.easeFactor) || data.easeFactor < 1.3 || data.easeFactor > 5 ||
+    typeof data.repetitions !== 'number' || !Number.isInteger(data.repetitions) || data.repetitions < 0 || data.repetitions > 10_000 ||
+    typeof data.nextReviewDate !== 'number' || !Number.isFinite(data.nextReviewDate) || data.nextReviewDate < 0
+  ) return undefined;
+  return {
+    interval: data.interval,
+    easeFactor: data.easeFactor,
+    repetitions: data.repetitions,
+    nextReviewDate: data.nextReviewDate,
+  };
 };
 
-const normalizeDeck = (value: unknown): CustomQuiz | null => {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const deck = value as Partial<CustomQuiz>;
-  if (
-    typeof deck.id !== 'string' || !deck.id.trim() || deck.id.length > 150 ||
-    typeof deck.title !== 'string' || !deck.title.trim() || deck.title.length > 100 ||
-    typeof deck.createdAt !== 'number' || !Number.isFinite(deck.createdAt) ||
-    !Array.isArray(deck.questions)
-  ) return null;
+const safeHttpsUrl = (value: unknown): string | undefined => {
+  const candidate = normalizeString(value, 1_000);
+  if (!candidate) return undefined;
+  try {
+    const parsed = new URL(candidate);
+    return parsed.protocol === 'https:' ? parsed.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+};
 
-  const questions = deck.questions
-    .filter(validQuestion)
-    .slice(0, MAX_IMPORTED_QUESTIONS);
-  if (questions.length === 0) return null;
+const makeUniqueId = (base: string, usedIds: Set<string>): { id: string; duplicate: boolean } => {
+  if (!usedIds.has(base)) {
+    usedIds.add(base);
+    return { id: base, duplicate: false };
+  }
+
+  let suffix = 2;
+  let candidate = `${base}-${suffix}`;
+  while (usedIds.has(candidate)) {
+    suffix += 1;
+    candidate = `${base}-${suffix}`;
+  }
+  usedIds.add(candidate);
+  return { id: candidate.slice(0, 180), duplicate: true };
+};
+
+const normalizeQuestion = (
+  value: unknown,
+  usedQuestionIds: Set<string>,
+): NormalizedValue<Question> => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { value: null, changed: true, duplicateId: false };
+  }
+
+  const raw = value as Record<string, unknown>;
+  const baseId = normalizeString(raw.id, 150);
+  const question = normalizeString(raw.question, 500);
+  const options = Array.isArray(raw.options)
+    ? raw.options.map((option) => normalizeString(option, 250)).filter(Boolean).slice(0, 6)
+    : [];
+  const normalizedOptions = options.map((option) => option.toLocaleLowerCase('de-DE'));
+  const correctAnswer = raw.correctAnswer;
+  const explanation = normalizeString(raw.explanation, 2_000);
+
+  if (
+    !baseId ||
+    !question ||
+    options.length < 2 ||
+    new Set(normalizedOptions).size !== options.length ||
+    typeof correctAnswer !== 'number' ||
+    !Number.isInteger(correctAnswer) ||
+    correctAnswer < 0 ||
+    correctAnswer >= options.length ||
+    !explanation
+  ) {
+    return { value: null, changed: true, duplicateId: false };
+  }
+
+  const uniqueId = makeUniqueId(baseId, usedQuestionIds);
+  const category = normalizeString(raw.category, 50) || 'allgemein';
+  const difficulty = normalizeDifficulty(raw.difficulty);
+  const imageUrl = safeHttpsUrl(raw.imageUrl);
+  const srsData = normalizeSrsData(raw.srsData);
+  const allowedKeys = new Set([
+    'id', 'category', 'question', 'options', 'correctAnswer', 'explanation',
+    'difficulty', 'imageUrl', 'srsData',
+  ]);
+
+  const normalized: Question = {
+    id: uniqueId.id,
+    category,
+    question,
+    options,
+    correctAnswer,
+    explanation,
+    ...(difficulty ? { difficulty } : {}),
+    ...(imageUrl ? { imageUrl } : {}),
+    ...(srsData ? { srsData } : {}),
+  };
+
+  const changed = uniqueId.duplicate ||
+    Object.keys(raw).some((key) => !allowedKeys.has(key)) ||
+    raw.id !== normalized.id ||
+    raw.category !== normalized.category ||
+    raw.question !== normalized.question ||
+    !Array.isArray(raw.options) ||
+    raw.options.length !== normalized.options.length ||
+    raw.options.some((option, index) => option !== normalized.options[index]) ||
+    raw.explanation !== normalized.explanation ||
+    (raw.difficulty !== undefined && raw.difficulty !== difficulty) ||
+    (raw.imageUrl !== undefined && raw.imageUrl !== imageUrl) ||
+    (raw.srsData !== undefined && !srsData);
+
+  return { value: normalized, changed, duplicateId: uniqueId.duplicate };
+};
+
+const normalizeDeck = (
+  value: unknown,
+  usedDeckIds: Set<string>,
+  usedQuestionIds: Set<string>,
+): NormalizedValue<CustomQuiz> => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { value: null, changed: true, duplicateId: false };
+  }
+
+  const raw = value as Record<string, unknown>;
+  const baseId = normalizeString(raw.id, 150);
+  const title = normalizeString(raw.title, 100);
+  const createdAt = raw.createdAt;
+  if (
+    !baseId ||
+    !title ||
+    typeof createdAt !== 'number' ||
+    !Number.isFinite(createdAt) ||
+    !Array.isArray(raw.questions)
+  ) {
+    return { value: null, changed: true, duplicateId: false };
+  }
+
+  const uniqueId = makeUniqueId(baseId, usedDeckIds);
+  const normalizedQuestions: Question[] = [];
+  let changed = uniqueId.duplicate || raw.questions.length > MAX_IMPORTED_QUESTIONS;
+  let duplicateId = uniqueId.duplicate;
+
+  for (const rawQuestion of raw.questions.slice(0, MAX_IMPORTED_QUESTIONS)) {
+    const normalizedQuestion = normalizeQuestion(rawQuestion, usedQuestionIds);
+    if (!normalizedQuestion.value) {
+      changed = true;
+      continue;
+    }
+    normalizedQuestions.push(normalizedQuestion.value);
+    changed ||= normalizedQuestion.changed;
+    duplicateId ||= normalizedQuestion.duplicateId;
+  }
+
+  if (normalizedQuestions.length === 0) {
+    return { value: null, changed: true, duplicateId };
+  }
+
+  const normalizedCreatedAt = Math.max(0, Math.trunc(createdAt));
+  const allowedKeys = new Set(['id', 'title', 'questions', 'createdAt']);
+  changed ||= Object.keys(raw).some((key) => !allowedKeys.has(key)) ||
+    raw.id !== uniqueId.id ||
+    raw.title !== title ||
+    raw.createdAt !== normalizedCreatedAt ||
+    normalizedQuestions.length !== raw.questions.length;
 
   return {
-    id: deck.id.trim(),
-    title: deck.title.trim(),
-    createdAt: Math.max(0, Math.trunc(deck.createdAt)),
-    questions,
+    value: {
+      id: uniqueId.id,
+      title,
+      createdAt: normalizedCreatedAt,
+      questions: normalizedQuestions,
+    },
+    changed,
+    duplicateId,
   };
 };
 
 export const applyLearningLibraryPolicy = (value: unknown): LearningLibraryPolicyResult => {
+  if (value === undefined || value === null) {
+    return { decks: [], changed: false, reason: 'none' };
+  }
   if (!Array.isArray(value)) {
-    return { decks: [], changed: value !== undefined && value !== null, reason: 'invalid-entry' };
+    return { decks: [], changed: true, reason: 'invalid-entry' };
   }
 
   const decks: CustomQuiz[] = [];
+  const usedDeckIds = new Set<string>();
+  const usedQuestionIds = new Set<string>();
   let totalQuestions = 0;
   let changed = false;
   let reason: LearningLibraryPolicyResult['reason'] = 'none';
@@ -65,11 +229,17 @@ export const applyLearningLibraryPolicy = (value: unknown): LearningLibraryPolic
       break;
     }
 
-    const deck = normalizeDeck(rawDeck);
-    if (!deck) {
+    const normalizedDeck = normalizeDeck(rawDeck, usedDeckIds, usedQuestionIds);
+    if (!normalizedDeck.value) {
       changed = true;
       reason = reason === 'none' ? 'invalid-entry' : reason;
       continue;
+    }
+    if (normalizedDeck.changed) {
+      changed = true;
+      reason = reason === 'none'
+        ? normalizedDeck.duplicateId ? 'duplicate-id' : 'invalid-entry'
+        : reason;
     }
 
     const remainingQuestions = MAX_LIBRARY_QUESTIONS - totalQuestions;
@@ -79,10 +249,10 @@ export const applyLearningLibraryPolicy = (value: unknown): LearningLibraryPolic
       break;
     }
 
-    const limitedDeck = deck.questions.length > remainingQuestions
-      ? { ...deck, questions: deck.questions.slice(0, remainingQuestions) }
-      : deck;
-    if (limitedDeck.questions.length !== deck.questions.length) {
+    const limitedDeck = normalizedDeck.value.questions.length > remainingQuestions
+      ? { ...normalizedDeck.value, questions: normalizedDeck.value.questions.slice(0, remainingQuestions) }
+      : normalizedDeck.value;
+    if (limitedDeck.questions.length !== normalizedDeck.value.questions.length) {
       changed = true;
       reason = reason === 'none' ? 'question-limit' : reason;
     }
