@@ -221,10 +221,11 @@ assert.deepEqual(
   'Lokale Decks dürfen durch das globale Limit nicht hinter Cloud-Decks verdrängt werden.',
 );
 
-const [main, releaseApp, manager, boundary, flashcards, importPanel, storage, firebaseService] = await Promise.all([
+const [main, releaseApp, manager, learningPlan, boundary, flashcards, importPanel, storage, firebaseService] = await Promise.all([
   readFile(resolve(repoRoot, 'wissenpur/src/main.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/ReleaseApp.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/components/LearningLibraryManager.tsx'), 'utf8'),
+  readFile(resolve(repoRoot, 'wissenpur/src/components/LearningPlanPanel.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/components/AccountSessionBoundary.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/pages/Flashcards.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/components/LearningSetImportPanel.tsx'), 'utf8'),
@@ -259,6 +260,10 @@ assert.match(manager, /validateLibraryLimits/);
 assert.match(manager, /syncStatsBestEffort/);
 assert.match(manager, /\.catch\(\(error: unknown\)/);
 assert.match(manager, /wissenpur:library-updated/);
+assert.match(learningPlan, /getDueQuestionsFromLibrary/);
+assert.match(learningPlan, /getDueQuestionsFromLibrary\(getStats\(\)\.customQuizzes \|\| \[\], now\)/);
+assert.match(learningPlan, /window\.setInterval\(refresh, REVIEW_REFRESH_MS\)/);
+assert.doesNotMatch(learningPlan, /\.flatMap\(\(deck\) => deck\.questions\)[\s\S]{0,120}nextReviewDate/);
 assert.match(importPanel, /MAX_LIBRARY_QUESTIONS/);
 assert.match(importPanel, /MAX_LIBRARY_SERIALIZED_BYTES/);
 assert.match(importPanel, /estimateLearningLibraryBytes/);
@@ -274,4 +279,4 @@ assert.match(firebaseService, /wissenpur:library-updated/);
 assert.match(boundary, /wissenpur:library-updated/);
 assert.match(boundary, /contentRevision/);
 
-console.log('Lernset-Import, lokale/Cloud-Merge-Policy, zentrale Bibliotheksrichtlinie, fällige Heute-Queue, SRS-State-Refresh, Zeit-Refresh, Rücknavigation, Offline-Speicherung und Probeprüfung geprüft.');
+console.log('Lernset-Import, gemeinsame Due-Queue in Heute/Bibliothek/Lernplan, lokale/Cloud-Merge-Policy, SRS-State-Refresh, Zeit-Refresh, Rücknavigation, Offline-Speicherung und Probeprüfung geprüft.');
