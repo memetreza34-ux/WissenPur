@@ -10,7 +10,7 @@ import {
 import { CATEGORIES } from '../data';
 import { auth } from '../firebase';
 import { syncUserStats } from '../services/firebaseService';
-import { assertLearningLibraryWithinPolicy } from '../services/learningLibraryPolicy';
+import { applyLearningLibraryPolicy } from '../services/learningLibraryPolicy';
 import { getStats, saveStats } from '../storage';
 import type { CategoryId, CustomQuiz, Difficulty, Question, UserStats } from '../types';
 import { Button, Card } from './UI';
@@ -120,11 +120,16 @@ export const ManualLearningSetPanel = () => {
       questions,
     };
     const currentStats = getStats();
-    const nextDecks = [...(currentStats.customQuizzes || []), deck];
+    const candidateDecks = [...(currentStats.customQuizzes || []), deck];
 
     try {
-      assertLearningLibraryWithinPolicy(nextDecks);
-      const nextStats: UserStats = { ...currentStats, customQuizzes: nextDecks };
+      const policy = applyLearningLibraryPolicy(candidateDecks);
+      const savedDeck = policy.decks.find((entry) => entry.id === deck.id);
+      if (!savedDeck || savedDeck.questions.length !== questions.length) {
+        throw new Error('Die Bibliothek hat ihr Größenlimit erreicht. Lösche oder verkleinere zuerst ein Lernset.');
+      }
+
+      const nextStats: UserStats = { ...currentStats, customQuizzes: policy.decks };
       saveStats(nextStats);
       window.dispatchEvent(new CustomEvent<UserStats>('wissenpur:stats-updated', { detail: nextStats }));
       window.dispatchEvent(new Event('wissenpur:library-updated'));
