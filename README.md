@@ -34,8 +34,9 @@ Jede neue Auth-Sitzung lädt `getMyEconomyState` über eine App-Check-geschützt
 Während dieser Hydrierung:
 
 - zeigt die Oberfläche keine Gastpunkte als Kontopunkte,
-- sind gewertete Runden und Shop-Aktionen gesperrt,
+- sind gewertete Runden, Rangliste, Daily-Rewards und Shop-Aktionen gesperrt,
 - können lokale Übungsrunden keine Economy-Werte verändern,
+- sind asynchrone Reads/Writes an die erwartete Firebase-UID gebunden,
 - werden verspätete Antworten einer alten Auth-Sitzung nach Logout/Kontowechsel verworfen.
 
 ### Gastdaten beim ersten Login
