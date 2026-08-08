@@ -1,5 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { MotionConfig } from 'motion/react';
 import { AccountPrivacyPanel } from './components/AccountPrivacyPanel';
 import { AccountSessionBoundary } from './components/AccountSessionBoundary';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
@@ -14,15 +15,17 @@ import './index.css';
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <AppErrorBoundary>
-      <AccountSessionBoundary>
-        <ReleaseApp />
-        <LearningAnalyticsPanel />
-        <LearningLibraryManager />
-        <ManualLearningSetPanel />
-        <LearningPlanPanel />
-        <LegalPanel />
-        <AccountPrivacyPanel />
-      </AccountSessionBoundary>
+      <MotionConfig reducedMotion="user">
+        <AccountSessionBoundary>
+          <ReleaseApp />
+          <LearningAnalyticsPanel />
+          <LearningLibraryManager />
+          <ManualLearningSetPanel />
+          <LearningPlanPanel />
+          <LegalPanel />
+          <AccountPrivacyPanel />
+        </AccountSessionBoundary>
+      </MotionConfig>
     </AppErrorBoundary>
   </StrictMode>,
 );
