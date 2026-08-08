@@ -149,6 +149,40 @@ service cloud.firestore {
       ]);
     }
 
+    function isValidTrustedLeaderboard(userId, data) {
+      return data.keys().hasOnly([
+               'uid',
+               'displayName',
+               'photoURL',
+               'totalPoints',
+               'economyVersion',
+               'updatedAt'
+             ]) &&
+             data.keys().hasAll([
+               'uid',
+               'displayName',
+               'photoURL',
+               'totalPoints',
+               'economyVersion'
+             ]) &&
+             data.uid is string &&
+             data.uid == userId &&
+             data.displayName is string &&
+             data.displayName.size() > 0 &&
+             data.displayName.size() <= 100 &&
+             data.photoURL is string &&
+             data.photoURL.size() <= 1000 &&
+             (
+               data.photoURL == '' ||
+               data.photoURL.matches('^/avatars/[A-Za-z0-9-]+[.]svg$')
+             ) &&
+             data.totalPoints is int &&
+             data.totalPoints >= 0 &&
+             data.totalPoints <= 100000000 &&
+             data.economyVersion == 1 &&
+             (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
 
@@ -166,11 +200,12 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Public reads contain the minimum display profile and server-verified
-    // point total. Every browser write is denied, including admin claims;
-    // Cloud Functions use the Admin SDK and bypass client rules.
+    // Public reads contain only the minimal server-verified display profile.
+    // If an Admin SDK regression ever writes extra/sensitive fields or an
+    // external avatar URL, the document fails closed and is not public-readable.
+    // Browser writes remain denied, including admin claims.
     match /trustedLeaderboard/{userId} {
-      allow read: if true;
+      allow read: if isValidTrustedLeaderboard(userId, resource.data);
       allow write: if false;
     }
 
