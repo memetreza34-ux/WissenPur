@@ -6,10 +6,12 @@ import { fileURLToPath } from 'node:url';
 const currentDir = resolve(fileURLToPath(new URL('.', import.meta.url)));
 const repoRoot = resolve(currentDir, '../..');
 
-const [dialogHook, importPanel, privacyPanel] = await Promise.all([
+const [dialogHook, importPanel, privacyPanel, main, indexCss] = await Promise.all([
   readFile(resolve(repoRoot, 'wissenpur/src/hooks/useAccessibleDialog.ts'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/components/LearningSetImportPanel.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/components/AccountPrivacyPanel.tsx'), 'utf8'),
+  readFile(resolve(repoRoot, 'wissenpur/src/main.tsx'), 'utf8'),
+  readFile(resolve(repoRoot, 'wissenpur/src/index.css'), 'utf8'),
 ]);
 
 assert.match(dialogHook, /FOCUSABLE_SELECTOR/);
@@ -40,4 +42,11 @@ assert.match(privacyPanel, /aria-label="Fenster schließen"[\s\S]*?disabled=\{is
 assert.match(privacyPanel, /role="status" aria-live="polite"/);
 assert.match(privacyPanel, /focus-visible:ring-rose-500/);
 
-console.log('Dialog-Fokusfang, Escape, Fokus-Rückgabe sowie Import- und Datenschutzdialog-A11y geprüft.');
+assert.match(main, /import \{ MotionConfig \} from 'motion\/react'/);
+assert.match(main, /<MotionConfig reducedMotion="user">/);
+assert.match(indexCss, /@media \(prefers-reduced-motion: reduce\)/);
+assert.match(indexCss, /animation-duration: 0\.01ms !important/);
+assert.match(indexCss, /transition-duration: 0\.01ms !important/);
+assert.match(indexCss, /\.animate-shimmer[\s\S]*?animation: none !important/);
+
+console.log('Dialog-A11y, Tastaturfokus und reduzierte Bewegung sind regressiv abgesichert.');
