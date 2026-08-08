@@ -66,7 +66,20 @@ assert.match(
   /const uid = request\.auth\?\.uid;\s*if \(uid\) await enforceGlobalCallableRateLimit\(uid\);/,
   'Angemeldete Ranglistenleser müssen denselben globalen Callable-Limiter verwenden.',
 );
+assert.match(
+  leaderboardCallable,
+  /getEffectivePublicLeaderboardLimit\(normalizedLimit, Boolean\(uid\)\)/,
+  'Gastzugriffe müssen einen engeren serverseitigen Antwortdeckel verwenden.',
+);
+assert.match(leaderboardCallable, /const PUBLIC_CACHE_TTL_MS = 15_000/);
+assert.match(leaderboardCallable, /publicLeaderboardCache\.expiresAt > now/);
+assert.match(leaderboardCallable, /publicLeaderboardCache\.sourceLimit >= fetchLimit/);
 assert.match(leaderboardCallable, /const fetchLimit = Math\.min\(200, requestedLimit \* 2\)/);
+assert.doesNotMatch(
+  leaderboardCallable,
+  /ipAddress|request\.rawRequest|x-forwarded-for|remoteAddress/,
+  'Der Gast-Ranglistenschutz darf keine IP-Adressen speichern oder auswerten.',
+);
 
 const exportBlock = account.slice(
   account.indexOf('export const exportMyData'),
@@ -83,4 +96,4 @@ assert.match(deleteBlock, /batch\.delete\(db\.collection\('serverRateLimits'\)\.
 assert.match(rules, /match \/serverRateLimits\/\{userId\}/);
 assert.match(rules, /allow read, write: if false;/);
 
-console.log('Globale Callable-, Ranglisten-, Export- und Quizstart-Rate-Limits sowie Löschbarkeit geprüft.');
+console.log('Globale Callable-, Gast-Ranglisten-, Export- und Quizstart-Limits sowie datensparsames Caching geprüft.');
