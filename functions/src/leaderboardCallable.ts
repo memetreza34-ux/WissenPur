@@ -6,15 +6,66 @@ import {
 import { enforceGlobalCallableRateLimit } from './callableRateLimit.js';
 import { db, enforceAppCheck } from './database.js';
 import {
+  getEffectivePublicLeaderboardLimit,
   normalizePublicLeaderboardLimit,
   sanitizePublicLeaderboardAvatar as safeAvatar,
   sanitizePublicLeaderboardEntry as sanitizeEntry,
+  type PublicLeaderboardEntry,
 } from './leaderboardPublicCore.js';
 import { logUnexpectedServerError } from './privacyLogger.js';
 
 interface LeaderboardRequest {
   limit?: unknown;
 }
+
+interface LeaderboardCache {
+  expiresAt: number;
+  sourceLimit: number;
+  entries: PublicLeaderboardEntry[];
+}
+
+const PUBLIC_CACHE_TTL_MS = 15_000;
+let publicLeaderboardCache: LeaderboardCache | null = null;
+
+const readSanitizedLeaderboard = async (
+  fetchLimit: number,
+): Promise<PublicLeaderboardEntry[]> => {
+  const now = Date.now();
+  if (
+    publicLeaderboardCache &&
+    publicLeaderboardCache.expiresAt > now &&
+    publicLeaderboardCache.sourceLimit >= fetchLimit
+  ) {
+    return publicLeaderboardCache.entries;
+  }
+
+  const snapshot = await db
+    .collection('trustedLeaderboard')
+    .orderBy('totalPoints', 'desc')
+    .limit(fetchLimit)
+    .get();
+
+  const entries: PublicLeaderboardEntry[] = [];
+  for (const document of snapshot.docs) {
+    const entry = sanitizeEntry(
+      document.id,
+      document.data() as Record<string, unknown>,
+    );
+    if (!entry) continue;
+
+    // Defense in depth: the pure entry sanitizer already performs this
+    // normalization; keep the transport boundary explicitly same-origin.
+    entry.photoURL = safeAvatar(entry.photoURL);
+    entries.push(entry);
+  }
+
+  publicLeaderboardCache = {
+    expiresAt: now + PUBLIC_CACHE_TTL_MS,
+    sourceLimit: fetchLimit,
+    entries,
+  };
+  return entries;
+};
 
 /**
  * Public leaderboard reads flow through a callable instead of a browser
@@ -28,34 +79,17 @@ export const getTrustedLeaderboard = onCall<LeaderboardRequest>(
       const uid = request.auth?.uid;
       if (uid) await enforceGlobalCallableRateLimit(uid);
 
-      const requestedLimit = normalizePublicLeaderboardLimit(request.data?.limit);
-      if (requestedLimit === null) {
+      const normalizedLimit = normalizePublicLeaderboardLimit(request.data?.limit);
+      if (normalizedLimit === null) {
         throw new HttpsError('invalid-argument', 'Das Ranglistenlimit ist ungültig.');
       }
+      const requestedLimit = getEffectivePublicLeaderboardLimit(normalizedLimit, Boolean(uid));
 
-      // Fetch a little extra so malformed historical rows can be skipped
-      // without exposing them or unexpectedly returning an empty list.
+      // Fetch a little extra so malformed historical rows can be skipped.
+      // Guests are capped more tightly and all callers benefit from a short
+      // per-instance public cache without storing IP addresses or account IDs.
       const fetchLimit = Math.min(200, requestedLimit * 2);
-      const snapshot = await db
-        .collection('trustedLeaderboard')
-        .orderBy('totalPoints', 'desc')
-        .limit(fetchLimit)
-        .get();
-
-      const entries = [];
-      for (const document of snapshot.docs) {
-        const entry = sanitizeEntry(
-          document.id,
-          document.data() as Record<string, unknown>,
-        );
-        if (!entry) continue;
-
-        // Defense in depth: the pure entry sanitizer already performs this
-        // normalization; keep the transport boundary explicitly same-origin.
-        entry.photoURL = safeAvatar(entry.photoURL);
-        entries.push(entry);
-        if (entries.length >= requestedLimit) break;
-      }
+      const entries = (await readSanitizedLeaderboard(fetchLimit)).slice(0, requestedLimit);
 
       return { entries };
     } catch (error) {
