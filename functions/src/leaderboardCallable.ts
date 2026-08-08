@@ -5,10 +5,7 @@ import {
 } from 'firebase-functions/v2/https';
 import { enforceGlobalCallableRateLimit } from './callableRateLimit.js';
 import { db, enforceAppCheck } from './database.js';
-import {
-  EconomyDomainError,
-  stringOrNull,
-} from './economyCore.js';
+import { stringOrNull } from './economyCore.js';
 import { logUnexpectedServerError } from './privacyLogger.js';
 
 interface LeaderboardRequest {
@@ -100,7 +97,7 @@ export const getTrustedLeaderboard = onCall<LeaderboardRequest>(
 
       return { entries };
     } catch (error) {
-      if (error instanceof HttpsError || error instanceof EconomyDomainError) throw error;
+      if (error instanceof HttpsError) throw error;
       logUnexpectedServerError('Failed to read trusted leaderboard', error);
       throw new HttpsError('internal', 'Die Rangliste konnte nicht sicher geladen werden.');
     }
