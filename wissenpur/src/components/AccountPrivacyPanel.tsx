@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Download, ShieldCheck, Trash2, X } from 'lucide-react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { auth } from '../firebase';
+import { useAccessibleDialog } from '../hooks/useAccessibleDialog';
 import {
   deleteCurrentAccount,
   exportCurrentAccountData,
@@ -57,6 +58,14 @@ export const AccountPrivacyPanel = () => {
 
   useEffect(() => onAuthStateChanged(auth, setUser), []);
 
+  const closePanel = () => {
+    if (isBusy) return;
+    setIsOpen(false);
+    setIsDangerOpen(false);
+    setDeleteConfirmation('');
+  };
+  const dialogRef = useAccessibleDialog(isOpen, closePanel);
+
   const exportData = async () => {
     setIsBusy(true);
     setMessage(null);
@@ -107,22 +116,26 @@ export const AccountPrivacyPanel = () => {
         type="button"
         onClick={() => {
           setMessage(null);
+          setIsDangerOpen(false);
+          setDeleteConfirmation('');
           setIsOpen(true);
         }}
         className="fixed bottom-28 right-4 z-[80] flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 text-xs font-black text-slate-700 shadow-xl backdrop-blur-xl hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-700 dark:bg-slate-900/95 dark:text-slate-100"
         aria-label="Datenschutz und Kontodaten öffnen"
       >
-        <ShieldCheck size={18} className="text-blue-600" />
+        <ShieldCheck size={18} className="text-blue-600" aria-hidden="true" />
         Daten
       </button>
 
       {isOpen && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm">
           <section
+            ref={dialogRef}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby="privacy-panel-title"
-            className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+            className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl outline-none dark:border-slate-700 dark:bg-slate-900"
           >
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -136,10 +149,11 @@ export const AccountPrivacyPanel = () => {
               <button
                 type="button"
                 aria-label="Fenster schließen"
-                onClick={() => setIsOpen(false)}
-                className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-white"
+                disabled={isBusy}
+                onClick={closePanel}
+                className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-slate-800 dark:hover:text-white"
               >
-                <X size={20} />
+                <X size={20} aria-hidden="true" />
               </button>
             </div>
 
@@ -149,7 +163,7 @@ export const AccountPrivacyPanel = () => {
             </div>
 
             {message && (
-              <div role="status" className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm font-bold text-blue-900 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-100">
+              <div role="status" aria-live="polite" className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm font-bold text-blue-900 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-100">
                 {message}
               </div>
             )}
@@ -157,7 +171,7 @@ export const AccountPrivacyPanel = () => {
             <div className="mt-6 space-y-3">
               <div className="rounded-2xl border border-slate-200 p-5 dark:border-slate-700">
                 <div className="flex items-start gap-3">
-                  <Download className="mt-0.5 shrink-0 text-blue-600" size={22} />
+                  <Download className="mt-0.5 shrink-0 text-blue-600" size={22} aria-hidden="true" />
                   <div>
                     <h3 className="font-black text-slate-950 dark:text-white">Daten exportieren</h3>
                     <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
@@ -166,14 +180,14 @@ export const AccountPrivacyPanel = () => {
                   </div>
                 </div>
                 <Button fullWidth variant="outline" className="mt-4" disabled={isBusy} onClick={exportData}>
-                  <Download size={17} />
+                  <Download size={17} aria-hidden="true" />
                   {isBusy ? 'Export wird erstellt …' : 'JSON-Export herunterladen'}
                 </Button>
               </div>
 
               <div className="rounded-2xl border border-rose-200 bg-rose-50/60 p-5 dark:border-rose-900 dark:bg-rose-950/20">
                 <div className="flex items-start gap-3">
-                  <Trash2 className="mt-0.5 shrink-0 text-rose-600" size={22} />
+                  <Trash2 className="mt-0.5 shrink-0 text-rose-600" size={22} aria-hidden="true" />
                   <div>
                     <h3 className="font-black text-rose-900 dark:text-rose-100">Konto vollständig löschen</h3>
                     <p className="mt-1 text-sm text-rose-800/80 dark:text-rose-200/80">
@@ -202,7 +216,7 @@ export const AccountPrivacyPanel = () => {
                       value={deleteConfirmation}
                       onChange={(event) => setDeleteConfirmation(event.target.value)}
                       autoComplete="off"
-                      className="w-full rounded-xl border-2 border-rose-200 bg-white px-4 py-3 font-black outline-none focus:border-rose-500 dark:border-rose-900 dark:bg-slate-950"
+                      className="w-full rounded-xl border-2 border-rose-200 bg-white px-4 py-3 font-black outline-none focus:border-rose-500 focus-visible:ring-2 focus-visible:ring-rose-500 dark:border-rose-900 dark:bg-slate-950"
                     />
                     <div className="grid grid-cols-2 gap-3">
                       <Button
