@@ -1,6 +1,34 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { parse } from 'dotenv';
+
+const parseEnvText = (text) => {
+  const values = {};
+
+  for (const rawLine of text.split(/\r?\n/)) {
+    let line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+    if (line.startsWith('export ')) line = line.slice(7).trim();
+
+    const separator = line.indexOf('=');
+    if (separator <= 0) continue;
+
+    const key = line.slice(0, separator).trim();
+    let value = line.slice(separator + 1).trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) continue;
+
+    if (
+      value.length >= 2 &&
+      ((value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'")))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    values[key] = value;
+  }
+
+  return values;
+};
 
 const protectedProcessKeys = new Set(Object.keys(process.env));
 const envFiles = ['.env', '.env.production', '.env.local', '.env.production.local'];
@@ -8,7 +36,7 @@ const envFiles = ['.env', '.env.production', '.env.local', '.env.production.loca
 for (const filename of envFiles) {
   const filepath = resolve(process.cwd(), filename);
   if (!existsSync(filepath)) continue;
-  const values = parse(readFileSync(filepath));
+  const values = parseEnvText(readFileSync(filepath, 'utf8'));
   for (const [key, value] of Object.entries(values)) {
     if (!protectedProcessKeys.has(key)) process.env[key] = value;
   }
