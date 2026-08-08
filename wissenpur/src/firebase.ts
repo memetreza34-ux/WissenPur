@@ -24,32 +24,39 @@ const clearLocalAccountCache = () => {
   window.dispatchEvent(new CustomEvent('wissenpur:account-storage-reset'));
 };
 
+const browserErrorMetadata = (error: unknown) => {
+  const candidate = error && typeof error === 'object'
+    ? error as { name?: unknown; code?: unknown }
+    : {};
+  return {
+    errorName: typeof candidate.name === 'string' ? candidate.name.slice(0, 80) : 'UnknownError',
+    ...(typeof candidate.code === 'string' ? { errorCode: candidate.code.slice(0, 100) } : {}),
+  };
+};
+
 // Global error handler for IndexedDB to prevent crashes in restricted environments.
 if (typeof window !== 'undefined') {
-  const handleIndexedDBError = (error: unknown) => {
+  const isIndexedDBError = (error: unknown) => {
     const candidate = error as { message?: string; name?: string } | undefined;
     const message = candidate?.message || String(error);
-
-    if (
+    return (
       message.includes('Indexed Database') ||
       message.includes('IndexedDB') ||
       candidate?.name === 'IndexedDBError'
-    ) {
-      console.warn('Caught IndexedDB error, preventing crash:', message);
-      return true;
-    }
-
-    return false;
+    );
   };
 
   window.addEventListener('unhandledrejection', (event) => {
-    if (handleIndexedDBError(event.reason)) {
+    if (isIndexedDBError(event.reason)) {
+      console.warn('IndexedDB operation was blocked by the browser', browserErrorMetadata(event.reason));
       event.preventDefault();
     }
   });
 
   window.addEventListener('error', (event) => {
-    if (handleIndexedDBError(event.error || event.message)) {
+    const error = event.error || event.message;
+    if (isIndexedDBError(error)) {
+      console.warn('IndexedDB operation was blocked by the browser', browserErrorMetadata(event.error));
       event.preventDefault();
     }
   });
@@ -72,9 +79,7 @@ if (appCheckSiteKey) {
     isTokenAutoRefreshEnabled: true,
   });
 } else if (import.meta.env.PROD) {
-  console.error(
-    'Firebase App Check is not configured. Set VITE_RECAPTCHA_ENTERPRISE_SITE_KEY before releasing AI features.',
-  );
+  console.error('Firebase App Check is not configured for this production build.');
 }
 
 // Use session persistence and an in-memory Firestore cache to avoid IndexedDB failures
@@ -113,7 +118,7 @@ export const signInWithGoogle = async () => {
       return null;
     }
 
-    console.error('Error signing in with Google:', error);
+    console.error('Google sign-in failed', browserErrorMetadata(error));
     throw error;
   }
 };
