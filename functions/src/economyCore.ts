@@ -112,27 +112,27 @@ export const SHOP_CATALOG = {
   avatar1: {
     kind: 'avatar',
     cost: 200,
-    url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Aneka',
+    url: '/avatars/aneka.svg',
   },
   avatar2: {
     kind: 'avatar',
     cost: 300,
-    url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Jude',
+    url: '/avatars/jude.svg',
   },
   avatar3: {
     kind: 'avatar',
     cost: 500,
-    url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Avery',
+    url: '/avatars/avery.svg',
   },
   avatar4: {
     kind: 'avatar',
     cost: 800,
-    url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Robot1',
+    url: '/avatars/robot-blue.svg',
   },
   avatar5: {
     kind: 'avatar',
     cost: 1_000,
-    url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Robot2',
+    url: '/avatars/robot-gold.svg',
   },
   'Quiz-Gott': { kind: 'title', cost: 500 },
   Alleswisser: { kind: 'title', cost: 1_000 },
@@ -140,6 +140,14 @@ export const SHOP_CATALOG = {
 } as const;
 
 export type ShopItemId = keyof typeof SHOP_CATALOG;
+
+const LOCAL_AVATAR_URLS = new Set([
+  '/avatars/aneka.svg',
+  '/avatars/jude.svg',
+  '/avatars/avery.svg',
+  '/avatars/robot-blue.svg',
+  '/avatars/robot-gold.svg',
+]);
 
 const ACHIEVEMENTS = [
   { id: 'newbie', type: 'points', threshold: 100 },
@@ -321,7 +329,9 @@ export const normalizeEconomy = (
   };
 
   const customPhotoURL = stringOrNull(data.customPhotoURL, 1_000);
-  if (customPhotoURL) state.customPhotoURL = customPhotoURL;
+  if (customPhotoURL && LOCAL_AVATAR_URLS.has(customPhotoURL)) {
+    state.customPhotoURL = customPhotoURL;
+  }
 
   if (state.lastDailyQuestionsDate !== today) {
     state.dailyQuestionsAnswered = 0;
