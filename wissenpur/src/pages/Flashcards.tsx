@@ -39,7 +39,8 @@ const persistSrsUpdates = (updatedQuestions: Question[]) => {
   window.dispatchEvent(new CustomEvent<UserStats>('wissenpur:stats-updated', { detail: next }));
   if (auth.currentUser) {
     void syncUserStats(next).catch((error: unknown) => {
-      console.warn('Karteikartenfortschritt konnte nicht mit der Cloud synchronisiert werden.', error);
+      const errorName = error instanceof Error ? error.name.slice(0, 80) : 'UnknownError';
+      console.warn('Karteikartenfortschritt konnte nicht mit der Cloud synchronisiert werden.', { errorName });
     });
   }
 };
