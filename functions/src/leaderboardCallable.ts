@@ -5,8 +5,11 @@ import {
 } from 'firebase-functions/v2/https';
 import { enforceGlobalCallableRateLimit } from './callableRateLimit.js';
 import { db, enforceAppCheck } from './database.js';
+import {
+  EconomyDomainError,
+  stringOrNull,
+} from './economyCore.js';
 import { logUnexpectedServerError } from './privacyLogger.js';
-import { stringOrNull } from './economyCore.js';
 
 interface LeaderboardRequest {
   limit?: unknown;
@@ -35,7 +38,7 @@ const safeAvatar = (value: unknown): string => {
 
 const sanitizeEntry = (
   documentId: string,
-  value: FirebaseFirestore.DocumentData,
+  value: Record<string, unknown>,
 ): PublicLeaderboardEntry | null => {
   const uid = stringOrNull(value.uid, 128);
   const displayName = stringOrNull(value.displayName, 100);
@@ -86,7 +89,10 @@ export const getTrustedLeaderboard = onCall<LeaderboardRequest>(
 
       const entries: PublicLeaderboardEntry[] = [];
       for (const document of snapshot.docs) {
-        const entry = sanitizeEntry(document.id, document.data());
+        const entry = sanitizeEntry(
+          document.id,
+          document.data() as Record<string, unknown>,
+        );
         if (!entry) continue;
         entries.push(entry);
         if (entries.length >= requestedLimit) break;
@@ -94,7 +100,7 @@ export const getTrustedLeaderboard = onCall<LeaderboardRequest>(
 
       return { entries };
     } catch (error) {
-      if (error instanceof HttpsError) throw error;
+      if (error instanceof HttpsError || error instanceof EconomyDomainError) throw error;
       logUnexpectedServerError('Failed to read trusted leaderboard', error);
       throw new HttpsError('internal', 'Die Rangliste konnte nicht sicher geladen werden.');
     }
