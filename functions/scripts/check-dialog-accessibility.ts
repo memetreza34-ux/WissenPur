@@ -48,5 +48,6 @@ assert.match(indexCss, /@media \(prefers-reduced-motion: reduce\)/);
 assert.match(indexCss, /animation-duration: 0\.01ms !important/);
 assert.match(indexCss, /transition-duration: 0\.01ms !important/);
 assert.match(indexCss, /\.animate-shimmer[\s\S]*?animation: none !important/);
+assert.doesNotMatch(indexCss, /fonts\.googleapis\.com|fonts\.gstatic\.com/);
 
-console.log('Dialog-A11y, Tastaturfokus und reduzierte Bewegung sind regressiv abgesichert.');
+console.log('Dialog-A11y, reduzierte Bewegung und lokale Schriftstapel sind regressiv abgesichert.');
