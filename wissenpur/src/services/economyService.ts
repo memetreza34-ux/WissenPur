@@ -2,6 +2,7 @@ import { httpsCallable } from 'firebase/functions';
 import { auth } from '../firebase';
 import { Difficulty, UserStats } from '../types';
 import { functions } from './functionsClient';
+import { getPublicErrorMessage } from './publicErrorMessage';
 
 export type RankedQuizMode = 'standard' | 'daily' | 'blitz';
 export type RankedDifficulty = Difficulty | 'all';
@@ -187,11 +188,5 @@ export const consumeServerPowerUp = async (
   return result.data;
 };
 
-export const getCallableErrorMessage = (error: unknown): string => {
-  if (error && typeof error === 'object' && 'message' in error) {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === 'string' && message.trim()) return message;
-  }
-
-  return 'Die Online-Funktion ist momentan nicht verfügbar.';
-};
+export const getCallableErrorMessage = (error: unknown): string =>
+  getPublicErrorMessage(error, 'Die Online-Funktion ist momentan nicht verfügbar.');
