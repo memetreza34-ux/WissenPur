@@ -1,6 +1,5 @@
 import { randomInt } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions';
 import {
   HttpsError,
   onCall,
@@ -21,6 +20,7 @@ import {
   toPublicEconomy,
   type EconomyState,
 } from './economyCore.js';
+import { logUnexpectedServerError } from './privacyLogger.js';
 
 interface PurchaseRequest {
   itemId?: unknown;
@@ -57,7 +57,7 @@ function toHttpsError(error: unknown): HttpsError {
   if (error instanceof EconomyDomainError) {
     return new HttpsError(error.code, error.message);
   }
-  logger.error('Unexpected economy action error', error);
+  logUnexpectedServerError('Unexpected economy action error', error);
   return new HttpsError('internal', 'Die Aktion konnte nicht sicher verarbeitet werden.');
 }
 
