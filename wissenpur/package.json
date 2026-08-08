@@ -6,8 +6,10 @@
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "vite build",
-    "build:release": "npm run lint && npm run check:release && vite build",
+    "build:release": "npm run lint && npm run preflight:production && vite build",
     "check:release": "node scripts/check-release-env.mjs",
+    "preflight:production": "node scripts/production-preflight.mjs",
+    "preflight:self-test": "node scripts/production-preflight.mjs --self-test",
     "preview": "vite preview",
     "clean": "node scripts/clean.mjs",
     "lint": "tsc --noEmit"
