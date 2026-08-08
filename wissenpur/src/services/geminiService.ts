@@ -50,7 +50,10 @@ const cleanText = (value: string, maxLength: number) =>
     .trim()
     .slice(0, maxLength);
 
-const normalizeTopic = (topic: string) => cleanText(topic, MAX_TOPIC_LENGTH) || 'Allgemeinwissen';
+// Topic text is inserted into explicit prompt delimiters. Strip delimiter-like
+// markup so user input cannot close or create prompt control tags.
+const normalizeTopic = (topic: string) =>
+  cleanText(topic.replace(/[<>`]/g, ' '), MAX_TOPIC_LENGTH) || 'Allgemeinwissen';
 
 const resolveQuestionCategory = (topic: string): CategoryId => {
   const normalized = topic.toLocaleLowerCase('de-DE').trim();
@@ -85,7 +88,7 @@ const isGeneratedQuestion = (value: unknown): value is GeneratedQuestion => {
 const validateGeneratedQuestions = (value: unknown, expectedCount: number): GeneratedQuestion[] => {
   if (!Array.isArray(value)) return [];
 
-  return value
+  const normalized = value
     .filter(isGeneratedQuestion)
     .slice(0, expectedCount)
     .map((question) => ({
@@ -98,6 +101,14 @@ const validateGeneratedQuestions = (value: unknown, expectedCount: number): Gene
           ? question.countryCode.trim().toLowerCase()
           : undefined,
     }));
+
+  const seenQuestions = new Set<string>();
+  return normalized.filter((question) => {
+    const key = question.question.toLocaleLowerCase('de-DE');
+    if (seenQuestions.has(key)) return false;
+    seenQuestions.add(key);
+    return true;
+  });
 };
 
 const createResponseSchema = (questionCount: number) =>
@@ -171,8 +182,8 @@ Variations-Seed: ${seed}`;
     if (!jsonText) return null;
 
     const validatedQuestions = validateGeneratedQuestions(JSON.parse(jsonText) as unknown, safeCount);
-    if (validatedQuestions.length === 0) {
-      console.warn('Gemini returned no valid questions. Using fallback questions.');
+    if (validatedQuestions.length !== safeCount) {
+      console.warn('KI-Antwort enthielt nicht die erwartete Anzahl gültiger, eindeutiger Fragen.');
       return null;
     }
 
@@ -189,8 +200,8 @@ Variations-Seed: ${seed}`;
       difficulty: difficulty === 'all' ? 'mittel' : difficulty,
       explanation: question.explanation,
     }));
-  } catch (error) {
-    console.error('Error generating questions:', error);
+  } catch {
+    console.warn('KI-Fragengenerierung fehlgeschlagen.');
     return null;
   }
 };
