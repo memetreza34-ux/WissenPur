@@ -27,6 +27,7 @@ const [
   reveal,
   economyState,
   economyCallables,
+  leaderboardCallable,
   account,
   rules,
 ] = await Promise.all([
@@ -36,6 +37,7 @@ const [
   readFile(resolve(repoRoot, 'functions/src/secureReveal.ts'), 'utf8'),
   readFile(resolve(repoRoot, 'functions/src/economyStateCallable.ts'), 'utf8'),
   readFile(resolve(repoRoot, 'functions/src/economyCallables.ts'), 'utf8'),
+  readFile(resolve(repoRoot, 'functions/src/leaderboardCallable.ts'), 'utf8'),
   readFile(resolve(repoRoot, 'functions/src/account.ts'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/firestore.rules'), 'utf8'),
 ]);
@@ -59,6 +61,12 @@ assert.equal(
   4,
   'Daily, Spin, Shop und Power-up müssen alle global begrenzt sein.',
 );
+assert.match(
+  leaderboardCallable,
+  /const uid = request\.auth\?\.uid;\s*if \(uid\) await enforceGlobalCallableRateLimit\(uid\);/,
+  'Angemeldete Ranglistenleser müssen denselben globalen Callable-Limiter verwenden.',
+);
+assert.match(leaderboardCallable, /const fetchLimit = Math\.min\(200, requestedLimit \* 2\)/);
 
 const exportBlock = account.slice(
   account.indexOf('export const exportMyData'),
@@ -75,4 +83,4 @@ assert.match(deleteBlock, /batch\.delete\(db\.collection\('serverRateLimits'\)\.
 assert.match(rules, /match \/serverRateLimits\/\{userId\}/);
 assert.match(rules, /allow read, write: if false;/);
 
-console.log('Globale Callable-, Export- und Quizstart-Rate-Limits sowie Löschbarkeit geprüft.');
+console.log('Globale Callable-, Ranglisten-, Export- und Quizstart-Rate-Limits sowie Löschbarkeit geprüft.');
