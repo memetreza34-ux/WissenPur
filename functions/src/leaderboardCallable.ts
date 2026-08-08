@@ -7,7 +7,8 @@ import { enforceGlobalCallableRateLimit } from './callableRateLimit.js';
 import { db, enforceAppCheck } from './database.js';
 import {
   normalizePublicLeaderboardLimit,
-  selectPublicLeaderboardEntries,
+  sanitizePublicLeaderboardAvatar as safeAvatar,
+  sanitizePublicLeaderboardEntry as sanitizeEntry,
 } from './leaderboardPublicCore.js';
 import { logUnexpectedServerError } from './privacyLogger.js';
 
@@ -41,13 +42,20 @@ export const getTrustedLeaderboard = onCall<LeaderboardRequest>(
         .limit(fetchLimit)
         .get();
 
-      const entries = selectPublicLeaderboardEntries(
-        snapshot.docs.map((document) => ({
-          id: document.id,
-          data: document.data() as Record<string, unknown>,
-        })),
-        requestedLimit,
-      );
+      const entries = [];
+      for (const document of snapshot.docs) {
+        const entry = sanitizeEntry(
+          document.id,
+          document.data() as Record<string, unknown>,
+        );
+        if (!entry) continue;
+
+        // Defense in depth: the pure entry sanitizer already performs this
+        // normalization; keep the transport boundary explicitly same-origin.
+        entry.photoURL = safeAvatar(entry.photoURL);
+        entries.push(entry);
+        if (entries.length >= requestedLimit) break;
+      }
 
       return { entries };
     } catch (error) {
