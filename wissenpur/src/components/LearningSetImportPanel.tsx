@@ -8,6 +8,7 @@ import {
   Upload,
   X,
 } from 'lucide-react';
+import { useAccessibleDialog } from '../hooks/useAccessibleDialog';
 import {
   estimateLearningLibraryBytes,
   MAX_IMPORT_BYTES,
@@ -73,6 +74,7 @@ export const LearningSetImportPanel = ({
     reset();
     onClose();
   };
+  const dialogRef = useAccessibleDialog(isOpen, close);
 
   const readFile = async (file: File | undefined) => {
     reset();
@@ -132,10 +134,12 @@ export const LearningSetImportPanel = ({
   return (
     <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm">
       <section
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="learning-set-import-title"
-        className="max-h-[92dvh] w-full max-w-xl overflow-y-auto rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+        className="max-h-[92dvh] w-full max-w-xl overflow-y-auto rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl outline-none dark:border-slate-700 dark:bg-slate-900"
       >
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -150,7 +154,7 @@ export const LearningSetImportPanel = ({
             type="button"
             aria-label="Import schließen"
             onClick={close}
-            className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-white"
+            className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 dark:hover:bg-slate-800 dark:hover:text-white"
           >
             <X size={20} />
           </button>
@@ -177,18 +181,18 @@ export const LearningSetImportPanel = ({
               type="button"
               disabled={isBusy}
               onClick={() => inputRef.current?.click()}
-              className="rounded-[1.5rem] border-2 border-dashed border-purple-200 bg-purple-50 p-6 text-left transition hover:border-purple-400 disabled:opacity-50 dark:border-purple-900 dark:bg-purple-950/20"
+              className="rounded-[1.5rem] border-2 border-dashed border-purple-200 bg-purple-50 p-6 text-left transition hover:border-purple-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 disabled:opacity-50 dark:border-purple-900 dark:bg-purple-950/20"
             >
-              <Upload className="text-purple-600" size={28} />
+              <Upload className="text-purple-600" size={28} aria-hidden="true" />
               <p className="mt-4 font-black text-slate-950 dark:text-white">Datei auswählen</p>
               <p className="mt-1 text-xs text-slate-500">JSON, CSV oder TSV</p>
             </button>
             <button
               type="button"
               onClick={downloadCsvTemplate}
-              className="rounded-[1.5rem] border border-slate-200 p-6 text-left transition hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+              className="rounded-[1.5rem] border border-slate-200 p-6 text-left transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 dark:border-slate-700 dark:hover:bg-slate-800"
             >
-              <Download className="text-slate-500" size={28} />
+              <Download className="text-slate-500" size={28} aria-hidden="true" />
               <p className="mt-4 font-black text-slate-950 dark:text-white">CSV-Vorlage</p>
               <p className="mt-1 text-xs text-slate-500">Beispiel herunterladen</p>
             </button>
@@ -196,14 +200,14 @@ export const LearningSetImportPanel = ({
         )}
 
         {isBusy && !preview && (
-          <div role="status" className="mt-5 rounded-2xl bg-blue-50 p-4 text-sm font-bold text-blue-900 dark:bg-blue-950/30 dark:text-blue-100">
+          <div role="status" aria-live="polite" className="mt-5 rounded-2xl bg-blue-50 p-4 text-sm font-bold text-blue-900 dark:bg-blue-950/30 dark:text-blue-100">
             Datei wird geprüft …
           </div>
         )}
 
         {error && (
           <div role="alert" className="mt-5 flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-bold text-rose-900 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100">
-            <AlertTriangle size={19} className="mt-0.5 shrink-0" />
+            <AlertTriangle size={19} className="mt-0.5 shrink-0" aria-hidden="true" />
             <span>{error}</span>
           </div>
         )}
@@ -212,7 +216,7 @@ export const LearningSetImportPanel = ({
           <div className="mt-5 space-y-4">
             <div className="rounded-[1.5rem] border border-emerald-200 bg-emerald-50 p-5 dark:border-emerald-900 dark:bg-emerald-950/20">
               <div className="flex items-start gap-3">
-                <CheckCircle2 className="mt-0.5 shrink-0 text-emerald-600" size={24} />
+                <CheckCircle2 className="mt-0.5 shrink-0 text-emerald-600" size={24} aria-hidden="true" />
                 <div>
                   <p className="text-xs font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300">Vorschau bereit</p>
                   <h3 className="mt-1 text-xl font-black text-slate-950 dark:text-white">{preview.deck.title}</h3>
@@ -221,8 +225,8 @@ export const LearningSetImportPanel = ({
                   </p>
                 </div>
                 {preview.format === 'json'
-                  ? <FileJson className="ml-auto text-emerald-600" />
-                  : <FileSpreadsheet className="ml-auto text-emerald-600" />}
+                  ? <FileJson className="ml-auto text-emerald-600" aria-hidden="true" />
+                  : <FileSpreadsheet className="ml-auto text-emerald-600" aria-hidden="true" />}
               </div>
             </div>
 
