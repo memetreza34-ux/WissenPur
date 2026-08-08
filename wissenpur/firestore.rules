@@ -200,12 +200,13 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Public reads contain only the minimal server-verified display profile.
-    // If an Admin SDK regression ever writes extra/sensitive fields or an
-    // external avatar URL, the document fails closed and is not public-readable.
-    // Browser writes remain denied, including admin claims.
+    // Browser collection enumeration is disabled. Public ranked lists are
+    // served by the App-Check-protected getTrustedLeaderboard callable, which
+    // sanitizes every returned row. A direct single-document read remains
+    // available only for a minimal valid display profile.
     match /trustedLeaderboard/{userId} {
-      allow read: if isValidTrustedLeaderboard(userId, resource.data);
+      allow get: if isValidTrustedLeaderboard(userId, resource.data);
+      allow list: if false;
       allow write: if false;
     }
 
