@@ -107,6 +107,7 @@ const entryPath = resolve(functionsSource, 'entry.ts');
 const entry = await readFile(entryPath, 'utf8');
 for (const requiredExport of [
   'getMyEconomyState',
+  'getTrustedLeaderboard',
   'startSecureRankedQuiz',
   'submitRankedQuiz',
   'revealSecureRankedQuiz',
@@ -141,14 +142,14 @@ assertMissing(
 assertIncludes(
   economyCallablesPath,
   economyCallables,
-  'authToken?.picture',
-  'Identity-Provider-Bilder müssen aus dem verifizierten Auth-Token stammen.',
+  'safeLeaderboardAvatar',
+  'Öffentliche Ranglistenbilder müssen auf lokale Avatarassets begrenzt sein.',
 );
 assertMissing(
   economyCallablesPath,
   economyCallables,
-  /userData\?\.photoURL/,
-  'Öffentliche Ranglistenbilder dürfen nicht aus clientbeschreibbaren Profildaten stammen.',
+  /authToken\?\.picture|providerPhoto|userData\?\.photoURL/,
+  'Öffentliche Ranglistenbilder dürfen weder Identity-Provider- noch clientbeschreibbare Profilbilder verwenden.',
 );
 
 const secureSubmitPath = resolve(functionsSource, 'secureSubmit.ts');
@@ -165,11 +166,41 @@ assertIncludes(
   "db.collection('trustedLeaderboard')",
   'Gewertete Abgaben müssen die serververifizierte Rangliste aktualisieren.',
 );
+assertIncludes(
+  secureSubmitPath,
+  secureSubmit,
+  'safeLeaderboardAvatar',
+  'Gewertete Abgaben dürfen nur lokale Avatarpfade in die Rangliste schreiben.',
+);
 assertMissing(
   secureSubmitPath,
   secureSubmit,
-  /QUESTION_BANK|fallbackAnswerKey/,
-  'Gewertete Abgaben dürfen keinen aktuellen Katalog als Antwort-Fallback verwenden.',
+  /QUESTION_BANK|fallbackAnswerKey|authToken\?\.picture|providerPhoto/,
+  'Gewertete Abgaben dürfen weder Katalog-Fallbacks noch externe Providerbilder verwenden.',
+);
+
+const leaderboardCallablePath = resolve(functionsSource, 'leaderboardCallable.ts');
+const leaderboardCallable = await readFile(leaderboardCallablePath, 'utf8');
+for (const expected of [
+  '{ enforceAppCheck }',
+  "collection('trustedLeaderboard')",
+  "orderBy('totalPoints', 'desc')",
+  'sanitizeEntry',
+  'safeAvatar',
+  'requestedLimit',
+]) {
+  assertIncludes(
+    leaderboardCallablePath,
+    leaderboardCallable,
+    expected,
+    `Sanitierende Leaderboard-Callable benötigt ${expected}.`,
+  );
+}
+assertMissing(
+  leaderboardCallablePath,
+  leaderboardCallable,
+  /email|question|learningAnalytics|customQuizzes/,
+  'Die öffentliche Leaderboard-Callable darf keine Konto- oder Lerninhalte ausgeben.',
 );
 
 const economyStatePath = resolve(functionsSource, 'economyStateCallable.ts');
@@ -300,8 +331,20 @@ const firebaseService = await readFile(firebaseServicePath, 'utf8');
 assertIncludes(
   firebaseServicePath,
   firebaseService,
-  "collection(db, 'trustedLeaderboard')",
-  'Der Client darf nur die serververifizierte Rangliste lesen.',
+  "functions, 'getTrustedLeaderboard'",
+  'Die Web-App muss die sanitierende Leaderboard-Callable verwenden.',
+);
+assertIncludes(
+  firebaseServicePath,
+  firebaseService,
+  'getTrustedLeaderboardCallable({ limit: safeLimit })',
+  'Leaderboard-Listen müssen über die Callable geladen werden.',
+);
+assertMissing(
+  firebaseServicePath,
+  firebaseService,
+  /collection\(db, ['"]trustedLeaderboard['"]\)|getDocs\(leaderboardQuery\)/,
+  'Browser-Enumeration von trustedLeaderboard ist verboten.',
 );
 assertIncludes(
   firebaseServicePath,
@@ -356,6 +399,18 @@ assertIncludes(
   rules,
   'match /trustedLeaderboard/{userId}',
   'Regeln für die serververifizierte Rangliste fehlen.',
+);
+assertIncludes(
+  rulesPath,
+  rules,
+  'isValidTrustedLeaderboard(userId, resource.data)',
+  'Direkte Einzelabrufe müssen auf das minimale Leaderboard-Schema begrenzt sein.',
+);
+assertIncludes(
+  rulesPath,
+  rules,
+  'allow list: if false;',
+  'Browser-Enumeration der Rangliste muss vollständig verweigert werden.',
 );
 assertIncludes(
   rulesPath,
