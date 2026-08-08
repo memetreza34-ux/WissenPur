@@ -20,6 +20,10 @@ const main = await readFile(
   resolve(repoRoot, 'wissenpur/src/main.tsx'),
   'utf8',
 );
+const indexHtml = await readFile(
+  resolve(repoRoot, 'wissenpur/index.html'),
+  'utf8',
+);
 
 const hosting = firebaseConfig.hosting;
 if (!hosting || typeof hosting !== 'object' || Array.isArray(hosting)) {
@@ -58,10 +62,26 @@ if (!hosting || typeof hosting !== 'object' || Array.isArray(hosting)) {
     'permissions-policy',
     'cross-origin-opener-policy',
     'cross-origin-resource-policy',
+    'x-permitted-cross-domain-policies',
+    'x-dns-prefetch-control',
   ]) {
     if (!globalKeys.has(requiredHeader)) {
       failures.push(`firebase.json: Sicherheitsheader ${requiredHeader} fehlt.`);
     }
+  }
+
+  const globalHeaderValue = (key: string): string => {
+    const header = globalHeaders.find((entry) =>
+      typeof entry.key === 'string' && entry.key.toLowerCase() === key.toLowerCase(),
+    );
+    return typeof header?.value === 'string' ? header.value : '';
+  };
+
+  if (globalHeaderValue('X-Permitted-Cross-Domain-Policies').toLowerCase() !== 'none') {
+    failures.push('firebase.json: X-Permitted-Cross-Domain-Policies muss none sein.');
+  }
+  if (globalHeaderValue('X-DNS-Prefetch-Control').toLowerCase() !== 'off') {
+    failures.push('firebase.json: X-DNS-Prefetch-Control muss off sein.');
   }
 
   const findHeaderValue = (source: string, key: string): string => {
@@ -77,7 +97,7 @@ if (!hosting || typeof hosting !== 'object' || Array.isArray(hosting)) {
     return typeof header?.value === 'string' ? header.value : '';
   };
 
-  for (const source of ['/index.html', '/sw.js']) {
+  for (const source of ['/', '/index.html', '/sw.js']) {
     const cacheControl = findHeaderValue(source, 'Cache-Control').toLowerCase();
     if (!cacheControl.includes('no-cache') || !cacheControl.includes('no-store')) {
       failures.push(`firebase.json: ${source} muss no-cache und no-store verwenden.`);
@@ -122,6 +142,9 @@ for (const requiredReleaseGate of [
 if (!main.includes('<AppErrorBoundary>')) {
   failures.push('wissenpur/src/main.tsx: Globale AppErrorBoundary fehlt.');
 }
+if (!/<html\s+lang=["']de-DE["']/.test(indexHtml)) {
+  failures.push('wissenpur/index.html: Dokumentensprache muss de-DE sein.');
+}
 
 if (failures.length > 0) {
   console.error('\nWissenPur-Hostingprüfung fehlgeschlagen:\n');
@@ -130,4 +153,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('Hosting-Sicherheitsheader, Cache-Regeln und Release-Gates geprüft.');
+console.log('Hosting-Sicherheitsheader, Privacy-Header, Cache-Regeln, Sprache und Release-Gates geprüft.');
