@@ -6,9 +6,10 @@ import { fileURLToPath } from 'node:url';
 const currentDir = resolve(fileURLToPath(new URL('.', import.meta.url)));
 const repoRoot = resolve(currentDir, '../..');
 
-const [dialogHook, importPanel] = await Promise.all([
+const [dialogHook, importPanel, privacyPanel] = await Promise.all([
   readFile(resolve(repoRoot, 'wissenpur/src/hooks/useAccessibleDialog.ts'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/components/LearningSetImportPanel.tsx'), 'utf8'),
+  readFile(resolve(repoRoot, 'wissenpur/src/components/AccountPrivacyPanel.tsx'), 'utf8'),
 ]);
 
 assert.match(dialogHook, /FOCUSABLE_SELECTOR/);
@@ -30,4 +31,13 @@ assert.match(importPanel, /role="alert"/);
 assert.match(importPanel, /role="status" aria-live="polite"/);
 assert.match(importPanel, /focus-visible:ring-2/);
 
-console.log('Dialog-Fokusfang, Escape, Fokus-Rückgabe und Importdialog-A11y geprüft.');
+assert.match(privacyPanel, /useAccessibleDialog\(isOpen, closePanel\)/);
+assert.match(privacyPanel, /const closePanel = \(\) => \{[\s\S]*?if \(isBusy\) return;/);
+assert.match(privacyPanel, /ref=\{dialogRef\}/);
+assert.match(privacyPanel, /tabIndex=\{-1\}/);
+assert.match(privacyPanel, /aria-labelledby="privacy-panel-title"/);
+assert.match(privacyPanel, /aria-label="Fenster schließen"[\s\S]*?disabled=\{isBusy\}/);
+assert.match(privacyPanel, /role="status" aria-live="polite"/);
+assert.match(privacyPanel, /focus-visible:ring-rose-500/);
+
+console.log('Dialog-Fokusfang, Escape, Fokus-Rückgabe sowie Import- und Datenschutzdialog-A11y geprüft.');
