@@ -6,11 +6,12 @@ import { fileURLToPath } from 'node:url';
 const currentDir = resolve(fileURLToPath(new URL('.', import.meta.url)));
 const repoRoot = resolve(currentDir, '../..');
 
-const [firebase, main, gemini, firebaseService] = await Promise.all([
+const [firebase, main, gemini, firebaseService, flashcards] = await Promise.all([
   readFile(resolve(repoRoot, 'wissenpur/src/firebase.ts'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/main.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/services/geminiService.ts'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/services/firebaseService.ts'), 'utf8'),
+  readFile(resolve(repoRoot, 'wissenpur/src/pages/Flashcards.tsx'), 'utf8'),
 ]);
 
 assert.match(firebase, /const browserErrorMetadata =/);
@@ -32,4 +33,8 @@ assert.match(firebaseService, /errorName: error instanceof Error \? error\.name 
 assert.doesNotMatch(firebaseService, /console\.(?:error|warn)\([^\n]*,\s*error\s*\)/);
 assert.doesNotMatch(firebaseService, /console\.(?:error|warn)\([^\n]*error\.message/);
 
-console.log('Browserdiagnostik ist auf statische Ereignisse sowie begrenzte Fehlernamen/-codes beschränkt.');
+assert.match(flashcards, /const errorName = error instanceof Error \? error\.name\.slice\(0, 80\)/);
+assert.doesNotMatch(flashcards, /console\.warn\([^\n]*,\s*error\s*\)/);
+assert.doesNotMatch(flashcards, /console\.warn\([^\n]*error\.message/);
+
+console.log('Browserdiagnostik in Auth, PWA, KI, Firestore und SRS ist auf statische Ereignisse sowie begrenzte Fehlernamen/-codes beschränkt.');
