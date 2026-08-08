@@ -94,15 +94,10 @@ function toHttpsError(error: unknown): HttpsError {
   return new HttpsError('internal', 'Die Abgabe konnte nicht sicher verarbeitet werden.');
 }
 
-function safeHttpsImage(value: unknown): string {
+function safeLeaderboardAvatar(value: unknown): string {
   const candidate = stringOrNull(value, 1_000);
   if (!candidate) return '';
-  try {
-    const parsed = new URL(candidate);
-    return parsed.protocol === 'https:' ? parsed.toString() : '';
-  } catch {
-    return '';
-  }
+  return /^\/avatars\/[a-z0-9-]+\.svg$/i.test(candidate) ? candidate : '';
 }
 
 function leaderboardProfile(
@@ -115,8 +110,7 @@ function leaderboardProfile(
   const storedName = stringOrNull(userData?.displayName, 100);
   const tokenName = stringOrNull(authToken?.name, 100);
   const displayName = customName || storedName || tokenName || 'WissenPur-Nutzer';
-  const providerPhoto = safeHttpsImage(authToken?.picture);
-  const photoURL = safeHttpsImage(state.customPhotoURL) || providerPhoto;
+  const photoURL = safeLeaderboardAvatar(state.customPhotoURL);
 
   return {
     uid,
