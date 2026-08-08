@@ -39,6 +39,34 @@ Der Lösungsschlüssel ist kein vom Nutzer bereitgestelltes Kontodatum, sondern 
 
 Firestore-Zeitstempel werden als ISO-Datum ausgegeben. Pro zugeordneter Sammlung werden höchstens 500 Dokumente exportiert. Dieser Grenzwert muss vor einem größeren öffentlichen Betrieb durch paginierten Export oder einen Supportprozess ersetzt werden.
 
+## Browser- und Inhalts-Privacy
+
+WissenPur reduziert vermeidbare Drittanbieterrequests im Lernbetrieb:
+
+- Die Anwendung lädt **keine Google Fonts**. Schrift wird über lokale beziehungsweise systemeigene Schriftstapel dargestellt.
+- Nutzerverwaltete Lernsets unterstützen keinen `imageUrl`-Kanal. Manipulierte oder ältere Bild-URLs werden durch die zentrale Bibliotheksrichtlinie entfernt.
+- Die veröffentlichten Offline- und Ranked-Fragen dürfen keinen `imageUrl` enthalten, solange kein ausdrücklich freigegebener Same-Origin-Assetpfad existiert.
+- Shop-Avatare liegen als versionierte SVG-Dateien unter `/avatars/*.svg` auf demselben Hosting-Origin.
+- Frühere externe DiceBear-Avatar-URLs werden bei der serverseitigen Economy-Normalisierung verworfen.
+- `trustedLeaderboard.photoURL` darf nur einen freigegebenen lokalen Avatarpfad enthalten. Profilbilder des Login-Anbieters werden nicht in die vertrauenswürdige Rangliste übernommen.
+- Die lokalen Shop-Avatare gehören zur Service-Worker-App-Shell und stehen dadurch auch nach erfolgreicher PWA-Installation offline zur Verfügung.
+
+Das eigene Google-Profilbild eines angemeldeten Nutzers kann in dessen persönlicher Oberfläche weiterhin aus dem Firebase-Auth-Profil angezeigt werden. Dabei setzt die App `referrerPolicy="no-referrer"`. Dieser persönliche Auth-Profilpfad ist getrennt von der öffentlichen Rangliste und den Lerninhalten.
+
+### Datensparsame Serverlogs
+
+App-eigene Cloud-Functions-Runtime-Logs laufen ausschließlich über den zentralen `privacyLogger.ts`.
+
+Bei unerwarteten Serverfehlern werden nur grobe technische Angaben wie Fehlername und technischer Fehlercode protokolliert. Die Anwendung protokolliert in diesen eigenen Runtime-Logs insbesondere nicht:
+
+- Firebase-UID
+- Quiz-Session-ID
+- E-Mail-Adresse
+- Fragentexte oder Antworten
+- vollständige Request-Payloads
+
+Direkte `logger.*`- oder `console.*`-Runtime-Logs außerhalb des zentralen Privacy-Loggers sind durch einen Release-Gate verboten.
+
 ## Gastdaten beim ersten Login
 
 WissenPur trennt **Lerninhalte** und **Economy** bewusst voneinander.
