@@ -12,17 +12,8 @@ import {
   ANALYTICS_STORAGE_KEY,
   normalizeLearningHistory,
 } from '../services/learningAnalytics';
+import { getPublicErrorMessage } from '../services/publicErrorMessage';
 import { Button } from './UI';
-
-const getErrorMessage = (error: unknown): string => {
-  if (error && typeof error === 'object' && 'message' in error) {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === 'string' && message.trim()) {
-      return message.replace(/^Firebase:\s*/i, '');
-    }
-  }
-  return 'Die Aktion konnte nicht abgeschlossen werden.';
-};
 
 const downloadJson = (value: unknown, filename: string) => {
   const blob = new Blob([JSON.stringify(value, null, 2)], {
@@ -89,7 +80,7 @@ export const AccountPrivacyPanel = () => {
       downloadJson(completeExport, `wissenpur-datenexport-${date}.json`);
       setMessage('Dein Datenexport inklusive lokaler Lernanalyse wurde erstellt.');
     } catch (error) {
-      setMessage(getErrorMessage(error));
+      setMessage(getPublicErrorMessage(error, 'Der Datenexport konnte nicht abgeschlossen werden.'));
     } finally {
       setIsBusy(false);
     }
@@ -103,7 +94,7 @@ export const AccountPrivacyPanel = () => {
       await deleteCurrentAccount();
       window.location.replace('/');
     } catch (error) {
-      setMessage(getErrorMessage(error));
+      setMessage(getPublicErrorMessage(error, 'Das Konto konnte nicht sicher gelöscht werden.'));
       setIsBusy(false);
     }
   };
