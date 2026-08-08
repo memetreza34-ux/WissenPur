@@ -8,5 +8,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["firestore.rules.test.ts"]
+  "include": ["*.test.ts"]
 }
