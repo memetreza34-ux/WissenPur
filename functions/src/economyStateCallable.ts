@@ -1,5 +1,4 @@
 import { FieldValue } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions';
 import {
   HttpsError,
   onCall,
@@ -12,6 +11,7 @@ import {
   normalizeEconomy,
   toPublicEconomy,
 } from './economyCore.js';
+import { logUnexpectedServerError } from './privacyLogger.js';
 
 function requireUser(request: CallableRequest<unknown>): string {
   const uid = request.auth?.uid;
@@ -60,7 +60,7 @@ export const getMyEconomyState = onCall(
       return { stats };
     } catch (error) {
       if (error instanceof HttpsError) throw error;
-      logger.error('Failed to hydrate authoritative economy state', error);
+      logUnexpectedServerError('Failed to hydrate authoritative economy state', error);
       throw new HttpsError(
         'internal',
         'Der sichere Online-Fortschritt konnte nicht geladen werden.',
