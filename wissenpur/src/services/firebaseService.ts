@@ -1,19 +1,16 @@
 import { onAuthStateChanged } from 'firebase/auth';
+import { httpsCallable } from 'firebase/functions';
 import {
-  collection,
   doc,
   getDoc,
   getDocFromServer,
-  getDocs,
-  limit,
-  orderBy,
-  query,
   setDoc,
 } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { saveStats } from '../storage';
 import { LeaderboardEntry, UserStats } from '../types';
 import { getServerEconomyState } from './economyService';
+import { functions } from './functionsClient';
 import { mergeLearningLibraries } from './learningLibraryMerge';
 import { applyLearningLibraryPolicy } from './learningLibraryPolicy';
 import { mergeWrongQuestions } from './wrongQuestionMerge';
@@ -38,6 +35,11 @@ class AuthSessionChangedError extends Error {
 }
 
 let hydratedAuthUid: string | null = null;
+
+const getTrustedLeaderboardCallable = httpsCallable<
+  { limit: number },
+  { entries: LeaderboardEntry[] }
+>(functions, 'getTrustedLeaderboard');
 
 onAuthStateChanged(auth, (user) => {
   const nextUid = user?.uid || null;
@@ -245,18 +247,10 @@ export const fetchUserStats = async (uid: string): Promise<UserStats | null> => 
 export const getLeaderboard = async (limitCount: number = 10): Promise<LeaderboardEntry[]> => {
   try {
     const safeLimit = Math.min(100, Math.max(1, Math.trunc(limitCount) || 10));
-    const leaderboardQuery = query(
-      collection(db, 'trustedLeaderboard'),
-      orderBy('totalPoints', 'desc'),
-      limit(safeLimit),
-    );
-    const querySnapshot = await getDocs(leaderboardQuery);
-
-    return querySnapshot.docs.map((documentSnapshot) =>
-      documentSnapshot.data() as LeaderboardEntry,
-    );
+    const response = await getTrustedLeaderboardCallable({ limit: safeLimit });
+    return Array.isArray(response.data.entries) ? response.data.entries : [];
   } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, 'trusted-leaderboard');
+    handleFirestoreError(error, OperationType.LIST, 'trusted-leaderboard-callable');
   }
 };
 
