@@ -55,6 +55,20 @@ test('normalization resets daily progress on a new Berlin date', () => {
   assert.equal(state.lastDailyQuestionsDate, '2026-08-06');
 });
 
+test('normalization removes legacy external avatar URLs but preserves released local avatars', () => {
+  const external = normalizeEconomy({
+    ...defaultEconomy('2026-08-06'),
+    customPhotoURL: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Legacy',
+  }, '2026-08-06');
+  assert.equal(external.customPhotoURL, undefined);
+
+  const local = normalizeEconomy({
+    ...defaultEconomy('2026-08-06'),
+    customPhotoURL: '/avatars/aneka.svg',
+  }, '2026-08-06');
+  assert.equal(local.customPhotoURL, '/avatars/aneka.svg');
+});
+
 test('ranked rounds update points, category progress and weekly goals', () => {
   const start = defaultEconomy('2026-08-06');
   const outcome = applyRankedRound(start, {
@@ -202,7 +216,7 @@ test('shop purchases and power-up consumption validate balances and inventory', 
   const avatarPurchase = purchaseShopItem(funded, 'avatar1');
   assert.equal(avatarPurchase.state.coins, 100);
   assert.ok(avatarPurchase.state.unlockedAvatars.includes('avatar1'));
-  assert.match(avatarPurchase.state.customPhotoURL || '', /dicebear/);
+  assert.equal(avatarPurchase.state.customPhotoURL, '/avatars/aneka.svg');
   expectDomainError('already-exists', () =>
     purchaseShopItem(avatarPurchase.state, 'avatar1'),
   );
