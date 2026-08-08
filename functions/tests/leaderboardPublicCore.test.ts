@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  getEffectivePublicLeaderboardLimit,
   normalizePublicLeaderboardLimit,
   sanitizePublicLeaderboardAvatar,
   sanitizePublicLeaderboardEntry,
@@ -15,6 +16,13 @@ test('leaderboard limit defaults and clamps safely', () => {
   assert.equal(normalizePublicLeaderboardLimit(500), 100);
   assert.equal(normalizePublicLeaderboardLimit(1.5), null);
   assert.equal(normalizePublicLeaderboardLimit('10'), null);
+});
+
+test('guest leaderboard responses are capped more tightly than authenticated responses', () => {
+  assert.equal(getEffectivePublicLeaderboardLimit(10, false), 10);
+  assert.equal(getEffectivePublicLeaderboardLimit(100, false), 25);
+  assert.equal(getEffectivePublicLeaderboardLimit(100, true), 100);
+  assert.equal(getEffectivePublicLeaderboardLimit(5, true), 5);
 });
 
 test('only released same-origin avatar paths survive', () => {
