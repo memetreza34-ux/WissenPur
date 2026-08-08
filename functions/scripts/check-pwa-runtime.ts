@@ -1,10 +1,17 @@
-import { readFile } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const currentDir = resolve(fileURLToPath(new URL('.', import.meta.url)));
 const repoRoot = resolve(currentDir, '../..');
 const failures: string[] = [];
+const avatarUrls = [
+  '/avatars/aneka.svg',
+  '/avatars/jude.svg',
+  '/avatars/avery.svg',
+  '/avatars/robot-blue.svg',
+  '/avatars/robot-gold.svg',
+] as const;
 
 const [serviceWorker, main, indexHtml, manifestText, iconSvg, maskableSvg, firebaseText] = await Promise.all([
   readFile(resolve(repoRoot, 'wissenpur/public/sw.js'), 'utf8'),
@@ -57,8 +64,8 @@ const forbid = (
 requireText(
   'wissenpur/public/sw.js',
   serviceWorker,
-  "const CACHE_VERSION = 'wissenpur-v4';",
-  'Der neue Build-Asset-Precache benötigt die aktuelle Cache-Version.',
+  "const CACHE_VERSION = 'wissenpur-v5';",
+  'Lokale Shop-Avatare benötigen die aktuelle Cache-Version.',
 );
 requireText(
   'wissenpur/public/sw.js',
@@ -114,6 +121,20 @@ forbid(
   /networkResponsePromise\s*\|\||\|\|\s*Response\.error\(\)/,
   'Promises dürfen nicht per Wahrheitswert als vermeintliche Offline-Response verwendet werden.',
 );
+
+for (const avatarUrl of avatarUrls) {
+  requireText(
+    'wissenpur/public/sw.js',
+    serviceWorker,
+    `'${avatarUrl}'`,
+    `${avatarUrl} muss Teil der Offline-App-Shell sein.`,
+  );
+  try {
+    await access(resolve(repoRoot, 'wissenpur/public', avatarUrl.slice(1)));
+  } catch {
+    failures.push(`wissenpur/public${avatarUrl}: Versioniertes Avatar-Asset fehlt.`);
+  }
+}
 
 requireText(
   'wissenpur/src/main.tsx',
@@ -210,4 +231,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('PWA-App-Shell, Build-Asset-Precache, Installationsmetadaten, Icons, Root-/Asset-Cacheheader, Offline-Antworten und Cachewechsel geprüft.');
+console.log('PWA-App-Shell, Build-Asset-Precache, lokale Shop-Avatare, Installationsmetadaten, Icons, Cacheheader und Offline-Antworten geprüft.');
