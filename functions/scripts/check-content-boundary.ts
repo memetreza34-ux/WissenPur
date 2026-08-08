@@ -40,8 +40,17 @@ for (const question of OFFLINE_QUESTIONS) {
   if (!Number.isInteger(question.correctAnswer) || question.correctAnswer < 0 || question.correctAnswer > 3) {
     throw new Error(`Offline question ${question.id} has an invalid correct answer.`);
   }
+  if (question.imageUrl) {
+    throw new Error(`Offline question ${question.id} may not trigger an external image request.`);
+  }
+}
+
+for (const question of RANKED_QUESTIONS) {
+  if (question.imageUrl) {
+    throw new Error(`Ranked question ${question.id} may not trigger an external image request until a same-origin asset pipeline is explicitly released.`);
+  }
 }
 
 console.log(
-  `Content boundary verified: ${RANKED_QUESTIONS.length} ranked questions and ${OFFLINE_QUESTIONS.length} offline questions.`,
+  `Content boundary verified: ${RANKED_QUESTIONS.length} ranked questions and ${OFFLINE_QUESTIONS.length} offline questions; no question-triggered remote images.`,
 );
