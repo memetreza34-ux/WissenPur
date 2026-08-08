@@ -21,6 +21,11 @@ export const normalizePublicLeaderboardLimit = (value: unknown): number | null =
   return Math.min(100, Math.max(1, value));
 };
 
+export const getEffectivePublicLeaderboardLimit = (
+  requestedLimit: number,
+  isAuthenticated: boolean,
+): number => Math.min(requestedLimit, isAuthenticated ? 100 : 25);
+
 export const sanitizePublicLeaderboardAvatar = (value: unknown): string => {
   const candidate = cleanString(value, 1_000);
   if (!candidate) return '';
