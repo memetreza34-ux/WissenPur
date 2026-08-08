@@ -1,5 +1,4 @@
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
-import { logger } from 'firebase-functions';
 import {
   HttpsError,
   onCall,
@@ -17,6 +16,7 @@ import {
   type EconomyState,
   type QuizMode,
 } from './economyCore.js';
+import { logUnexpectedServerError } from './privacyLogger.js';
 import { readSessionAnswerKey } from './sessionAnswerKey.js';
 
 const maxQuestionsPerSession = 30;
@@ -90,7 +90,7 @@ function toHttpsError(error: unknown): HttpsError {
   if (error instanceof EconomyDomainError) {
     return new HttpsError(error.code, error.message);
   }
-  logger.error('Unexpected secure quiz submission error', error);
+  logUnexpectedServerError('Unexpected secure quiz submission error', error);
   return new HttpsError('internal', 'Die Abgabe konnte nicht sicher verarbeitet werden.');
 }
 
@@ -269,7 +269,6 @@ export const submitRankedQuiz = onCall<SubmitQuizRequest>(
         return submissionResult;
       });
 
-      logger.info('Secure ranked quiz submitted', { uid, sessionId });
       return result;
     } catch (error) {
       throw toHttpsError(error);
