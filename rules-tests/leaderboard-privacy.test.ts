@@ -7,7 +7,7 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc } from 'firebase/firestore';
 
 const projectId = 'demo-wissenpur-leaderboard-privacy';
 let testEnv: RulesTestEnvironment;
@@ -49,10 +49,21 @@ after(async () => {
   await testEnv.cleanup();
 });
 
-test('minimal trusted leaderboard document is public-readable', async () => {
+test('minimal trusted leaderboard document is public-readable by direct id', async () => {
   await seed('trustedLeaderboard/alice', validLeaderboard());
   const anonymous = testEnv.unauthenticatedContext().firestore();
   await assertSucceeds(getDoc(doc(anonymous, 'trustedLeaderboard/alice')));
+});
+
+test('browser collection enumeration is denied even when rows are valid', async () => {
+  await seed('trustedLeaderboard/alice', validLeaderboard());
+  await seed('trustedLeaderboard/bob', {
+    ...validLeaderboard('bob'),
+    displayName: 'Bob',
+    totalPoints: 80,
+  });
+  const anonymous = testEnv.unauthenticatedContext().firestore();
+  await assertFails(getDocs(collection(anonymous, 'trustedLeaderboard')));
 });
 
 test('empty local avatar is allowed for users without a shop avatar', async () => {
