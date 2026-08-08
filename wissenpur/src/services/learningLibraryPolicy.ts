@@ -47,17 +47,6 @@ const normalizeSrsData = (value: unknown): SRSData | undefined => {
   };
 };
 
-const safeHttpsUrl = (value: unknown): string | undefined => {
-  const candidate = normalizeString(value, 1_000);
-  if (!candidate) return undefined;
-  try {
-    const parsed = new URL(candidate);
-    return parsed.protocol === 'https:' ? parsed.toString() : undefined;
-  } catch {
-    return undefined;
-  }
-};
-
 const makeUniqueId = (
   base: string,
   usedIds: Set<string>,
@@ -116,11 +105,10 @@ const normalizeQuestion = (
   const uniqueId = makeUniqueId(baseId, usedQuestionIds);
   const category = normalizeString(raw.category, 50) || 'allgemein';
   const difficulty = normalizeDifficulty(raw.difficulty);
-  const imageUrl = safeHttpsUrl(raw.imageUrl);
   const srsData = normalizeSrsData(raw.srsData);
   const allowedKeys = new Set([
     'id', 'category', 'question', 'options', 'correctAnswer', 'explanation',
-    'difficulty', 'imageUrl', 'srsData',
+    'difficulty', 'srsData',
   ]);
 
   const normalized: Question = {
@@ -131,7 +119,6 @@ const normalizeQuestion = (
     correctAnswer,
     explanation,
     ...(difficulty ? { difficulty } : {}),
-    ...(imageUrl ? { imageUrl } : {}),
     ...(srsData ? { srsData } : {}),
   };
 
@@ -145,7 +132,7 @@ const normalizeQuestion = (
     raw.options.some((option, index) => option !== normalized.options[index]) ||
     raw.explanation !== normalized.explanation ||
     (raw.difficulty !== undefined && raw.difficulty !== difficulty) ||
-    (raw.imageUrl !== undefined && raw.imageUrl !== imageUrl) ||
+    raw.imageUrl !== undefined ||
     (raw.srsData !== undefined && !srsData);
 
   return { value: normalized, changed, duplicateId: uniqueId.duplicate };
