@@ -1,10 +1,14 @@
-const CACHE_VERSION = 'wissenpur-v5';
+const CACHE_VERSION = 'wissenpur-v6';
 const APP_SHELL_CACHE = `${CACHE_VERSION}-app-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const APP_SHELL = [
   '/manifest.json',
   '/wissenpur-icon.svg',
   '/wissenpur-maskable-icon.svg',
+  '/wissenpur-icon-192.png',
+  '/wissenpur-icon-512.png',
+  '/wissenpur-maskable-icon-512.png',
+  '/apple-touch-icon.png',
   '/avatars/aneka.svg',
   '/avatars/jude.svg',
   '/avatars/avery.svg',
