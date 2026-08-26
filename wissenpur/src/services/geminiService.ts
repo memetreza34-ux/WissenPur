@@ -1,5 +1,5 @@
 import { getAI, getGenerativeModel, GoogleAIBackend, Schema } from 'firebase/ai';
-import { app, auth } from '../firebase';
+import { app, assertProtectedOnlineRuntimeReady, auth } from '../firebase';
 import { CategoryId, Difficulty, Question } from '../types';
 
 const MODEL_NAME = 'gemini-3.5-flash-lite';
@@ -134,6 +134,7 @@ export const generateQuestions = async (
   difficulty: Difficulty | 'all',
   count: number = 10
 ): Promise<Question[] | null> => {
+  assertProtectedOnlineRuntimeReady();
   const expectedUser = auth.currentUser;
   const safeCategory = normalizeTopic(category);
   const questionCategory = resolveQuestionCategory(safeCategory);
