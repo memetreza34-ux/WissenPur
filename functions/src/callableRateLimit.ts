@@ -5,6 +5,8 @@ import { evaluateFixedWindowRate } from './rateLimitCore.js';
 
 type RateBucket = 'global' | 'accountExport';
 
+const rateLimitRetentionMs = 24 * 60 * 60 * 1000;
+
 const RATE_BUCKETS: Record<RateBucket, {
   windowMs: number;
   maxActions: number;
@@ -73,6 +75,7 @@ const enforceBucket = async (
       [config.windowField]: Timestamp.fromMillis(decision.windowStartedAtMs),
       [config.countField]: decision.count,
       [config.updatedField]: FieldValue.serverTimestamp(),
+      expiresAt: Timestamp.fromMillis(now + rateLimitRetentionMs),
     }, { merge: true });
   });
 };
