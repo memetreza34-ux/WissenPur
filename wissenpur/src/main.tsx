@@ -10,6 +10,7 @@ import { LearningLibraryManager } from './components/LearningLibraryManager';
 import { LearningPlanPanel } from './components/LearningPlanPanel';
 import { LegalPanel } from './components/LegalPanel';
 import { ManualLearningSetPanel } from './components/ManualLearningSetPanel';
+import { PwaUpdateBanner } from './components/PwaUpdateBanner';
 import ReleaseApp from './ReleaseApp';
 import './index.css';
 
@@ -17,9 +18,10 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <AppErrorBoundary>
       <MotionConfig reducedMotion="user">
+        <ConnectivityBanner />
+        <PwaUpdateBanner />
         <AccountSessionBoundary>
           <ReleaseApp />
-          <ConnectivityBanner />
           <LearningAnalyticsPanel />
           <LearningLibraryManager />
           <ManualLearningSetPanel />
