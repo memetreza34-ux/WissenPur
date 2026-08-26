@@ -23,9 +23,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: wissenpur-quality-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   frontend-typecheck-and-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: wissenpur
@@ -39,6 +44,8 @@ jobs:
         with:
           node-version: 22
 
+      # Temporary until wissenpur/package-lock.json is regenerated from the
+      # current manifest. check:frontend-lock intentionally keeps this visible.
       - name: Install corrected frontend dependency graph
         run: npm install --no-audit --no-fund
 
@@ -50,6 +57,7 @@ jobs:
 
   functions-verify-and-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Check out repository
@@ -71,6 +79,7 @@ jobs:
 
   firestore-security-rules:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Check out repository
