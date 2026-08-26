@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const currentDir = resolve(fileURLToPath(new URL('.', import.meta.url)));
 const repoRoot = resolve(currentDir, '../..');
+const publicRoot = resolve(repoRoot, 'wissenpur/public');
 const failures: string[] = [];
 const avatarUrls = [
   '/avatars/aneka.svg',
@@ -12,14 +13,20 @@ const avatarUrls = [
   '/avatars/robot-blue.svg',
   '/avatars/robot-gold.svg',
 ] as const;
+const pngAssets = [
+  { url: '/wissenpur-icon-192.png', width: 192, height: 192 },
+  { url: '/wissenpur-icon-512.png', width: 512, height: 512 },
+  { url: '/wissenpur-maskable-icon-512.png', width: 512, height: 512 },
+  { url: '/apple-touch-icon.png', width: 180, height: 180 },
+] as const;
 
 const [serviceWorker, main, indexHtml, manifestText, iconSvg, maskableSvg, firebaseText] = await Promise.all([
-  readFile(resolve(repoRoot, 'wissenpur/public/sw.js'), 'utf8'),
+  readFile(resolve(publicRoot, 'sw.js'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/main.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/index.html'), 'utf8'),
-  readFile(resolve(repoRoot, 'wissenpur/public/manifest.json'), 'utf8'),
-  readFile(resolve(repoRoot, 'wissenpur/public/wissenpur-icon.svg'), 'utf8'),
-  readFile(resolve(repoRoot, 'wissenpur/public/wissenpur-maskable-icon.svg'), 'utf8'),
+  readFile(resolve(publicRoot, 'manifest.json'), 'utf8'),
+  readFile(resolve(publicRoot, 'wissenpur-icon.svg'), 'utf8'),
+  readFile(resolve(publicRoot, 'wissenpur-maskable-icon.svg'), 'utf8'),
   readFile(resolve(repoRoot, 'firebase.json'), 'utf8'),
 ]);
 
@@ -43,186 +50,90 @@ const firebase = JSON.parse(firebaseText) as {
   };
 };
 
-const requireText = (
-  file: string,
-  content: string,
-  expected: string,
-  explanation: string,
-) => {
+const requireText = (file: string, content: string, expected: string, explanation: string) => {
   if (!content.includes(expected)) failures.push(`${file}: ${explanation}`);
 };
-
-const forbid = (
-  file: string,
-  content: string,
-  pattern: RegExp,
-  explanation: string,
-) => {
+const forbid = (file: string, content: string, pattern: RegExp, explanation: string) => {
   if (pattern.test(content)) failures.push(`${file}: ${explanation}`);
 };
 
-requireText(
-  'wissenpur/public/sw.js',
-  serviceWorker,
-  "const CACHE_VERSION = 'wissenpur-v5';",
-  'Lokale Shop-Avatare benötigen die aktuelle Cache-Version.',
-);
-requireText(
-  'wissenpur/public/sw.js',
-  serviceWorker,
+requireText('wissenpur/public/sw.js', serviceWorker, "const CACHE_VERSION = 'wissenpur-v6';", 'PNG-App-Assets benötigen Cache-Version v6.');
+for (const expected of [
   'const VITE_ASSET_PATTERN =',
-  'Der Installpfad muss die von Vite erzeugten gehashten Assets erkennen.',
-);
-requireText(
-  'wissenpur/public/sw.js',
-  serviceWorker,
   "const indexResponse = await fetch(reloadRequest('/index.html'));",
-  'Der Installpfad muss die tatsächlich gebaute index.html frisch laden.',
-);
-requireText(
-  'wissenpur/public/sw.js',
-  serviceWorker,
   'const assetUrls = [...html.matchAll(VITE_ASSET_PATTERN)]',
-  'Gehashtes JavaScript und CSS müssen aus der gebauten App-Shell extrahiert werden.',
-);
-requireText(
-  'wissenpur/public/sw.js',
-  serviceWorker,
   'await cache.addAll(uniqueAssetUrls.map(reloadRequest));',
-  'Die beim Build referenzierten Assets müssen bereits während der Installation gecacht werden.',
-);
-requireText(
-  'wissenpur/public/sw.js',
-  serviceWorker,
   "cache.put('/index.html', indexResponse.clone())",
-  'Die Offline-App-Shell muss die gebaute index.html enthalten.',
-);
-requireText(
-  'wissenpur/public/sw.js',
-  serviceWorker,
   "cache.put('/', indexResponse.clone())",
-  'Die Root-Navigation muss direkt durch die gecachte App-Shell abgedeckt sein.',
-);
-requireText(
-  'wissenpur/public/sw.js',
-  serviceWorker,
   'event.waitUntil(networkResponsePromise.then(() => undefined));',
-  'Stale-while-revalidate muss die Hintergrundaktualisierung am Leben halten.',
-);
-requireText(
-  'wissenpur/public/sw.js',
-  serviceWorker,
   'return networkResponse || offlineResponse();',
-  'Ein Netzfehler ohne Cache muss immer eine gültige Response liefern.',
-);
-forbid(
-  'wissenpur/public/sw.js',
-  serviceWorker,
-  /networkResponsePromise\s*\|\||\|\|\s*Response\.error\(\)/,
-  'Promises dürfen nicht per Wahrheitswert als vermeintliche Offline-Response verwendet werden.',
-);
+]) requireText('wissenpur/public/sw.js', serviceWorker, expected, `PWA-Runtime-Baustein fehlt: ${expected}`);
+forbid('wissenpur/public/sw.js', serviceWorker, /networkResponsePromise\s*\|\||\|\|\s*Response\.error\(\)/, 'Promises dürfen nicht als Offline-Response verwendet werden.');
 
 for (const avatarUrl of avatarUrls) {
-  requireText(
-    'wissenpur/public/sw.js',
-    serviceWorker,
-    `'${avatarUrl}'`,
-    `${avatarUrl} muss Teil der Offline-App-Shell sein.`,
-  );
+  requireText('wissenpur/public/sw.js', serviceWorker, `'${avatarUrl}'`, `${avatarUrl} muss offline gecacht werden.`);
+  try { await access(resolve(publicRoot, avatarUrl.slice(1))); } catch { failures.push(`wissenpur/public${avatarUrl}: Avatar fehlt.`); }
+}
+
+const pngSignature = '89504e470d0a1a0a';
+for (const asset of pngAssets) {
+  const path = resolve(publicRoot, asset.url.slice(1));
   try {
-    await access(resolve(repoRoot, 'wissenpur/public', avatarUrl.slice(1)));
+    const buffer = await readFile(path);
+    if (buffer.length < 24 || buffer.subarray(0, 8).toString('hex') !== pngSignature) {
+      failures.push(`wissenpur/public${asset.url}: Keine gültige PNG-Signatur.`);
+      continue;
+    }
+    const width = buffer.readUInt32BE(16);
+    const height = buffer.readUInt32BE(20);
+    if (width !== asset.width || height !== asset.height) {
+      failures.push(`wissenpur/public${asset.url}: Erwartet ${asset.width}x${asset.height}, gefunden ${width}x${height}.`);
+    }
+    requireText('wissenpur/public/sw.js', serviceWorker, `'${asset.url}'`, `${asset.url} muss Teil der Offline-App-Shell sein.`);
   } catch {
-    failures.push(`wissenpur/public${avatarUrl}: Versioniertes Avatar-Asset fehlt.`);
+    failures.push(`wissenpur/public${asset.url}: Versioniertes PNG-Asset fehlt.`);
   }
 }
 
-requireText(
-  'wissenpur/src/main.tsx',
-  main,
-  "navigator.serviceWorker.register('/sw.js', { scope: '/' })",
-  'Die gebündelte Anwendung muss den Service Worker explizit mit Root-Scope registrieren.',
-);
-forbid(
-  'wissenpur/index.html',
-  indexHtml,
-  /<script(?![^>]*type=["']module["'][^>]*src=)[^>]*>[\s\S]*?<\/script>/i,
-  'Die statische App-Shell darf kein Inline-JavaScript enthalten.',
-);
-for (const [expected, explanation] of [
-  ['<link rel="manifest" href="/manifest.json" />', 'Die App-Shell muss das Web-App-Manifest verknüpfen.'],
-  ['<meta name="mobile-web-app-capable" content="yes" />', 'Die mobile Installationsmetadaten fehlen.'],
-  ['<meta name="apple-mobile-web-app-capable" content="yes" />', 'Der iOS-Standalone-Hinweis fehlt.'],
-  ['<meta name="apple-mobile-web-app-title" content="WissenPur" />', 'Der iOS-App-Name fehlt.'],
-  ['<meta name="color-scheme" content="light dark" />', 'Browser-Oberflächen sollen beide Farbschemata kennen.'],
+requireText('wissenpur/src/main.tsx', main, "navigator.serviceWorker.register('/sw.js', { scope: '/' })", 'Service Worker muss Root-Scope besitzen.');
+forbid('wissenpur/index.html', indexHtml, /<script(?![^>]*type=["']module["'][^>]*src=)[^>]*>[\s\S]*?<\/script>/i, 'Statische App-Shell darf kein Inline-JavaScript enthalten.');
+for (const expected of [
+  '<link rel="manifest" href="/manifest.json" />',
+  '<meta name="mobile-web-app-capable" content="yes" />',
+  '<meta name="apple-mobile-web-app-capable" content="yes" />',
+  '<meta name="apple-mobile-web-app-title" content="WissenPur" />',
+  '<meta name="color-scheme" content="light dark" />',
+  '<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />',
+]) requireText('wissenpur/index.html', indexHtml, expected, `Installationsmetadatum fehlt: ${expected}`);
+
+if (manifest.start_url !== '/' || manifest.scope !== '/' || manifest.id !== '/') failures.push('manifest.json: id/start_url/scope müssen / sein.');
+if (manifest.display !== 'standalone') failures.push('manifest.json: display muss standalone sein.');
+if (typeof manifest.name !== 'string' || typeof manifest.short_name !== 'string') failures.push('manifest.json: name/short_name fehlen.');
+if (typeof manifest.background_color !== 'string' || typeof manifest.theme_color !== 'string') failures.push('manifest.json: Farben fehlen.');
+const icons = Array.isArray(manifest.icons) ? manifest.icons : [];
+for (const expected of [
+  ['/wissenpur-icon-192.png', '192x192', 'image/png', 'any'],
+  ['/wissenpur-icon-512.png', '512x512', 'image/png', 'any'],
+  ['/wissenpur-maskable-icon-512.png', '512x512', 'image/png', 'maskable'],
 ] as const) {
-  requireText('wissenpur/index.html', indexHtml, expected, explanation);
-}
-
-if (manifest.start_url !== '/' || manifest.scope !== '/' || manifest.id !== '/') {
-  failures.push('wissenpur/public/manifest.json: id, start_url und scope müssen konsistent auf / zeigen.');
-}
-if (manifest.display !== 'standalone') {
-  failures.push('wissenpur/public/manifest.json: Die PWA muss im standalone-Modus starten.');
-}
-if (typeof manifest.name !== 'string' || typeof manifest.short_name !== 'string') {
-  failures.push('wissenpur/public/manifest.json: name und short_name müssen gesetzt sein.');
-}
-if (typeof manifest.background_color !== 'string' || typeof manifest.theme_color !== 'string') {
-  failures.push('wissenpur/public/manifest.json: Hintergrund- und Theme-Farbe fehlen.');
-}
-if (!Array.isArray(manifest.icons) || manifest.icons.length < 2) {
-  failures.push('wissenpur/public/manifest.json: Normales und maskierbares App-Icon werden benötigt.');
-} else {
-  const anyIcon = manifest.icons.find((icon) => icon.purpose === 'any');
-  const maskableIcon = manifest.icons.find((icon) => icon.purpose === 'maskable');
-  if (anyIcon?.src !== '/wissenpur-icon.svg' || anyIcon.type !== 'image/svg+xml') {
-    failures.push('wissenpur/public/manifest.json: Das normale SVG-App-Icon ist falsch konfiguriert.');
-  }
-  if (maskableIcon?.src !== '/wissenpur-maskable-icon.svg' || maskableIcon.type !== 'image/svg+xml') {
-    failures.push('wissenpur/public/manifest.json: Das dedizierte maskierbare SVG-Icon ist falsch konfiguriert.');
+  if (!icons.some((icon) => icon.src === expected[0] && icon.sizes === expected[1] && icon.type === expected[2] && icon.purpose === expected[3])) {
+    failures.push(`manifest.json: PNG-Icon ${expected[0]} ist nicht korrekt verdrahtet.`);
   }
 }
+if (!icons.some((icon) => icon.src === '/wissenpur-icon.svg' && icon.type === 'image/svg+xml')) failures.push('manifest.json: SVG-Fallback fehlt.');
+if (!icons.some((icon) => icon.src === '/wissenpur-maskable-icon.svg' && icon.purpose === 'maskable')) failures.push('manifest.json: maskierbarer SVG-Fallback fehlt.');
 
-requireText(
-  'wissenpur/public/wissenpur-icon.svg',
-  iconSvg,
-  'viewBox="0 0 512 512"',
-  'Das normale SVG-Icon benötigt eine quadratische 512er Zeichenfläche.',
-);
-requireText(
-  'wissenpur/public/wissenpur-maskable-icon.svg',
-  maskableSvg,
-  '<rect width="512" height="512" fill="url(#background)"/>',
-  'Das maskierbare Icon benötigt einen vollflächigen Hintergrund ohne transparente Randzone.',
-);
-requireText(
-  'wissenpur/public/sw.js',
-  serviceWorker,
-  "'/wissenpur-maskable-icon.svg'",
-  'Das maskierbare Icon muss Teil der Offline-App-Shell sein.',
-);
+requireText('wissenpur/public/wissenpur-icon.svg', iconSvg, 'viewBox="0 0 512 512"', 'Normales SVG benötigt 512er Zeichenfläche.');
+requireText('wissenpur/public/wissenpur-maskable-icon.svg', maskableSvg, '<rect width="512" height="512" fill="url(#background)"/>', 'Maskable SVG benötigt vollflächigen Hintergrund.');
 
-const headersFor = (source: string) => firebase.hosting?.headers?.find(
-  (entry) => entry.source === source,
-)?.headers || [];
-const headerValue = (source: string, key: string) => new Map(
-  headersFor(source).map((entry) => [entry.key, entry.value]),
-).get(key);
-
+const headersFor = (source: string) => firebase.hosting?.headers?.find((entry) => entry.source === source)?.headers || [];
+const headerValue = (source: string, key: string) => new Map(headersFor(source).map((entry) => [entry.key, entry.value])).get(key);
 for (const source of ['/', '/index.html']) {
-  if (headerValue(source, 'Cache-Control') !== 'no-cache, no-store, must-revalidate') {
-    failures.push(`firebase.json: ${source} muss ohne langlebigen HTTP-Cache ausgeliefert werden.`);
-  }
+  if (headerValue(source, 'Cache-Control') !== 'no-cache, no-store, must-revalidate') failures.push(`firebase.json: ${source} darf nicht langlebig gecacht werden.`);
 }
-if (headerValue('/sw.js', 'Cache-Control') !== 'no-cache, no-store, must-revalidate') {
-  failures.push('firebase.json: /sw.js muss ohne Browsercache ausgeliefert werden.');
-}
-if (headerValue('/sw.js', 'Service-Worker-Allowed') !== '/') {
-  failures.push('firebase.json: Der Service Worker benötigt explizit den Root-Scope.');
-}
-if (headerValue('/assets/**', 'Cache-Control') !== 'public, max-age=31536000, immutable') {
-  failures.push('firebase.json: Gehashte Vite-Assets müssen langfristig immutable gecacht werden.');
-}
+if (headerValue('/sw.js', 'Cache-Control') !== 'no-cache, no-store, must-revalidate') failures.push('firebase.json: /sw.js darf nicht gecacht werden.');
+if (headerValue('/sw.js', 'Service-Worker-Allowed') !== '/') failures.push('firebase.json: Service-Worker-Allowed muss / sein.');
+if (headerValue('/assets/**', 'Cache-Control') !== 'public, max-age=31536000, immutable') failures.push('firebase.json: Gehashte Assets müssen immutable sein.');
 
 if (failures.length > 0) {
   console.error('\nWissenPur-PWA-Prüfung fehlgeschlagen:\n');
@@ -231,4 +142,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('PWA-App-Shell, Build-Asset-Precache, lokale Shop-Avatare, Installationsmetadaten, Icons, Cacheheader und Offline-Antworten geprüft.');
+console.log('PWA-App-Shell, Build-Asset-Precache, lokale Avatare, PNG-Signaturen/-Maße, Apple-Touch-Icon, Cacheheader und Offline-Antworten geprüft.');
