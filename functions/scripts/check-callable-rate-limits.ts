@@ -46,13 +46,20 @@ assert.match(limiter, /maxActions: 120/);
 assert.match(limiter, /windowMs: 60 \* 1000/);
 assert.match(limiter, /maxActions: 5/);
 assert.match(limiter, /windowMs: 10 \* 60 \* 1000/);
+assert.match(limiter, /const rateLimitRetentionMs = 24 \* 60 \* 60 \* 1000/);
 assert.match(limiter, /db\.collection\('serverRateLimits'\)\.doc\(uid\)/);
+assert.match(limiter, /expiresAt: Timestamp\.fromMillis\(now \+ rateLimitRetentionMs\)/);
 assert.match(limiter, /resource-exhausted/);
 assert.match(limiter, /enforceGlobalCallableRateLimit/);
 assert.match(limiter, /enforceAccountExportRateLimit/);
 
-assert.match(start, /maxQuizStartsPerWindow = 12/);
+assert.match(start, /const sessionTtlMs = 30 \* 60 \* 1000/);
+assert.match(start, /const rateLimitRetentionMs = 24 \* 60 \* 60 \* 1000/);
+assert.match(start, /const maxStartsPerWindow = 12/);
 assert.match(start, /evaluateFixedWindowRate/);
+assert.match(start, /expiresAt: Timestamp\.fromMillis\(now \+ rateLimitRetentionMs\)/);
+assert.match(start, /expiresAt: Timestamp\.fromMillis\(now \+ sessionTtlMs\)/);
+
 assert.match(submit, /await enforceGlobalCallableRateLimit\(uid\)/);
 assert.match(reveal, /await enforceGlobalCallableRateLimit\(uid\)/);
 assert.match(economyState, /await enforceGlobalCallableRateLimit\(uid\)/);
@@ -96,4 +103,4 @@ assert.match(deleteBlock, /batch\.delete\(db\.collection\('serverRateLimits'\)\.
 assert.match(rules, /match \/serverRateLimits\/\{userId\}/);
 assert.match(rules, /allow read, write: if false;/);
 
-console.log('Globale Callable-, Gast-Ranglisten-, Export- und Quizstart-Limits sowie datensparsames Caching geprüft.');
+console.log('Globale Callable-, Gast-Ranglisten-, Export- und Quizstart-Limits inklusive TTL-Retention geprüft.');
