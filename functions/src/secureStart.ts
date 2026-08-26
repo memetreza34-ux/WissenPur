@@ -6,6 +6,7 @@ import { QUESTION_BANK } from './generated/questionBank.js';
 import { evaluateFixedWindowRate } from './rateLimitCore.js';
 
 const sessionTtlMs = 30 * 60 * 1000;
+const rateLimitRetentionMs = 24 * 60 * 60 * 1000;
 const maxQuestions = 30;
 const rateWindowMs = 60 * 1000;
 const maxStartsPerWindow = 12;
@@ -126,6 +127,7 @@ export const startSecureRankedQuiz = onCall<StartSecureQuizRequest>(
         quizWindowStartedAt: Timestamp.fromMillis(rateDecision.windowStartedAtMs),
         quizStarts: rateDecision.count,
         updatedAt: FieldValue.serverTimestamp(),
+        expiresAt: Timestamp.fromMillis(now + rateLimitRetentionMs),
       }, { merge: true });
 
       transaction.create(sessionRef, {
