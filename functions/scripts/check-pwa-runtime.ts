@@ -57,7 +57,8 @@ const forbid = (file: string, content: string, pattern: RegExp, explanation: str
   if (pattern.test(content)) failures.push(`${file}: ${explanation}`);
 };
 
-requireText('wissenpur/public/sw.js', serviceWorker, "const CACHE_VERSION = 'wissenpur-v6';", 'PNG-App-Assets benötigen Cache-Version v6.');
+requireText('wissenpur/public/sw.js', serviceWorker, "const CACHE_VERSION = 'wissenpur-v7';", 'Navigation-Privacy und PNG-App-Assets benötigen Cache-Version v7.');
+requireText('wissenpur/public/sw.js', serviceWorker, "const APP_CACHE_PREFIX = 'wissenpur-';", 'Cache-Cleanup muss auf WissenPur-eigene Caches begrenzt sein.');
 for (const expected of [
   'const VITE_ASSET_PATTERN =',
   "const indexResponse = await fetch(reloadRequest('/index.html'));",
@@ -67,8 +68,28 @@ for (const expected of [
   "cache.put('/', indexResponse.clone())",
   'event.waitUntil(networkResponsePromise.then(() => undefined));',
   'return networkResponse || offlineResponse();',
+  'cacheName.startsWith(APP_CACHE_PREFIX)',
+  '!cacheName.startsWith(CACHE_VERSION)',
 ]) requireText('wissenpur/public/sw.js', serviceWorker, expected, `PWA-Runtime-Baustein fehlt: ${expected}`);
 forbid('wissenpur/public/sw.js', serviceWorker, /networkResponsePromise\s*\|\||\|\|\s*Response\.error\(\)/, 'Promises dürfen nicht als Offline-Response verwendet werden.');
+forbid(
+  'wissenpur/public/sw.js',
+  serviceWorker,
+  /async function networkFirstNavigation[\s\S]{0,700}cache\.put\(request/,
+  'Navigationen dürfen nicht unter vollständigen URLs oder Querystrings im Runtime-Cache gespeichert werden.',
+);
+forbid(
+  'wissenpur/public/sw.js',
+  serviceWorker,
+  /\.filter\(\(cacheName\) => !cacheName\.startsWith\(CACHE_VERSION\)\)/,
+  'Cache-Cleanup darf nicht pauschal fremde Origin-Caches löschen.',
+);
+requireText(
+  'wissenpur/public/sw.js',
+  serviceWorker,
+  "const appShell = await caches.match('/index.html');",
+  'Offline-Navigation muss ausschließlich auf die feste App-Shell zurückfallen.',
+);
 
 for (const avatarUrl of avatarUrls) {
   requireText('wissenpur/public/sw.js', serviceWorker, `'${avatarUrl}'`, `${avatarUrl} muss offline gecacht werden.`);
@@ -142,4 +163,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('PWA-App-Shell, Build-Asset-Precache, lokale Avatare, PNG-Signaturen/-Maße, Apple-Touch-Icon, Cacheheader und Offline-Antworten geprüft.');
+console.log('PWA-v7: App-Shell, Navigation-Privacy, scoped Cache-Cleanup, Build-Asset-Precache, lokale Avatare, PNG-Maße, Apple-Touch-Icon und Cacheheader geprüft.');
