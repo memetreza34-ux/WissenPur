@@ -1,6 +1,7 @@
-const CACHE_VERSION = 'wissenpur-v6';
+const CACHE_VERSION = 'wissenpur-v7';
 const APP_SHELL_CACHE = `${CACHE_VERSION}-app-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
+const APP_CACHE_PREFIX = 'wissenpur-';
 const APP_SHELL = [
   '/manifest.json',
   '/wissenpur-icon.svg',
@@ -66,7 +67,9 @@ self.addEventListener('activate', (event) => {
       .then((cacheNames) =>
         Promise.all(
           cacheNames
-            .filter((cacheName) => !cacheName.startsWith(CACHE_VERSION))
+            .filter((cacheName) =>
+              cacheName.startsWith(APP_CACHE_PREFIX) && !cacheName.startsWith(CACHE_VERSION),
+            )
             .map((cacheName) => caches.delete(cacheName)),
         ),
       )
@@ -94,16 +97,8 @@ self.addEventListener('fetch', (event) => {
 
 async function networkFirstNavigation(request) {
   try {
-    const response = await fetch(request);
-    if (response.ok) {
-      const cache = await caches.open(RUNTIME_CACHE);
-      await cache.put(request, response.clone());
-    }
-    return response;
+    return await fetch(request);
   } catch {
-    const cachedPage = await caches.match(request);
-    if (cachedPage) return cachedPage;
-
     const appShell = await caches.match('/index.html');
     return appShell || offlineResponse();
   }
