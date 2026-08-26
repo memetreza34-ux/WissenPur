@@ -1,7 +1,8 @@
 import { connectFunctionsEmulator, getFunctions } from 'firebase/functions';
-import { app } from '../firebase';
+import { app, assertProtectedOnlineRuntimeReady } from '../firebase';
 
 export const functions = getFunctions(app, 'europe-west1');
+export const assertFunctionsClientReady = assertProtectedOnlineRuntimeReady;
 
 const emulatorState = globalThis as typeof globalThis & {
   __WISSENPUR_SHARED_FUNCTIONS_EMULATOR_CONNECTED__?: boolean;
