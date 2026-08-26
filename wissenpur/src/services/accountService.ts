@@ -1,7 +1,7 @@
 import { getIdToken, reauthenticateWithPopup } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
 import { auth, googleProvider } from '../firebase';
-import { functions } from './functionsClient';
+import { assertFunctionsClientReady, functions } from './functionsClient';
 
 export interface AccountDataExport {
   schemaVersion: number;
@@ -101,6 +101,7 @@ const isRecentAuthenticationRequired = (error: unknown): boolean => {
 };
 
 export const exportCurrentAccountData = async (): Promise<AccountDataExport> => {
+  assertFunctionsClientReady();
   const expectedUid = auth.currentUser?.uid;
   if (!expectedUid) throw new Error('Bitte melde dich zuerst an.');
 
@@ -115,6 +116,7 @@ export const exportCurrentAccountData = async (): Promise<AccountDataExport> => 
 };
 
 export const deleteCurrentAccount = async (): Promise<AccountDeletionResult> => {
+  assertFunctionsClientReady();
   const currentUser = auth.currentUser;
   if (!currentUser) throw new Error('Bitte melde dich zuerst an.');
   const expectedUid = currentUser.uid;
@@ -132,6 +134,7 @@ export const deleteCurrentAccount = async (): Promise<AccountDeletionResult> => 
     assertActiveAccountUid(expectedUid);
     await getIdToken(currentUser, true);
     assertActiveAccountUid(expectedUid);
+    assertFunctionsClientReady();
 
     const retry = await deleteMyAccountCallable({});
     return finalizeDeletedAccount(expectedUid, retry.data);
