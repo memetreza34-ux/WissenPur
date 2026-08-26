@@ -10,6 +10,8 @@
     "check:release": "node scripts/check-release-env.mjs",
     "preflight:production": "node scripts/production-preflight.mjs",
     "preflight:self-test": "node scripts/production-preflight.mjs --self-test",
+    "rollback:plan": "node scripts/hosting-rollback-plan.mjs",
+    "rollback:self-test": "node scripts/hosting-rollback-plan.mjs --self-test",
     "preview": "vite preview",
     "clean": "node scripts/clean.mjs",
     "lint": "tsc --noEmit"
