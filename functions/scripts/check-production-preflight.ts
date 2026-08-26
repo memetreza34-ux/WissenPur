@@ -9,11 +9,12 @@ const repoRoot = resolve(currentDir, '../..');
 const webRoot = resolve(repoRoot, 'wissenpur');
 const preflightPath = resolve(webRoot, 'scripts/production-preflight.mjs');
 
-const [preflight, releaseCheck, frontendPackageText, envExample] = await Promise.all([
+const [preflight, releaseCheck, frontendPackageText, envExample, documentation] = await Promise.all([
   readFile(preflightPath, 'utf8'),
   readFile(resolve(webRoot, 'scripts/check-release-env.mjs'), 'utf8'),
   readFile(resolve(webRoot, 'package.json'), 'utf8'),
   readFile(resolve(webRoot, '.env.example'), 'utf8'),
+  readFile(resolve(webRoot, 'docs/PRODUCTION_PREFLIGHT.md'), 'utf8'),
 ]);
 
 const frontendPackage = JSON.parse(frontendPackageText) as {
@@ -23,6 +24,8 @@ const frontendPackage = JSON.parse(frontendPackageText) as {
 assert.match(preflight, /RELEASE_PRODUCTION_FIREBASE_PROJECT_ID/);
 assert.match(preflight, /RELEASE_PRODUCTION_CONFIRMATION/);
 assert.match(preflight, /RELEASE_DEPLOYMENT_REVIEW_CONFIRMED/);
+assert.match(preflight, /RELEASE_FIRESTORE_TTL_CONFIRMATION/);
+assert.match(preflight, /quizSessions\.expiresAt,serverRateLimits\.expiresAt/);
 assert.match(preflight, /projects\?\.production/);
 assert.match(preflight, /VITE_FIRESTORE_DATABASE_ID/);
 assert.match(preflight, /VITE_ENABLE_APPCHECK_DEBUG/);
@@ -56,9 +59,13 @@ for (const key of [
   'RELEASE_PRODUCTION_FIREBASE_PROJECT_ID',
   'RELEASE_PRODUCTION_CONFIRMATION',
   'RELEASE_DEPLOYMENT_REVIEW_CONFIRMED',
+  'RELEASE_FIRESTORE_TTL_CONFIRMATION',
 ]) {
   assert.match(envExample, new RegExp(`^${key}=`, 'm'), `${key} muss in .env.example dokumentiert sein.`);
 }
+assert.match(documentation, /Collection Group `quizSessions` → Feld `expiresAt`/);
+assert.match(documentation, /Collection Group `serverRateLimits` → Feld `expiresAt`/);
+assert.match(documentation, /RELEASE_FIRESTORE_TTL_CONFIRMATION=quizSessions\.expiresAt,serverRateLimits\.expiresAt/);
 
 const selfTest = spawnSync(process.execPath, [preflightPath, '--self-test'], {
   cwd: webRoot,
@@ -71,4 +78,4 @@ assert.equal(
 );
 assert.match(selfTest.stdout, /Produktions-Preflight-Selbsttest erfolgreich/);
 
-console.log('Fail-closed Produktions-Preflight, release build wiring und paketfreier Selbsttest geprüft.');
+console.log('Fail-closed Produktions-Preflight, Firestore-TTL-Freigabe, Release-Build-Wiring und paketfreier Selbsttest geprüft.');
