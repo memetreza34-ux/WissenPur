@@ -6,11 +6,11 @@ import {
   getDocFromServer,
   setDoc,
 } from 'firebase/firestore';
-import { auth, db } from '../firebase';
+import { assertProtectedOnlineRuntimeReady, auth, db } from '../firebase';
 import { saveStats } from '../storage';
 import { LeaderboardEntry, UserStats } from '../types';
 import { getServerEconomyState } from './economyService';
-import { functions } from './functionsClient';
+import { assertFunctionsClientReady, functions } from './functionsClient';
 import { mergeLearningLibraries } from './learningLibraryMerge';
 import { applyLearningLibraryPolicy } from './learningLibraryPolicy';
 import { mergeWrongQuestions } from './wrongQuestionMerge';
@@ -154,6 +154,7 @@ const persistProfileOnly = async (
   expectedUid: string,
 ): Promise<UserStats> => {
   assertActiveAuthUid(expectedUid);
+  assertProtectedOnlineRuntimeReady();
   const library = applyLearningLibraryPolicy(stats.customQuizzes);
   const wrongQuestions = mergeWrongQuestions(stats.wrongQuestions, []);
   const profileNormalized = library.changed || wrongQuestions.length !== (stats.wrongQuestions || []).length;
@@ -201,6 +202,7 @@ export const syncUserStats = async (stats: UserStats): Promise<UserStats | undef
   const requiresHydration = hydratedAuthUid !== expectedUid;
 
   try {
+    assertProtectedOnlineRuntimeReady();
     if (requiresHydration) {
       const existingSnapshot = await getDoc(userRef);
       assertActiveAuthUid(expectedUid);
@@ -237,6 +239,7 @@ export const syncUserStats = async (stats: UserStats): Promise<UserStats | undef
 
 export const fetchUserStats = async (uid: string): Promise<UserStats | null> => {
   try {
+    assertProtectedOnlineRuntimeReady();
     const documentSnapshot = await getDoc(doc(db, 'users', uid));
     return documentSnapshot.exists() ? (documentSnapshot.data() as UserStats) : null;
   } catch (error) {
@@ -246,6 +249,7 @@ export const fetchUserStats = async (uid: string): Promise<UserStats | null> => 
 
 export const getLeaderboard = async (limitCount: number = 10): Promise<LeaderboardEntry[]> => {
   try {
+    assertFunctionsClientReady();
     const safeLimit = Math.min(100, Math.max(1, Math.trunc(limitCount) || 10));
     const response = await getTrustedLeaderboardCallable({ limit: safeLimit });
     return Array.isArray(response.data.entries) ? response.data.entries : [];
@@ -256,6 +260,7 @@ export const getLeaderboard = async (limitCount: number = 10): Promise<Leaderboa
 
 export const testConnection = async () => {
   try {
+    assertProtectedOnlineRuntimeReady();
     await getDocFromServer(doc(db, 'test', 'connection'));
   } catch (error) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
