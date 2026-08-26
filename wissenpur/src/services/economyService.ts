@@ -1,7 +1,7 @@
 import { httpsCallable } from 'firebase/functions';
 import { auth } from '../firebase';
 import { Difficulty, UserStats } from '../types';
-import { functions } from './functionsClient';
+import { assertFunctionsClientReady, functions } from './functionsClient';
 import { getPublicErrorMessage } from './publicErrorMessage';
 
 export type RankedQuizMode = 'standard' | 'daily' | 'blitz';
@@ -75,6 +75,7 @@ class CallableAuthSessionChangedError extends Error {
 const runForCurrentAuthenticatedSession = async <T>(
   operation: () => Promise<T>,
 ): Promise<T> => {
+  assertFunctionsClientReady();
   const expectedUser = auth.currentUser;
   if (!expectedUser) throw new Error('Bitte melde dich zuerst an.');
   const expectedUid = expectedUser.uid;
