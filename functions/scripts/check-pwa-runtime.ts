@@ -72,12 +72,27 @@ for (const expected of [
   '!cacheName.startsWith(CACHE_VERSION)',
 ]) requireText('wissenpur/public/sw.js', serviceWorker, expected, `PWA-Runtime-Baustein fehlt: ${expected}`);
 forbid('wissenpur/public/sw.js', serviceWorker, /networkResponsePromise\s*\|\||\|\|\s*Response\.error\(\)/, 'Promises dürfen nicht als Offline-Response verwendet werden.');
-forbid(
-  'wissenpur/public/sw.js',
-  serviceWorker,
-  /async function networkFirstNavigation[\s\S]{0,700}cache\.put\(request/,
-  'Navigationen dürfen nicht unter vollständigen URLs oder Querystrings im Runtime-Cache gespeichert werden.',
-);
+
+const navigationStart = serviceWorker.indexOf('async function networkFirstNavigation');
+const staticCacheStart = serviceWorker.indexOf('async function staleWhileRevalidate');
+if (navigationStart < 0 || staticCacheStart <= navigationStart) {
+  failures.push('wissenpur/public/sw.js: Navigation- und Static-Cache-Funktionen müssen getrennt vorhanden sein.');
+} else {
+  const navigationSection = serviceWorker.slice(navigationStart, staticCacheStart);
+  forbid(
+    'wissenpur/public/sw.js',
+    navigationSection,
+    /cache\.put\(request/,
+    'Navigationen dürfen nicht unter vollständigen URLs oder Querystrings im Runtime-Cache gespeichert werden.',
+  );
+  forbid(
+    'wissenpur/public/sw.js',
+    navigationSection,
+    /caches\.match\(request\)/,
+    'Offline-Navigation darf keine zuvor unter Query-URLs gespeicherten Seiten wiederverwenden.',
+  );
+}
+
 forbid(
   'wissenpur/public/sw.js',
   serviceWorker,
