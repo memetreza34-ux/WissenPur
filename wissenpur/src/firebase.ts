@@ -65,6 +65,20 @@ if (typeof window !== 'undefined') {
 export const app = initializeApp(firebaseConfig);
 
 const appCheckSiteKey = import.meta.env.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY?.trim();
+export const isAppCheckConfigured = Boolean(appCheckSiteKey);
+
+/**
+ * The app shell is allowed to render even when a deployment was misconfigured,
+ * so users still get a recoverable UI instead of a white screen. Protected
+ * production network features must call this guard immediately before use.
+ */
+export const assertProtectedOnlineRuntimeReady = (): void => {
+  if (import.meta.env.PROD && !isAppCheckConfigured) {
+    throw new Error(
+      'Geschützte Online-Funktionen sind in diesem Produktionsbuild nicht verfügbar. App Check fehlt.',
+    );
+  }
+};
 
 if (appCheckSiteKey) {
   if (import.meta.env.DEV && import.meta.env.VITE_ENABLE_APPCHECK_DEBUG === 'true') {
