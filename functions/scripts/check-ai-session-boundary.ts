@@ -10,8 +10,8 @@ const geminiService = await readFile(
   'utf8',
 );
 
-assert.match(geminiService, /import \{ app, auth \} from ['"]\.\.\/firebase['"]/);
-assert.match(geminiService, /const expectedUser = auth\.currentUser;/);
+assert.match(geminiService, /import \{ app, assertProtectedOnlineRuntimeReady, auth \} from ['"]\.\.\/firebase['"]/);
+assert.match(geminiService, /assertProtectedOnlineRuntimeReady\(\);\s*const expectedUser = auth\.currentUser;/);
 assert.match(geminiService, /const result = await model\.generateContent\(prompt\);/);
 assert.match(
   geminiService,
@@ -20,10 +20,12 @@ assert.match(
 );
 assert.match(geminiService, /KI-Ergebnis wurde verworfen, weil sich die Kontositzung geändert hat/);
 
+const appCheckGuardIndex = geminiService.indexOf('assertProtectedOnlineRuntimeReady();');
 const generationIndex = geminiService.indexOf('const result = await model.generateContent(prompt);');
 const sessionGuardIndex = geminiService.indexOf('if (auth.currentUser !== expectedUser)', generationIndex);
 const parseIndex = geminiService.indexOf('const jsonText = result.response.text().trim();', generationIndex);
 const returnQuestionsIndex = geminiService.indexOf('return validatedQuestions.map', generationIndex);
+assert.ok(appCheckGuardIndex >= 0 && generationIndex > appCheckGuardIndex, 'App Check muss vor dem KI-Netzwerkrequest geprüft werden.');
 assert.ok(generationIndex >= 0 && sessionGuardIndex > generationIndex);
 assert.ok(parseIndex > sessionGuardIndex, 'Das KI-Ergebnis darf erst nach Sessionprüfung geparst werden.');
 assert.ok(returnQuestionsIndex > sessionGuardIndex, 'Fragen dürfen erst nach Sessionprüfung an den Aufrufer zurückgegeben werden.');
@@ -55,4 +57,4 @@ assert.doesNotMatch(
   'Der KI-Prompt darf keine Konto-, Economy- oder Analysedaten einbetten.',
 );
 
-console.log('KI-Fragengenerierung ist gegen Sessionwechsel, Prompt-Trennzeichen, Duplikate, Teilantworten und rohe Fehlerlogs abgesichert.');
+console.log('KI-Fragengenerierung ist gegen fehlendes App Check, Sessionwechsel, Prompt-Trennzeichen, Duplikate, Teilantworten und rohe Fehlerlogs abgesichert.');
