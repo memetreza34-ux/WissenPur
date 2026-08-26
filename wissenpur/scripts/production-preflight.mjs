@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const PLACEHOLDER_PATTERN = /(todo|replace|muster|beispiel|dein[_ -]|example\.|example@|xxx)/i;
+const EXPECTED_FIRESTORE_TTL_CONFIRMATION = 'quizSessions.expiresAt,serverRateLimits.expiresAt';
 
 const parseEnvText = (text) => {
   const values = {};
@@ -96,6 +97,9 @@ export const validateProductionTarget = ({ env, firebaseConfig, firebaseRc }) =>
   if (text(env.VITE_FIRESTORE_DATABASE_ID) !== '(default)') {
     errors.push('Produktion muss die Firestore-Datenbank (default) verwenden.');
   }
+  if (text(env.RELEASE_FIRESTORE_TTL_CONFIRMATION) !== EXPECTED_FIRESTORE_TTL_CONFIRMATION) {
+    errors.push(`RELEASE_FIRESTORE_TTL_CONFIRMATION muss nach aktivierter Firestore-TTL exakt ${EXPECTED_FIRESTORE_TTL_CONFIRMATION} lauten.`);
+  }
   if (isTrue(env.VITE_ENABLE_APPCHECK_DEBUG)) {
     errors.push('App-Check-Debugmodus ist für Produktion verboten.');
   }
@@ -117,6 +121,7 @@ const runSelfTest = () => {
     RELEASE_EXPECTED_FIREBASE_PROJECT_ID: 'wissenpur-prod',
     RELEASE_PRODUCTION_CONFIRMATION: 'PRODUCTION:wissenpur-prod:RELEASE',
     RELEASE_DEPLOYMENT_REVIEW_CONFIRMED: 'true',
+    RELEASE_FIRESTORE_TTL_CONFIRMATION: EXPECTED_FIRESTORE_TTL_CONFIRMATION,
     VITE_FIRESTORE_DATABASE_ID: '(default)',
     VITE_ENABLE_APPCHECK_DEBUG: 'false',
     VITE_USE_FUNCTIONS_EMULATOR: 'false',
@@ -132,6 +137,13 @@ const runSelfTest = () => {
       firebaseConfig,
       firebaseRc,
     }).some((error) => error.includes('RELEASE_PRODUCTION_CONFIRMATION')),
+  );
+  assert.ok(
+    validateProductionTarget({
+      env: { ...env, RELEASE_FIRESTORE_TTL_CONFIRMATION: '' },
+      firebaseConfig,
+      firebaseRc,
+    }).some((error) => error.includes('RELEASE_FIRESTORE_TTL_CONFIRMATION')),
   );
   assert.ok(
     validateProductionTarget({
