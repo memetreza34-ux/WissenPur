@@ -4,142 +4,126 @@ Stand: August 2026
 
 ## Ziel
 
-Die bisherige AI-Studio-App verwendet die benannte Datenbank:
+Die Release-App und Cloud Functions verwenden ausschließlich die stabile Firestore-Standarddatenbank `(default)`. Falls noch Daten in einer benannten Alt-Datenbank liegen, werden sie **nicht** mit einem selbstgebauten Dokumentkopierer verschoben. WissenPur verwendet dafür den von Google Cloud verwalteten Firestore Export/Import-Pfad.
+
+Die tatsächliche Produktionstransaktion bleibt bewusst manuell. Das Repository enthält nur einen **fail-closed Planer**, der nach mehreren Bestätigungen die vorgesehenen `gcloud`-Kommandos ausgibt und selbst nichts ausführt.
+
+## Sicherheitsprinzipien
+
+- Quell-Datenbank muss benannt sein und darf nicht `(default)` sein.
+- Ziel ist immer exakt `(default)`.
+- Quell-Datenbank muss zweimal identisch angegeben werden.
+- `.firebaserc -> projects.production` muss mit der bestätigten Produktions-Projekt-ID übereinstimmen.
+- Der Exportpfad muss unter `gs://.../wissenpur-migration/...` liegen.
+- Die `(default)`-Zieldatenbank muss vor dem Import ausdrücklich als kontrolliert leer bestätigt werden.
+- Deployment-/Migrationsreview muss bestätigt sein.
+- Eine exakte Bestätigungsphrase ist erforderlich.
+- Der Planer besitzt keinen Firebase-/Firestore-SDK-Zugriff und startet kein `gcloud`- oder Firebase-Kommando.
+
+## 1. Produktionsziel festlegen
+
+Erst wenn das echte Zielprojekt bewusst feststeht, wird in `.firebaserc` ein `production`-Alias eingetragen. Bis dahin soll der Produktions-Preflight absichtlich blockieren.
+
+Vor einer Migration müssen mindestens diese Werte in einer **nicht eingecheckten** Release-Umgebung gesetzt sein:
 
 ```text
-ai-studio-e6a56a0b-5009-48b4-ab34-e5fc5f5f781b
+RELEASE_PRODUCTION_FIREBASE_PROJECT_ID=<PROJEKT_ID>
+RELEASE_FIRESTORE_SOURCE_DATABASE_ID=<BENANNTE_QUELLE>
+RELEASE_FIRESTORE_SOURCE_DATABASE_CONFIRMATION=<BENANNTE_QUELLE>
+VITE_FIRESTORE_DATABASE_ID=(default)
+RELEASE_FIRESTORE_MIGRATION_GCS_PATH=gs://<BUCKET>/wissenpur-migration/<SNAPSHOT>
+RELEASE_FIRESTORE_DEFAULT_EMPTY_CONFIRMED=true
+RELEASE_DEPLOYMENT_REVIEW_CONFIRMED=true
+RELEASE_FIRESTORE_MIGRATION_CONFIRMATION=MIGRATE:<PROJEKT_ID>:<BENANNTE_QUELLE>:(default)
 ```
 
-Die Release-Konfiguration verwendet stattdessen die stabile Standarddatenbank:
+Keine dieser Freigaben gehört mit realen Produktionswerten ins Repository.
 
-```text
-(default)
-```
+## 2. Planer ausführen
 
-Web-App, Firebase CLI und die eingecheckte Functions-Umgebung sind bereits auf `(default)` umgestellt. Vor einem Deployment müssen Datenbank und Daten kontrolliert migriert werden.
-
-## Voraussetzungen
-
-- Blaze-Abrechnung ist aktiviert.
-- `firebase` und `gcloud` sind mit dem richtigen Google-Konto angemeldet.
-- Das Konto besitzt die nötigen Firestore- und Storage-Berechtigungen.
-- Es existiert ein Cloud-Storage-Bucket für den Export.
-- Während der Migration finden keine produktiven Schreibvorgänge statt.
-
-## 1. Projekt ausdrücklich auswählen
-
-Das alte Projekt ist nur noch unter dem Alias `dev` eingetragen. Es existiert absichtlich kein Default-Alias.
+Im Frontend-Verzeichnis:
 
 ```bash
-firebase use dev
-firebase projects:list
+npm run migration:plan
 ```
 
-Projekt-ID und Kontoinhaber müssen vor jedem weiteren Schritt kontrolliert werden.
+Der Befehl prüft nur die Freigaben und gibt anschließend den vorgesehenen Ablauf aus. Er führt **weder Export noch Import** aus.
 
-## 2. Standarddatenbank erstellen
-
-Die `(default)`-Datenbank kann in der Google-Cloud-/Firebase-Konsole erstellt werden. Alternativ unterstützt die Firebase CLI das Anlegen von Firestore-Datenbanken.
-
-Wichtig:
-
-- Region bewusst auswählen; sie lässt sich später nicht beliebig ändern.
-- Standard Edition verwenden, sofern keine Enterprise-Funktionen benötigt werden.
-- Die Zielregion muss zu Datenschutz, Latenz und Functions-Region passen.
-- Noch keine Nutzer auf die leere Ziel-Datenbank schicken.
-
-## 3. Bestehende Daten sichern
-
-Beispiel mit einem eigenen Bucket und eindeutigem Exportpfad:
+Der paketfreie Selbsttest lautet:
 
 ```bash
-gcloud firestore export \
-  gs://DEIN_BUCKET/wissenpur-migration/2026-08-06 \
-  --database=ai-studio-e6a56a0b-5009-48b4-ab34-e5fc5f5b781b
+npm run migration:self-test
 ```
 
-Der Export verursacht Firestore-Leseoperationen. Nach Start muss der Operationsstatus geprüft werden. Ein fehlgeschlagener oder unvollständiger Export darf nicht importiert werden.
+Zusätzlich ist `check:firestore-migration` Bestandteil des Functions-Verify-Pfads und verhindert, dass der Planer später still zu einem ausführenden Datenjob umgebaut wird.
 
-## 4. Regeln vor dem Nutzerzugriff vorbereiten
+## 3. Managed Export bewusst starten
 
-Die Regeln im Repository zielen jetzt auf die Standarddatenbank:
+Nur nach Prüfung des ausgegebenen Plans wird der Managed Export mit `gcloud firestore export` manuell gestartet. Dabei gelten weiterhin:
 
-```bash
-firebase deploy --only firestore:rules --project dev
-```
+- richtiges Google-Konto und Zielprojekt kontrollieren,
+- Firestore-/Storage-Berechtigungen kontrollieren,
+- produktive Schreibvorgänge für das Migrationsfenster stoppen,
+- Operationsstatus bis zum vollständigen Erfolg prüfen,
+- unvollständige oder fehlgeschlagene Exporte niemals importieren.
 
-Vor einem öffentlichen Betrieb müssen dieselben Regeln zusätzlich in Emulator-Tests geprüft werden.
+Der Exportpfad muss dauerhaft dem dokumentierten Snapshot zuordenbar sein.
 
-## 5. Export in `(default)` importieren
+## 4. `(default)`-Ziel vor Import prüfen
 
-Nur in eine kontrollierte, noch nicht produktiv verwendete Ziel-Datenbank importieren:
+Vor dem Import:
 
-```bash
-gcloud firestore import \
-  gs://DEIN_BUCKET/wissenpur-migration/2026-08-06/EXPORT_PREFIX/ \
-  --database='(default)'
-```
+- Region und Edition der `(default)`-Datenbank bestätigen,
+- Ziel darf noch keine unkontrollierten Produktionsschreibvorgänge enthalten,
+- Rules und erforderliche Indexe vorbereiten,
+- dokumentieren, dass das Ziel kontrolliert leer beziehungsweise bewusst für den Import vorbereitet ist.
 
-Existierende Dokumente mit denselben Pfaden können beim Import überschrieben werden. Deshalb muss das Ziel vor dem Import leer beziehungsweise bewusst vorbereitet sein.
+Ein Import kann bestehende Dokumentpfade überschreiben. Deshalb ist die Variable `RELEASE_FIRESTORE_DEFAULT_EMPTY_CONFIRMED=true` eine bewusste Release-Freigabe und kein automatischer Test.
 
-## 6. Daten prüfen
+## 5. Managed Import bewusst starten
 
-Mindestens kontrollieren:
+Erst nach erfolgreichem Export und Zielprüfung wird der vom Planer ausgegebene `gcloud firestore import`-Befehl manuell ausgeführt. Ziel bleibt zwingend `(default)`.
 
-- Anzahl der Nutzer
-- Ranglisteneinträge
-- Punkte und Münzen mehrerer Testkonten
-- eigene Quizprojekte
-- gespeicherte Fehlerfragen
-- Lernpläne
-- Quiz-Sitzungen und Ablaufzeitstempel
-- alte Lobby- und Duel-Dokumente
+Während des Imports keine App-Version veröffentlichen, die gleichzeitig in Quelle und Ziel schreibt.
 
-Zusätzlich mit zwei Testkonten prüfen:
+## 6. Nachkontrolle
 
-- Konto A kann Konto B nicht lesen.
-- Cloud-Fortschritt wird auf einem zweiten Gerät geladen.
-- eine gewertete Prüfung schreibt in Nutzer und Rangliste.
-- Datenexport liest aus `(default)`.
-- Testkontolöschung entfernt Nutzer, Rangliste und Auth-Konto.
+Mindestens vergleichen:
 
-## 7. TTL-Richtlinien einrichten
+- Anzahl der Nutzerprofile,
+- `trustedLeaderboard`,
+- Punkte, Münzen, Streaks und Inventar mehrerer Testkonten,
+- eigene Lernsets und Fehlerfragen,
+- Lernpläne,
+- Quiz-Sitzungen und Ablaufzeitstempel,
+- Rate-Limit-Dokumente, soweit für den Releasezustand erforderlich,
+- Alt-Collections vor dem separat guarded Legacy-Cleanup.
 
-Für folgende Collection Groups ist das Feld `expiresAt` als TTL-Feld vorgesehen:
+Danach mit mindestens zwei getrennten Testkonten prüfen:
 
-- `quizSessions`
-- `roundReceipts`
+- Konto A kann Konto B nicht lesen,
+- Konto B kann keine Ranked-Session von A submitten oder revealen,
+- eine eigene Ranked-Session kann vollständig abgeschlossen werden,
+- Cloud-Lerninhalte werden nach erneutem Login korrekt geladen,
+- Datenexport liest aus `(default)`,
+- Testkontolöschung entfernt die vorgesehenen Daten und das Auth-Konto.
 
-TTL-Löschungen erfolgen nicht sofort. Abgelaufene Dokumente müssen daher weiterhin auch in der Anwendungslogik als ungültig behandelt werden.
+## 7. TTL, Regeln und Cleanup
 
-## 8. Alt-Multiplayer bereinigen
+Für zeitlich begrenzte Collections müssen die vorgesehenen TTL-Felder und Regeln im Zielprojekt geprüft werden. Alte `lobbies`, `duels`, `leaderboard` und `roundReceipts` werden **nicht** während des Imports nebenbei gelöscht. Dafür existiert der separate Dry-Run-first Legacy-Cleanup.
 
-Vor dem öffentlichen Release:
+## 8. Release und Rollback
 
-- alte `lobbies` vollständig prüfen beziehungsweise löschen,
-- alte `duels` vollständig prüfen beziehungsweise löschen,
-- keine verschachtelten Spieler-UIDs im Altbestand zurücklassen,
-- Multiplayer-Schreibzugriffe deaktiviert lassen.
+Vor dem Hosting-Release:
 
-## 9. Release erst danach umschalten
+1. Produktions-Preflight ausführen.
+2. Rules/Functions gegen `(default)` prüfen.
+3. Daten- und Zwei-Konto-Smokes durchführen.
+4. Hosting-Rollback-Plan erzeugen und aktuellen Live-Stand in einem `rollback-*`-Channel sichern.
+5. Erst danach Hosting veröffentlichen.
 
-Erst nach erfolgreicher Prüfung:
+Ein Datenbank-Rollback ist nach neuen Schreibvorgängen in `(default)` **keine einfache Umschaltung der Datenbank-ID**. Bei einem Fehler müssen Schreibvorgänge gestoppt, Exportzeitpunkt und neue Writes abgeglichen und eine kontrollierte Wiederherstellung geplant werden.
 
-1. Staging auf `(default)` deployen.
-2. Login, Quiz, Daily, Glücksrad, Shop, Export und Löschung testen.
-3. Monitoring und Budgetwarnungen aktivieren.
-4. Produktionsprojekt ausdrücklich auswählen.
-5. Functions, Regeln und Hosting deployen.
-6. alten Schreibpfad deaktiviert lassen.
-7. Export-Backup bis nach erfolgreicher Abnahme aufbewahren.
+## Noch offen vor Produktion
 
-## Rollback
-
-Bei einem Fehler:
-
-- Hosting-/Functions-Release zurückrollen,
-- keine neuen Schreibvorgänge in zwei Datenbanken gleichzeitig zulassen,
-- Ursache beheben,
-- Daten anhand des Exportzeitpunkts und der nachfolgenden Schreibvorgänge abgleichen.
-
-Ein bloßes Zurückstellen der Datenbank-ID ist kein sicherer Rollback, sobald in `(default)` bereits neue Nutzerdaten geschrieben wurden.
+Der Planer und seine Sicherheitsgates sind Repository-Code. Die reale Migration bleibt offen, bis Produktionsprojekt, Berechtigungen, Bucket, Quell-Datenbank, Zielregion und Releasefenster tatsächlich feststehen. Ohne diese Werte darf die Migration nicht als durchgeführt bezeichnet werden.
