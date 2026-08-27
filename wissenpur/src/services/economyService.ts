@@ -124,6 +124,11 @@ const purchaseShopItemCallable = httpsCallable<
   EconomyResponse & { itemId: string; cost: number }
 >(functions, 'purchaseShopItem');
 
+const equipShopAvatarCallable = httpsCallable<
+  { avatarId: string },
+  EconomyResponse & { avatarId: string }
+>(functions, 'equipShopAvatar');
+
 const consumePowerUpCallable = httpsCallable<
   { powerUp: PowerUpId },
   EconomyResponse & { powerUp: PowerUpId }
@@ -179,6 +184,13 @@ export const purchaseServerShopItem = async (
   itemId: string,
 ): Promise<EconomyResponse & { itemId: string; cost: number }> => {
   const result = await runForCurrentAuthenticatedSession(() => purchaseShopItemCallable({ itemId }));
+  return result.data;
+};
+
+export const equipServerShopAvatar = async (
+  avatarId: string,
+): Promise<EconomyResponse & { avatarId: string }> => {
+  const result = await runForCurrentAuthenticatedSession(() => equipShopAvatarCallable({ avatarId }));
   return result.data;
 };
 
