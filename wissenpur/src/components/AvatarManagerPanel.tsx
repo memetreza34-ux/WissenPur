@@ -101,11 +101,6 @@ export const AvatarManagerPanel = () => {
     try {
       const purchased = await purchaseServerShopItem(avatarId);
       applyServerResponse(purchased.stats);
-
-      // The purchase already equips the avatar in authoritative economy state.
-      // A follow-up equip keeps the public leaderboard avatar in sync immediately.
-      const equipped = await equipServerShopAvatar(avatarId);
-      applyServerResponse(equipped.stats);
       setMessage('Avatar gekauft und aktiviert.');
     } catch (error) {
       setMessage(getCallableErrorMessage(error));
