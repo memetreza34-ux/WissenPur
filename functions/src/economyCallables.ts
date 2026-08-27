@@ -178,6 +178,7 @@ export const purchaseShopItem = onCall<PurchaseRequest>(
       await enforceGlobalCallableRateLimit(uid);
       const itemId = requireString(request.data.itemId, 'itemId', 100);
       const userRef = db.collection('users').doc(uid);
+      const leaderboardRef = db.collection('trustedLeaderboard').doc(uid);
       const today = berlinDateKey();
 
       return await db.runTransaction(async (transaction) => {
@@ -194,6 +195,11 @@ export const purchaseShopItem = onCall<PurchaseRequest>(
           ...publicState,
           updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
+        transaction.set(
+          leaderboardRef,
+          leaderboardProfile(uid, userData, purchase.state, request.auth?.token),
+          { merge: true },
+        );
 
         return {
           itemId: purchase.itemId,
