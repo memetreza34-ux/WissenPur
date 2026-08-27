@@ -4,6 +4,7 @@ export {
   purchaseShopItem,
   consumePowerUp,
 } from './economyCallables.js';
+export { equipShopAvatar } from './avatarEquipCallable.js';
 export { getMyEconomyState } from './economyStateCallable.js';
 export { getTrustedLeaderboard } from './leaderboardCallable.js';
 export { submitRankedQuiz } from './secureSubmit.js';
