@@ -6,6 +6,7 @@ import { AccountSessionBoundary } from './components/AccountSessionBoundary';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
 import { AvatarManagerPanel } from './components/AvatarManagerPanel';
 import { ConnectivityBanner } from './components/ConnectivityBanner';
+import { FirstRunOnboarding } from './components/FirstRunOnboarding';
 import { LearningAnalyticsPanel } from './components/LearningAnalyticsPanel';
 import { LearningLibraryManager } from './components/LearningLibraryManager';
 import { LearningPlanPanel } from './components/LearningPlanPanel';
@@ -23,6 +24,7 @@ createRoot(document.getElementById('root')!).render(
         <PwaUpdateBanner />
         <AccountSessionBoundary>
           <ReleaseApp />
+          <FirstRunOnboarding />
           <LearningAnalyticsPanel />
           <LearningLibraryManager />
           <ManualLearningSetPanel />
