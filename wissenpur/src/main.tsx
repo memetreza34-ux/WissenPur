@@ -4,6 +4,7 @@ import { MotionConfig } from 'motion/react';
 import { AccountPrivacyPanel } from './components/AccountPrivacyPanel';
 import { AccountSessionBoundary } from './components/AccountSessionBoundary';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
+import { AvatarManagerPanel } from './components/AvatarManagerPanel';
 import { ConnectivityBanner } from './components/ConnectivityBanner';
 import { LearningAnalyticsPanel } from './components/LearningAnalyticsPanel';
 import { LearningLibraryManager } from './components/LearningLibraryManager';
@@ -26,6 +27,7 @@ createRoot(document.getElementById('root')!).render(
           <LearningLibraryManager />
           <ManualLearningSetPanel />
           <LearningPlanPanel />
+          <AvatarManagerPanel />
           <LegalPanel />
           <AccountPrivacyPanel />
         </AccountSessionBoundary>
