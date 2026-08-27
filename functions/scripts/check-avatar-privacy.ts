@@ -18,10 +18,28 @@ for (const [itemId, item] of avatarItems) {
   await access(resolve(publicRoot, url.slice(1)));
 }
 
-const [secureSubmit, economyCallables, economyCore] = await Promise.all([
+const [
+  secureSubmit,
+  economyCallables,
+  economyCore,
+  avatarEquipCore,
+  avatarEquipCallable,
+  entry,
+  economyService,
+  avatarManager,
+  main,
+  accountBoundary,
+] = await Promise.all([
   readFile(resolve(repoRoot, 'functions/src/secureSubmit.ts'), 'utf8'),
   readFile(resolve(repoRoot, 'functions/src/economyCallables.ts'), 'utf8'),
   readFile(resolve(repoRoot, 'functions/src/economyCore.ts'), 'utf8'),
+  readFile(resolve(repoRoot, 'functions/src/avatarEquipCore.ts'), 'utf8'),
+  readFile(resolve(repoRoot, 'functions/src/avatarEquipCallable.ts'), 'utf8'),
+  readFile(resolve(repoRoot, 'functions/src/entry.ts'), 'utf8'),
+  readFile(resolve(repoRoot, 'wissenpur/src/services/economyService.ts'), 'utf8'),
+  readFile(resolve(repoRoot, 'wissenpur/src/components/AvatarManagerPanel.tsx'), 'utf8'),
+  readFile(resolve(repoRoot, 'wissenpur/src/main.tsx'), 'utf8'),
+  readFile(resolve(repoRoot, 'wissenpur/src/components/AccountSessionBoundary.tsx'), 'utf8'),
 ]);
 
 for (const [name, source] of [
@@ -36,4 +54,31 @@ for (const [name, source] of [
 assert.doesNotMatch(economyCore, /dicebear|api\.dicebear\.com/i);
 assert.match(economyCore, /LOCAL_AVATAR_URLS\.has\(customPhotoURL\)/);
 
-console.log('Shop- und Leaderboard-Avatare sind auf lokale, versionierte SVG-Assets begrenzt.');
+assert.match(avatarEquipCore, /avatarId === 'default'/);
+assert.match(avatarEquipCore, /state\.unlockedAvatars\.includes\(avatarId\)/);
+assert.match(avatarEquipCore, /item\.kind !== 'avatar'/);
+assert.match(avatarEquipCore, /state\.customPhotoURL = item\.url/);
+assert.doesNotMatch(avatarEquipCore, /state\.coins\s*[-+]=/,
+  'Das Wechseln eines bereits gekauften Avatars darf keine Münzen verändern.');
+
+assert.match(avatarEquipCallable, /enforceGlobalCallableRateLimit\(uid\)/);
+assert.match(avatarEquipCallable, /equipAvatarItem\(currentState, avatarId\)/);
+assert.match(avatarEquipCallable, /trustedLeaderboard/);
+assert.match(avatarEquipCallable, /safeLocalAvatar/);
+assert.match(entry, /export \{ equipShopAvatar \} from '\.\/avatarEquipCallable\.js';/);
+assert.match(economyService, /equipShopAvatarCallable/);
+assert.match(economyService, /export const equipServerShopAvatar/);
+
+for (const [itemId, item] of avatarItems) {
+  assert.match(avatarManager, new RegExp(`id: '${itemId}'`));
+  if ('url' in item) assert.ok(avatarManager.includes(`url: '${item.url}'`));
+}
+assert.match(avatarManager, /equipServerShopAvatar/);
+assert.match(avatarManager, /purchaseServerShopItem/);
+assert.match(avatarManager, /equip\('default'\)/);
+assert.match(avatarManager, /Gekaufte Avatare kannst du jederzeit kostenlos wechseln/);
+assert.match(avatarManager, /wissenpur:stats-updated/);
+assert.match(main, /<AvatarManagerPanel\s*\/>/);
+assert.match(accountBoundary, /wissenpur:stats-updated/);
+
+console.log('Avatar-Privacy, lokale Assets, serverseitiger Besitzcheck und kostenloser Equip-/Reset-Flow geprüft.');
