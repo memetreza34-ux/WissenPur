@@ -22,8 +22,9 @@ interface AccountSessionBoundaryProps {
  * account the user explicitly signs into. Authenticated -> anonymous and
  * authenticated -> another account always clear the previous account context.
  *
- * Library mutations can also request a controlled remount so the main product
- * immediately reloads imported decks, due-card counts and wrong-question data.
+ * Library and shared stats mutations can also request a controlled remount so
+ * the main product immediately reloads imported decks, due-card counts,
+ * economy-owned profile state and wrong-question data.
  */
 export const AccountSessionBoundary = ({ children }: AccountSessionBoundaryProps) => {
   const [sessionKey, setSessionKey] = useState('auth-loading');
@@ -47,7 +48,11 @@ export const AccountSessionBoundary = ({ children }: AccountSessionBoundaryProps
   useEffect(() => {
     const refreshProductContent = () => setContentRevision((value) => value + 1);
     window.addEventListener('wissenpur:library-updated', refreshProductContent);
-    return () => window.removeEventListener('wissenpur:library-updated', refreshProductContent);
+    window.addEventListener('wissenpur:stats-updated', refreshProductContent);
+    return () => {
+      window.removeEventListener('wissenpur:library-updated', refreshProductContent);
+      window.removeEventListener('wissenpur:stats-updated', refreshProductContent);
+    };
   }, []);
 
   if (!authResolved) {
