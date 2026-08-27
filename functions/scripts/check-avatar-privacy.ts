@@ -69,6 +69,12 @@ assert.match(entry, /export \{ equipShopAvatar \} from '\.\/avatarEquipCallable\
 assert.match(economyService, /equipShopAvatarCallable/);
 assert.match(economyService, /export const equipServerShopAvatar/);
 
+const purchaseBlock = economyCallables.match(
+  /export const purchaseShopItem[\s\S]*?export const consumePowerUp/,
+)?.[0] || '';
+assert.match(purchaseBlock, /const leaderboardRef = db\.collection\('trustedLeaderboard'\)\.doc\(uid\)/);
+assert.match(purchaseBlock, /transaction\.set\(\s*leaderboardRef,\s*leaderboardProfile\(uid, userData, purchase\.state, request\.auth\?\.token\)/);
+
 for (const [itemId, item] of avatarItems) {
   assert.match(avatarManager, new RegExp(`id: '${itemId}'`));
   if ('url' in item) assert.ok(avatarManager.includes(`url: '${item.url}'`));
@@ -81,4 +87,4 @@ assert.match(avatarManager, /wissenpur:stats-updated/);
 assert.match(main, /<AvatarManagerPanel\s*\/>/);
 assert.match(accountBoundary, /wissenpur:stats-updated/);
 
-console.log('Avatar-Privacy, lokale Assets, serverseitiger Besitzcheck und kostenloser Equip-/Reset-Flow geprüft.');
+console.log('Avatar-Privacy, lokale Assets, serverseitiger Besitzcheck, Kauf-Sync und kostenloser Equip-/Reset-Flow geprüft.');
