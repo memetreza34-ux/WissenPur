@@ -27,6 +27,14 @@ const lock = JSON.parse(await readFile(lockPath, 'utf8')) as {
 
 const failures: string[] = [];
 const root = lock.packages?.[''];
+const removedTopLevelPackages = [
+  '@google/genai',
+  '@types/express',
+  'autoprefixer',
+  'dotenv',
+  'express',
+  'tsx',
+] as const;
 
 if (lock.lockfileVersion !== 3) {
   failures.push(`wissenpur/package-lock.json: lockfileVersion ${String(lock.lockfileVersion)} statt 3.`);
@@ -64,6 +72,14 @@ if (!root) {
   }
 }
 
+for (const packageName of removedTopLevelPackages) {
+  if (lock.packages?.[`node_modules/${packageName}`]) {
+    failures.push(
+      `wissenpur/package-lock.json: Entferntes Alt-Paket ${packageName} liegt noch als Top-Level-Lockeintrag vor. Das Lockfile muss aus dem bereinigten Manifest neu erzeugt werden.`,
+    );
+  }
+}
+
 if (failures.length > 0) {
   console.error('\nWissenPur-Frontend-Lockfile ist nicht reproduzierbar:\n');
   for (const failure of failures) console.error(`- ${failure}`);
@@ -71,4 +87,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('Frontend-Lockfile stimmt mit dem Manifest und allen direkten Abhängigkeiten überein.');
+console.log('Frontend-Lockfile stimmt mit dem Manifest überein und enthält keine bekannten Top-Level-Alt-Pakete.');
