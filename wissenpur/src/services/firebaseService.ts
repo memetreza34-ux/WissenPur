@@ -96,7 +96,6 @@ const mergeProfileContent = (
     ...localStats,
     uid: cloudStats.uid ?? localStats.uid,
     displayName: cloudStats.displayName ?? localStats.displayName,
-    photoURL: cloudStats.photoURL ?? localStats.photoURL,
     customName: cloudStats.customName ?? localStats.customName,
     age: cloudStats.age ?? localStats.age,
     wrongQuestions: mergedWrongQuestions,
@@ -139,7 +138,6 @@ const getProfileUpdate = (
   return sanitizeForFirestore({
     uid: expectedUid,
     displayName: currentUser.displayName || 'Anonym',
-    photoURL: currentUser.photoURL || '',
     customName: stats.customName,
     age: stats.age,
     wrongQuestions,
