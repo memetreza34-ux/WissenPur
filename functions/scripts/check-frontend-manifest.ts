@@ -9,6 +9,8 @@ const packageJson = JSON.parse(await readFile(packagePath, 'utf8')) as {
   scripts?: Record<string, string>;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  engines?: Record<string, string>;
+  packageManager?: string;
 };
 
 const dependencies = packageJson.dependencies || {};
@@ -70,14 +72,20 @@ for (const buildTool of ['@tailwindcss/vite', '@vitejs/plugin-react', 'tailwindc
   }
 }
 
+if (packageJson.engines?.node !== '>=22.12.0 <23') {
+  failures.push('wissenpur/package.json: Node muss für den Frontend-Build auf >=22.12.0 <23 begrenzt sein.');
+}
+if (packageJson.packageManager !== 'npm@10.9.2') {
+  failures.push('wissenpur/package.json: packageManager muss npm@10.9.2 festlegen.');
+}
 if (scripts.clean !== 'node scripts/clean.mjs') {
   failures.push('wissenpur/package.json: Clean-Skript muss plattformunabhängig über Node laufen.');
 }
 if (!scripts.lint?.includes('tsc --noEmit')) {
   failures.push('wissenpur/package.json: Frontend-Typecheck fehlt im lint-Skript.');
 }
-if (!scripts['build:release']?.includes('check:release')) {
-  failures.push('wissenpur/package.json: Release-Build muss die Produktionskonfiguration prüfen.');
+if (!scripts['build:release']?.includes('preflight:production')) {
+  failures.push('wissenpur/package.json: Release-Build muss den Produktions-Preflight ausführen.');
 }
 
 for (const [name, version] of Object.entries({ ...dependencies, ...devDependencies })) {
@@ -97,5 +105,5 @@ if (failures.length > 0) {
 }
 
 console.log(
-  `Frontend-Manifest geprüft: ${Object.keys(dependencies).length} Laufzeit- und ${Object.keys(devDependencies).length} Entwicklungsabhängigkeiten.`,
+  `Frontend-Manifest und Toolchain geprüft: Node ${packageJson.engines?.node}, ${packageJson.packageManager}, ${Object.keys(dependencies).length} Laufzeit- und ${Object.keys(devDependencies).length} Entwicklungsabhängigkeiten.`,
 );
