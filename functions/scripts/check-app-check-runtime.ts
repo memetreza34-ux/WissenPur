@@ -16,6 +16,8 @@ const [firebase, functionsClient, economy, account, firebaseService, gemini] = a
 ]);
 
 assert.match(firebase, /const appCheckSiteKey = import\.meta\.env\.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY\?\.trim\(\)/);
+assert.match(firebase, /const configuredDatabaseId = import\.meta\.env\.VITE_FIRESTORE_DATABASE_ID\?\.trim\(\)/);
+assert.match(firebase, /const hasUnsafeProductionDatabase = Boolean\(/);
 assert.match(firebase, /export const isAppCheckConfigured = Boolean\(appCheckSiteKey\)/);
 assert.match(firebase, /export const assertProtectedOnlineRuntimeReady = \(\): void => \{/);
 assert.match(firebase, /initializeAppCheck\(app, \{/);
@@ -27,6 +29,8 @@ const initializationStart = firebase.indexOf('if (appCheckSiteKey)', guardStart)
 assert.ok(guardStart >= 0 && initializationStart > guardStart, 'Der lazy App-Check-Guard muss vor der Initialisierung definiert sein.');
 const guardSection = firebase.slice(guardStart, initializationStart);
 assert.match(guardSection, /if \(import\.meta\.env\.PROD && !isAppCheckConfigured\) \{/);
+assert.match(guardSection, /if \(hasUnsafeProductionDatabase\) \{/);
+assert.match(guardSection, /Firestore muss \(default\) verwenden/);
 assert.match(guardSection, /throw new Error\(/, 'Der lazy Guard muss in fehlkonfigurierter Produktion fail-closed sein.');
 
 const productionFallbackStart = firebase.indexOf('} else if (import.meta.env.PROD)', initializationStart);
@@ -38,6 +42,15 @@ assert.doesNotMatch(
   productionFallback,
   /throw new Error/,
   'Fehlendes App Check darf den Modulimport nicht abbrechen; nur konkrete Online-Aktionen dürfen fail-closed blockieren.',
+);
+
+assert.match(firebase, /const developmentDatabaseId = !import\.meta\.env\.PROD/);
+assert.match(firebase, /configuredDatabaseId !== '\(default\)'/);
+assert.match(firebase, /export const db = developmentDatabaseId[\s\S]{0,180}initializeFirestore\(app, firestoreSettings\);/);
+assert.doesNotMatch(
+  firebase,
+  /export const db = configuredDatabaseId && configuredDatabaseId !== '\(default\)'/,
+  'Production darf eine benannte Firestore-Datenbank nicht direkt aus der Build-Umgebung übernehmen.',
 );
 
 assert.match(functionsClient, /import \{ app, assertProtectedOnlineRuntimeReady \} from ['"]\.\.\/firebase['"]/);
@@ -74,4 +87,4 @@ for (const file of [economy, account, firebaseService, gemini]) {
   );
 }
 
-console.log('Lazy App-Check-Initialisierung und fail-closed Guards für Functions, Cloud-Profil, Rangliste und Firebase AI geprüft.');
+console.log('App Check, fail-closed Online-Grenzen und (default)-Firestore für Production geprüft.');
