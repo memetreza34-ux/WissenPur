@@ -29,6 +29,7 @@ const [
   economyService,
   firebaseService,
   avatarManager,
+  releaseApp,
   main,
   accountBoundary,
   firestoreRules,
@@ -43,6 +44,7 @@ const [
   readFile(resolve(repoRoot, 'wissenpur/src/services/economyService.ts'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/services/firebaseService.ts'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/components/AvatarManagerPanel.tsx'), 'utf8'),
+  readFile(resolve(repoRoot, 'wissenpur/src/ReleaseApp.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/main.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/components/AccountSessionBoundary.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/firestore.rules'), 'utf8'),
@@ -103,7 +105,20 @@ assert.match(avatarManager, /purchaseServerShopItem/);
 assert.match(avatarManager, /equip\('default'\)/);
 assert.match(avatarManager, /Gekaufte Avatare kannst du jederzeit kostenlos wechseln/);
 assert.match(avatarManager, /wissenpur:stats-updated/);
+
+assert.match(releaseApp, /const profilePhotoURL = stats\.customPhotoURL \|\| user\?\.photoURL \|\| null;/,
+  'Der lokal/serverseitig ausgerüstete WissenPur-Avatar muss in der Hauptoberfläche Vorrang vor dem Provider-Foto haben.');
+assert.ok(
+  (releaseApp.match(/profilePhotoURL \? <img src=\{profilePhotoURL\}/g) || []).length >= 2,
+  'Heute- und Profilansicht müssen dieselbe priorisierte Avatarquelle rendern.',
+);
+assert.doesNotMatch(
+  releaseApp,
+  /user\?\.photoURL \? <img src=\{user\.photoURL\}/,
+  'Die Hauptoberfläche darf einen ausgerüsteten WissenPur-Avatar nicht durch das Provider-Foto übersteuern.',
+);
+
 assert.match(main, /<AvatarManagerPanel\s*\/>/);
 assert.match(accountBoundary, /wissenpur:stats-updated/);
 
-console.log('Avatar-Privacy, Provider-Foto-Minimierung, lokale Assets, serverseitiger Besitzcheck, Kauf-Sync und kostenloser Equip-/Reset-Flow geprüft.');
+console.log('Avatar-Privacy, Provider-Foto-Minimierung, lokale Assets, Hauptprofil-Rendering, serverseitiger Besitzcheck, Kauf-Sync und kostenloser Equip-/Reset-Flow geprüft.');
