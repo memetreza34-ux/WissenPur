@@ -65,6 +65,12 @@ if (typeof window !== 'undefined') {
 export const app = initializeApp(firebaseConfig);
 
 const appCheckSiteKey = import.meta.env.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY?.trim();
+const configuredDatabaseId = import.meta.env.VITE_FIRESTORE_DATABASE_ID?.trim();
+const hasUnsafeProductionDatabase = Boolean(
+  import.meta.env.PROD &&
+  configuredDatabaseId &&
+  configuredDatabaseId !== '(default)',
+);
 export const isAppCheckConfigured = Boolean(appCheckSiteKey);
 
 /**
@@ -76,6 +82,11 @@ export const assertProtectedOnlineRuntimeReady = (): void => {
   if (import.meta.env.PROD && !isAppCheckConfigured) {
     throw new Error(
       'Geschützte Online-Funktionen sind in diesem Produktionsbuild nicht verfügbar. App Check fehlt.',
+    );
+  }
+  if (hasUnsafeProductionDatabase) {
+    throw new Error(
+      'Geschützte Online-Funktionen sind in diesem Produktionsbuild nicht verfügbar. Firestore muss (default) verwenden.',
     );
   }
 };
@@ -106,12 +117,17 @@ export const auth = initializeAuth(app, {
 const firestoreSettings = {
   localCache: memoryLocalCache(),
 };
-const configuredDatabaseId = import.meta.env.VITE_FIRESTORE_DATABASE_ID?.trim();
 
-// Production uses the stable default Firestore database. A named database can
-// be selected explicitly for isolated development or a one-time migration.
-export const db = configuredDatabaseId && configuredDatabaseId !== '(default)'
-  ? initializeFirestore(app, firestoreSettings, configuredDatabaseId)
+// Production always opens Firestore `(default)`. A named database is accepted
+// only in development, and protected production network features additionally
+// fail closed when a named database was injected into the build environment.
+const developmentDatabaseId = !import.meta.env.PROD &&
+  configuredDatabaseId &&
+  configuredDatabaseId !== '(default)'
+  ? configuredDatabaseId
+  : null;
+export const db = developmentDatabaseId
+  ? initializeFirestore(app, firestoreSettings, developmentDatabaseId)
   : initializeFirestore(app, firestoreSettings);
 
 export const googleProvider = new GoogleAuthProvider();
