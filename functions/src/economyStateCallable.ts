@@ -51,6 +51,10 @@ export const getMyEconomyState = onCall(
         transaction.set(userRef, {
           uid,
           ...publicState,
+          // Provider profile images are available through Firebase Auth when
+          // needed by the signed-in browser. Do not duplicate the external URL
+          // in the learning-profile document; remove historical copies lazily.
+          photoURL: FieldValue.delete(),
           updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
 
