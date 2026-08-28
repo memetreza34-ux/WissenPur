@@ -21,7 +21,6 @@ let testEnv: RulesTestEnvironment;
 const profile = (uid: string) => ({
   uid,
   displayName: uid,
-  photoURL: '',
   wrongQuestions: [],
   customQuizzes: [],
   darkMode: false,
@@ -103,7 +102,7 @@ test('a user can create and read only their own profile document', async () => {
   await assertFails(deleteDoc(aliceRef));
 });
 
-test('the browser cannot create or update economy and shop-avatar fields', async () => {
+test('the browser cannot create or update economy, shop-avatar or provider-photo fields', async () => {
   const alice = testEnv.authenticatedContext('alice').firestore();
 
   await assertFails(setDoc(doc(alice, 'users/alice'), {
@@ -114,6 +113,10 @@ test('the browser cannot create or update economy and shop-avatar fields', async
   await assertFails(setDoc(doc(alice, 'users/alice'), {
     ...profile('alice'),
     customPhotoURL: 'https://tracker.example/avatar.png',
+  }));
+  await assertFails(setDoc(doc(alice, 'users/alice'), {
+    ...profile('alice'),
+    photoURL: 'https://images.example/provider-photo.png',
   }));
 
   await seed('users/alice', serverEconomy('alice'));
@@ -132,6 +135,9 @@ test('the browser cannot create or update economy and shop-avatar fields', async
   }));
   await assertFails(updateDoc(doc(alice, 'users/alice'), {
     customPhotoURL: 'https://tracker.example/avatar.png',
+  }));
+  await assertFails(updateDoc(doc(alice, 'users/alice'), {
+    photoURL: 'https://images.example/provider-photo.png',
   }));
 });
 
