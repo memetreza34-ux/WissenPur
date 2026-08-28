@@ -304,6 +304,7 @@ export default function ReleaseApp() {
     [reviewNow, stats.customQuizzes],
   );
   const dueCards = dueReviewQuestions.length;
+  const profilePhotoURL = stats.customPhotoURL || user?.photoURL || null;
 
   const startActiveQuiz = (quiz: ActiveQuiz) => {
     quizGenerationRef.current += 1;
@@ -678,7 +679,7 @@ export default function ReleaseApp() {
             </div>
             {user ? (
               <button type="button" onClick={() => setScreen('profile')} className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-blue-600 font-black text-white">
-                {user.photoURL ? <img src={user.photoURL} alt="Profil" className="h-full w-full object-cover" referrerPolicy="no-referrer" /> : user.displayName?.[0] || 'U'}
+                {profilePhotoURL ? <img src={profilePhotoURL} alt="Profil" className="h-full w-full object-cover" referrerPolicy="no-referrer" /> : user.displayName?.[0] || 'U'}
               </button>
             ) : (
               <Button size="sm" onClick={signInWithGoogle}><LogIn size={16} /> Anmelden</Button>
@@ -854,7 +855,7 @@ export default function ReleaseApp() {
       <div className="min-h-full pb-28">
         {renderHeader('Profil')}
         <main className="space-y-6 p-5">
-          <Card className="p-6 text-center"><div className="mx-auto flex h-20 w-20 items-center justify-center overflow-hidden rounded-[1.75rem] bg-blue-600 text-3xl font-black text-white">{user?.photoURL ? <img src={user.photoURL} alt="Profil" className="h-full w-full object-cover" referrerPolicy="no-referrer" /> : stats.customName?.[0] || user?.displayName?.[0] || level.icon}</div><h2 className="mt-4 text-2xl font-black">{stats.customName || user?.displayName || 'Gastkonto'}</h2><p className={`mt-1 text-sm font-black ${level.color}`}>{level.name} · Level {level.level}</p><div className="mt-5"><ProgressBar progress={level.progress} /></div></Card>
+          <Card className="p-6 text-center"><div className="mx-auto flex h-20 w-20 items-center justify-center overflow-hidden rounded-[1.75rem] bg-blue-600 text-3xl font-black text-white">{profilePhotoURL ? <img src={profilePhotoURL} alt="Profil" className="h-full w-full object-cover" referrerPolicy="no-referrer" /> : stats.customName?.[0] || user?.displayName?.[0] || level.icon}</div><h2 className="mt-4 text-2xl font-black">{stats.customName || user?.displayName || 'Gastkonto'}</h2><p className={`mt-1 text-sm font-black ${level.color}`}>{level.name} · Level {level.level}</p><div className="mt-5"><ProgressBar progress={level.progress} /></div></Card>
           <div className="grid grid-cols-2 gap-3"><Card className="p-5 text-center"><Trophy className="mx-auto text-blue-500" /><p className="mt-2 text-2xl font-black">{stats.totalPoints}</p><p className="text-xs text-slate-500">Punkte</p></Card><Card className="p-5 text-center"><Target className="mx-auto text-emerald-500" /><p className="mt-2 text-2xl font-black">{accuracy}%</p><p className="text-xs text-slate-500">Genauigkeit</p></Card></div>
           <Button fullWidth variant="outline" disabled={isAccountHydrating} onClick={() => setScreen('leaderboard')}><Medal size={18} /> Rangliste öffnen</Button>
           <Button fullWidth variant="outline" disabled={isAccountHydrating} onClick={() => setScreen('shop')}><Coins size={18} /> Shop öffnen</Button>
