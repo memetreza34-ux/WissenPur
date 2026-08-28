@@ -111,7 +111,6 @@ service cloud.firestore {
              data.uid is string &&
              hasValidOptionalString(data, 'displayName', 100) &&
              hasValidOptionalString(data, 'customName', 100) &&
-             hasValidOptionalString(data, 'photoURL', 1000) &&
              hasValidOptionalAge(data) &&
              hasValidOptionalList(data, 'wrongQuestions', 300) &&
              hasValidOptionalDifficultyTimes(data) &&
@@ -126,7 +125,6 @@ service cloud.firestore {
         'displayName',
         'customName',
         'age',
-        'photoURL',
         'wrongQuestions',
         'customDifficultyTimes',
         'darkMode',
@@ -140,7 +138,6 @@ service cloud.firestore {
         'displayName',
         'customName',
         'age',
-        'photoURL',
         'wrongQuestions',
         'customDifficultyTimes',
         'darkMode',
@@ -188,7 +185,8 @@ service cloud.firestore {
 
       // New browser-created documents contain profile and learning content
       // only. Economy fields, inventory and shop avatars are added exclusively
-      // by Cloud Functions.
+      // by Cloud Functions. Identity-provider photo URLs are intentionally not
+      // duplicated into the learning-profile document.
       allow create: if isOwner(userId) &&
                        request.resource.data.keys().hasOnly(clientProfileKeys()) &&
                        isValidClientProfile(userId, request.resource.data);
