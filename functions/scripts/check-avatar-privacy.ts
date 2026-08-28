@@ -22,24 +22,30 @@ const [
   secureSubmit,
   economyCallables,
   economyCore,
+  economyStateCallable,
   avatarEquipCore,
   avatarEquipCallable,
   entry,
   economyService,
+  firebaseService,
   avatarManager,
   main,
   accountBoundary,
+  firestoreRules,
 ] = await Promise.all([
   readFile(resolve(repoRoot, 'functions/src/secureSubmit.ts'), 'utf8'),
   readFile(resolve(repoRoot, 'functions/src/economyCallables.ts'), 'utf8'),
   readFile(resolve(repoRoot, 'functions/src/economyCore.ts'), 'utf8'),
+  readFile(resolve(repoRoot, 'functions/src/economyStateCallable.ts'), 'utf8'),
   readFile(resolve(repoRoot, 'functions/src/avatarEquipCore.ts'), 'utf8'),
   readFile(resolve(repoRoot, 'functions/src/avatarEquipCallable.ts'), 'utf8'),
   readFile(resolve(repoRoot, 'functions/src/entry.ts'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/services/economyService.ts'), 'utf8'),
+  readFile(resolve(repoRoot, 'wissenpur/src/services/firebaseService.ts'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/components/AvatarManagerPanel.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/main.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/components/AccountSessionBoundary.tsx'), 'utf8'),
+  readFile(resolve(repoRoot, 'wissenpur/firestore.rules'), 'utf8'),
 ]);
 
 for (const [name, source] of [
@@ -53,6 +59,19 @@ for (const [name, source] of [
 
 assert.doesNotMatch(economyCore, /dicebear|api\.dicebear\.com/i);
 assert.match(economyCore, /LOCAL_AVATAR_URLS\.has\(customPhotoURL\)/);
+
+assert.match(economyStateCallable, /photoURL: FieldValue\.delete\(\)/,
+  'Autoritative Konto-Hydrierung muss historische Provider-photoURL-Felder aus users/{uid} entfernen.');
+assert.doesNotMatch(firebaseService, /currentUser\.photoURL/,
+  'Der Browser darf die Firebase-Auth-photoURL nicht zusätzlich in das Firestore-Profil spiegeln.');
+assert.doesNotMatch(firebaseService, /cloudStats\.photoURL/,
+  'Historische Provider-photoURL-Werte dürfen nicht zurück in den lokalen Lernzustand gemergt werden.');
+const clientProfileRuleSection = firestoreRules.slice(
+  firestoreRules.indexOf('function isValidClientProfile'),
+  firestoreRules.indexOf('function isValidTrustedLeaderboard'),
+);
+assert.doesNotMatch(clientProfileRuleSection, /photoURL/,
+  'Client-writable Nutzerprofile dürfen kein Provider-photoURL-Feld mehr akzeptieren.');
 
 assert.match(avatarEquipCore, /avatarId === 'default'/);
 assert.match(avatarEquipCore, /state\.unlockedAvatars\.includes\(avatarId\)/);
@@ -87,4 +106,4 @@ assert.match(avatarManager, /wissenpur:stats-updated/);
 assert.match(main, /<AvatarManagerPanel\s*\/>/);
 assert.match(accountBoundary, /wissenpur:stats-updated/);
 
-console.log('Avatar-Privacy, lokale Assets, serverseitiger Besitzcheck, Kauf-Sync und kostenloser Equip-/Reset-Flow geprüft.');
+console.log('Avatar-Privacy, Provider-Foto-Minimierung, lokale Assets, serverseitiger Besitzcheck, Kauf-Sync und kostenloser Equip-/Reset-Flow geprüft.');
