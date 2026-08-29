@@ -85,8 +85,8 @@ if (!hosting || typeof hosting !== 'object' || Array.isArray(hosting)) {
     failures.push('firebase.json: X-DNS-Prefetch-Control muss off sein.');
   }
   const imageCsp = globalHeaderValue('Content-Security-Policy').trim();
-  if (imageCsp !== "img-src 'self' data: blob:") {
-    failures.push("firebase.json: CSP muss externe Bildhosts mit exakt img-src 'self' data: blob: blockieren.");
+  if (imageCsp !== "img-src 'self' data: blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'") {
+    failures.push("firebase.json: CSP muss Bilder auf same-origin/data/blob begrenzen und object-src/base-uri/frame-ancestors härten.");
   }
 
   const findHeaderValue = (source: string, key: string): string => {
@@ -158,4 +158,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('Hosting-Sicherheitsheader, same-origin Bild-CSP, Privacy-Header, Cache-Regeln, Sprache und Release-Gates geprüft.');
+console.log('Hosting-Sicherheitsheader, hardened same-origin Bild-CSP, Privacy-Header, Cache-Regeln, Sprache und Release-Gates geprüft.');
