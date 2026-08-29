@@ -7,6 +7,7 @@
   "engines": {
     "node": "22"
   },
+  "packageManager": "npm@10.9.2",
   "scripts": {
     "check:secrets": "tsx scripts/check-repository-secrets.ts",
     "check:hosting": "tsx scripts/check-hosting-config.ts",
