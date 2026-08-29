@@ -44,7 +44,7 @@ jobs:
         with:
           node-version: '22.12.0'
 
-      - name: Pin frontend npm version
+      - name: Pin npm version
         run: npm install --global npm@10.9.2 --no-audit --no-fund
 
       # Temporary until wissenpur/package-lock.json is regenerated from the
@@ -71,6 +71,10 @@ jobs:
         with:
           node-version: '22.12.0'
 
+      - name: Pin npm version
+        run: npm install --global npm@10.9.2 --no-audit --no-fund
+
+      # Temporary until functions/package-lock.json is generated and committed.
       - name: Install pinned Functions dependencies
         run: npm install --prefix functions --no-audit --no-fund
 
@@ -93,12 +97,16 @@ jobs:
         with:
           node-version: '22.12.0'
 
+      - name: Pin npm version
+        run: npm install --global npm@10.9.2 --no-audit --no-fund
+
       - name: Set up Java 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
 
+      # Temporary until rules-tests/package-lock.json is generated and committed.
       - name: Install pinned rules-test dependencies
         run: npm install --prefix rules-tests --no-audit --no-fund
 
