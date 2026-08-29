@@ -118,7 +118,7 @@ export const LegalPanel = () => {
 
                   <Section title="Welche Daten verarbeitet werden">
                     <ul className="list-disc space-y-2 pl-5">
-                      <li>Kontodaten aus Firebase Authentication, insbesondere UID, Anzeigename, E-Mail-Adresse, Profilbild und Login-Anbieter.</li>
+                      <li>Kontodaten aus Firebase Authentication, insbesondere UID, Anzeigename, E-Mail-Adresse, Profilbild und Login-Anbieter. Provider-Anzeigename und Provider-Profilbild werden nicht als Lernprofilfelder in Firestore dupliziert.</li>
                       <li>Lernfortschritt, Antworten, Punkte, Münzen, Streaks, Erfolge, Lernpläne, eigene Lernsets und gespeicherte Fehlerfragen.</li>
                       <li>Quiz-Sitzungen, Sicherheitsnachweise und technische Metadaten zur Verhinderung doppelter oder manipulierter Wertungen.</li>
                       <li>Auf dem aktuellen Gerät eine kompakte persönliche Lernanalyse mit Zeitpunkten, Kategorien und Ergebniskennzahlen neuer Prüfungen. Sie enthält keine Fragentexte, Antworten oder Lösungsschlüssel.</li>
@@ -135,7 +135,7 @@ export const LegalPanel = () => {
                       <li>Firebase Hosting beziehungsweise der konfigurierte Hostinganbieter für die Web-App.</li>
                       <li>Firebase App Check und reCAPTCHA Enterprise zum Schutz vor automatisiertem Missbrauch.</li>
                       <li>Firebase AI Logic und Google Gemini für ausdrücklich gestartete KI-Lernfunktionen.</li>
-                      <li>Externe Bildquellen können beim Anzeigen einzelner Lerninhalte die IP-Adresse des Geräts erhalten. Vor Release sind alle verwendeten Domains abschließend zu dokumentieren oder durch eigenes Hosting zu ersetzen.</li>
+                      <li>Lern-, Shop- und Ranglistenbilder werden im Releasepfad ausschließlich aus derselben App-Origin ausgeliefert. Externe Bild-URLs in nutzerverwalteten Lernsets werden entfernt; serververwaltete Shop-Avatare liegen als lokale App-Assets vor.</li>
                     </ul>
                   </Section>
 
@@ -148,8 +148,9 @@ export const LegalPanel = () => {
                     <ul className="list-disc space-y-2 pl-5">
                       <li>Kontodaten und servergespeicherter Lernfortschritt: bis zur Kontolöschung oder bis eine andere erforderliche Frist abläuft.</li>
                       <li>Lokale Lernanalyse: höchstens 80 neue Sitzungen auf dem aktuellen Gerät, bis Logout, Kontolöschung oder Browserdaten-Löschung sie entfernt.</li>
-                      <li>Quiz-Sitzungen und Rundennachweise: höchstens {legalConfig.sessionRetentionDays || '[Frist fehlt]'} Tage, zusätzlich technisch über Ablaufzeit und TTL begrenzt.</li>
-                      <li>Technische Sicherheits- und Fehlerlogs: höchstens {legalConfig.logRetentionDays || '[Frist fehlt]'} Tage, soweit der jeweilige Dienst dies unterstützt.</li>
+                      <li>Aktive Ranked-Quiz-Sitzungen laufen technisch nach ungefähr 30 Minuten ab. Die physische Löschung erfolgt anschließend über die konfigurierte Firestore-TTL und kann zeitversetzt stattfinden.</li>
+                      <li>Historische Rundennachweise und noch vorhandene Alt-Daten: höchstens {legalConfig.sessionRetentionDays || '[Frist fehlt]'} Tage beziehungsweise bis zum kontrollierten Legacy-Cleanup, sofern keine andere erforderliche Frist gilt.</li>
+                      <li>Technische Sicherheits- und Fehlerlogs: höchstens {legalConfig.logRetentionDays || '[Frist fehlt]'} Tage, soweit der jeweilige Dienst dies unterstützt. App-eigene Functions-Fehlerlogs sind auf technische Fehlerklasse und Fehlercode begrenzt und enthalten keine UID, E-Mail, Session-ID, Fragentexte oder Request-Payloads.</li>
                       <li>Supportanfragen: höchstens {legalConfig.supportRetentionDays || '[Frist fehlt]'} Tage nach Abschluss, sofern keine gesetzlichen Pflichten entgegenstehen.</li>
                     </ul>
                   </Section>
