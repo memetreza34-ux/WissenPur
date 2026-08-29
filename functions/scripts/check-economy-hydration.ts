@@ -99,9 +99,15 @@ assert.match(releaseApp, /if \(isAccountHydrating\)/);
 assert.match(releaseApp, /DailySpinWheel onClaimReward=\{\(\) => setStats\(getStats\(\) as ReleaseStats\)\}/);
 assert.doesNotMatch(releaseApp, /DailySpinWheel[\s\S]{0,160}setTimeout/);
 
+assert.match(spinWheel, /const berlinDateKey = \(\) =>/);
 assert.match(spinWheel, /const expectedUid = auth\.currentUser\?\.uid;/);
 assert.match(spinWheel, /if \(auth\.currentUser\?\.uid !== expectedUid\) \{\s*setIsSpinning\(false\);\s*return;/);
 assert.match(spinWheel, /useEffect\(\(\) => \(\) => clearAnimationTimers\(\), \[\]\)/);
+assert.match(
+  spinWheel,
+  /if \(getStats\(\)\.lastSpinDate !== berlinDateKey\(\)\) \{\s*setWonReward\(null\);\s*\}/,
+  'Ein über Mitternacht geöffnetes Glücksrad muss den alten UI-Gewinn am neuen Berlin-Kalendertag freigeben.',
+);
 const spinSaveIndex = spinWheel.indexOf('saveStats(preserveLocalLearningData(result.stats));');
 const spinCallbackIndex = spinWheel.indexOf('onClaimReward(result.reward);');
 const spinFinishTimeoutIndex = spinWheel.indexOf('finishTimeoutRef.current = window.setTimeout');
@@ -111,4 +117,4 @@ const timeoutBody = spinWheel.slice(spinFinishTimeoutIndex);
 assert.doesNotMatch(timeoutBody, /saveStats\(/, 'Ein Animationstimeout darf niemals verzögert Kontodaten schreiben.');
 assert.match(timeoutBody, /auth\.currentUser\?\.uid !== expectedUid/);
 
-console.log('Autoritative Economy-Hydrierung, UI-Generationssperre, Stale-Session-Sperre, accountgebundene Glücksrad-Persistenz, Legacy-Reset und signierte Local-Mutation-Sperre geprüft.');
+console.log('Autoritative Economy-Hydrierung, UI-Generationssperre, Stale-Session-Sperre, accountgebundene Glücksrad-Persistenz, Tageswechsel-Freigabe, Legacy-Reset und signierte Local-Mutation-Sperre geprüft.');
