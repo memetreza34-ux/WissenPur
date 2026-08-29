@@ -132,8 +132,8 @@ const globalHeaders = hosting.hosting?.headers?.find((entry) => entry.source ===
 const imageCsp = globalHeaders.find((entry) => entry.key?.toLowerCase() === 'content-security-policy')?.value || '';
 assert.equal(
   imageCsp,
-  "img-src 'self' data: blob:",
-  'Production Hosting muss externe Profil-/Trackingbilder browserseitig blockieren.',
+  "img-src 'self' data: blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+  'Production Hosting muss externe Profil-/Trackingbilder blockieren und nicht benötigte Einbettungs-/Base-/Object-Kanäle schließen.',
 );
 assert.match(indexCss, /img\[alt="Profil"\]\[src\^="https:\/\/"\]/,
   'Für historische Provider-Foto-URLs muss ein visueller Offline-/Privacy-Fallback existieren.');
@@ -143,4 +143,4 @@ assert.match(indexCss, /content: "U";/,
 assert.match(main, /<AvatarManagerPanel\s*\/>/);
 assert.match(accountBoundary, /wissenpur:stats-updated/);
 
-console.log('Avatar-Privacy, same-origin Bild-CSP, Provider-Foto-Fallback, lokale Assets, Hauptprofil-Rendering, serverseitiger Besitzcheck, Kauf-Sync und kostenloser Equip-/Reset-Flow geprüft.');
+console.log('Avatar-Privacy, hardened same-origin Bild-CSP, Provider-Foto-Fallback, lokale Assets, Hauptprofil-Rendering, serverseitiger Besitzcheck, Kauf-Sync und kostenloser Equip-/Reset-Flow geprüft.');
