@@ -21,12 +21,13 @@ Der aktive Release-Stand wird in Draft-PR #2 (`agent/release-foundation`) entwic
 - Das Rechtliches-Modal verwendet den gemeinsamen Accessibility-Hook für Fokusfalle, Escape, Fokus-Rückgabe und Scroll-Lock.
 - Frontend, Functions und Firestore-Regeltests deklarieren einheitlich `npm@10.9.2`; die drei Hosted-CI-Jobs pinnen Node `22.12.0` und npm `10.9.2`.
 - Der Package-Lock-Gate prüft alle drei Node-Arbeitsbereiche und blockiert fehlende, veraltete oder nicht zum jeweiligen Manifest passende Lockfiles.
+- `node scripts/regenerate-package-locks.mjs` erzeugt die drei Lockfiles nur unter exakt Node `22.12.0` und npm `10.9.2` und verweigert abweichende Toolchains.
 - automatische Release-Gates decken u. a. Secrets, Architektur, Account-Isolation, App Check, Ranked-Snapshots, Rate-Limits, PWA, Accessibility, Datenschutz, Lernbibliothek, SRS, Analytics, Migration und Production-Preflight ab.
 
 ## Weiterhin offene Release-Blocker
 
 1. **GitHub Actions Billing/Spending-Limit korrigieren.** Die aktuellen Workflow-Läufe starten weiterhin keinen Runner; die Jobs enden ohne ausgeführte Steps. Dadurch liegt weiterhin kein bestätigter Hosted-CI-Codefehler vor, aber auch kein erfolgreicher Hosted-CI-Nachweis.
-2. **Alle drei Node-Lockfiles reproduzierbar herstellen.** `wissenpur/package-lock.json` stammt noch aus dem alten Frontend-Manifest und enthält veraltete direkte Pakete; `@types/react` und `@types/react-dom` fehlen dort vollständig. `functions/package-lock.json` und `rules-tests/package-lock.json` fehlen derzeit ganz. Alle drei Lockfiles müssen mit Node `22.12.0` und npm `10.9.2` aus den aktuellen Manifesten erzeugt und committed werden. Erst danach alle drei CI-Installationen gemeinsam auf `npm ci` umstellen.
+2. **Alle drei Node-Lockfiles reproduzierbar herstellen.** `wissenpur/package-lock.json` stammt noch aus dem alten Frontend-Manifest und enthält veraltete direkte Pakete; `@types/react` und `@types/react-dom` fehlen dort vollständig. `functions/package-lock.json` und `rules-tests/package-lock.json` fehlen derzeit ganz. Mit exakt Node `22.12.0` und npm `10.9.2` im Repository-Root `node scripts/regenerate-package-locks.mjs` ausführen, die drei erzeugten Lockfiles prüfen und committen. Erst danach alle drei CI-Installationen gemeinsam auf `npm ci` umstellen.
 3. **Clean-Checkout-Verifikation durchführen:** Frontend-Typecheck und Build, Functions-Verify/Compile sowie Firestore-Emulatortests vollständig erfolgreich bestätigen.
 4. **Produktions-Firebase konfigurieren:** App Check, AI Logic, Functions, Quotas, Budgetwarnungen und Monitoring im echten Zielprojekt aktivieren.
 5. **Firestore-Produktion fertigstellen:** `(default)` als Produktionsdatenbank verwenden, kontrollierte Migration durchführen und TTL für `quizSessions.expiresAt` sowie `serverRateLimits.expiresAt` aktivieren.
