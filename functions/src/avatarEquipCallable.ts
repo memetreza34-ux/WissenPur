@@ -51,14 +51,10 @@ const publicLeaderboardProfile = (
   customPhotoURL: unknown,
   totalPoints: number,
   economyVersion: number,
-  authToken: Record<string, unknown> | undefined,
 ) => ({
   uid,
-  displayName:
-    stringOrNull(userData?.customName, 100) ||
-    stringOrNull(userData?.displayName, 100) ||
-    stringOrNull(authToken?.name, 100) ||
-    'WissenPur-Nutzer',
+  // Public identity is opt-in through the app-specific customName only.
+  displayName: stringOrNull(userData?.customName, 100) || 'WissenPur-Nutzer',
   photoURL: safeLocalAvatar(customPhotoURL),
   totalPoints,
   economyVersion,
@@ -105,7 +101,6 @@ export const equipShopAvatar = onCall<EquipAvatarRequest>(
             equipped.state.customPhotoURL,
             equipped.state.totalPoints,
             equipped.state.economyVersion,
-            request.auth?.token,
           ),
           { merge: true },
         );
