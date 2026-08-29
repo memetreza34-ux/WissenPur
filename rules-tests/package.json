@@ -6,6 +6,7 @@
   "engines": {
     "node": "22"
   },
+  "packageManager": "npm@10.9.2",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test:rules": "firebase emulators:exec --config ../firebase.json --only firestore --project demo-wissenpur-rules \"tsx firestore.rules.test.ts && tsx leaderboard-privacy.test.ts\"",
