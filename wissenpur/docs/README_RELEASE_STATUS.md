@@ -17,12 +17,14 @@ Der aktive Release-Stand wird in Draft-PR #2 (`agent/release-foundation`) entwic
 - PWA-App-Icons sind committed und verdrahtet: 192×192, 512×512, maskable 512×512 und Apple-Touch 180×180.
 - Service Worker v7 cached App-Shell, gehashte Build-Assets, lokale Avatare und Icons.
 - globale Offline-/Online-Anzeige ist vorhanden.
+- Das tägliche Glücksrad gibt einen neuen Tagesdreh auch dann frei, wenn die App über den Berlin-Kalendertagswechsel hinweg geöffnet bleibt.
+- Das Rechtliches-Modal verwendet den gemeinsamen Accessibility-Hook für Fokusfalle, Escape, Fokus-Rückgabe und Scroll-Lock.
 - automatische Release-Gates decken u. a. Secrets, Architektur, Account-Isolation, App Check, Ranked-Snapshots, Rate-Limits, PWA, Accessibility, Datenschutz, Lernbibliothek, SRS, Analytics, Migration und Production-Preflight ab.
 
 ## Weiterhin offene Release-Blocker
 
-1. **GitHub Actions Billing/Spending-Limit korrigieren.** Der aktuellste Lauf startet weiterhin keinen Runner; die Jobs enden ohne ausgeführte Steps. Dadurch liegt weiterhin kein bestätigter Hosted-CI-Codefehler vor, aber auch kein erfolgreicher Hosted-CI-Nachweis.
-2. **`wissenpur/package-lock.json` reproduzierbar neu erzeugen.** Das Lockfile stammt noch aus dem alten Frontend-Manifest und enthält veraltete direkte Pakete. Danach Frontend-CI wieder auf `npm ci` umstellen.
+1. **GitHub Actions Billing/Spending-Limit korrigieren.** Die aktuellen Workflow-Läufe starten weiterhin keinen Runner; die Jobs enden ohne ausgeführte Steps. Dadurch liegt weiterhin kein bestätigter Hosted-CI-Codefehler vor, aber auch kein erfolgreicher Hosted-CI-Nachweis.
+2. **`wissenpur/package-lock.json` reproduzierbar neu erzeugen.** Das Lockfile stammt noch aus dem alten Frontend-Manifest und enthält veraltete direkte Pakete. Die neuen direkten Typ-Pakete `@types/react` und `@types/react-dom` fehlen im vorhandenen Lockfile vollständig; ein bloßes Bereinigen alter Einträge reicht daher nicht. Danach Frontend-CI wieder auf `npm ci` umstellen.
 3. **Clean-Checkout-Verifikation durchführen:** Frontend-Typecheck und Build, Functions-Verify/Compile sowie Firestore-Emulatortests vollständig erfolgreich bestätigen.
 4. **Produktions-Firebase konfigurieren:** App Check, AI Logic, Functions, Quotas, Budgetwarnungen und Monitoring im echten Zielprojekt aktivieren.
 5. **Firestore-Produktion fertigstellen:** `(default)` als Produktionsdatenbank verwenden, kontrollierte Migration durchführen und TTL für `quizSessions.expiresAt` sowie `serverRateLimits.expiresAt` aktivieren.
@@ -33,7 +35,8 @@ Der aktive Release-Stand wird in Draft-PR #2 (`agent/release-foundation`) entwic
 
 ## Aktueller CI-Status
 
-Der aktuelle PR-Head ist `beb09bdf4dfc80ffd7c18fe28adc6c34d30674ce`.
-Der dazugehörige Workflow-Lauf `33254332371` ist fehlgeschlagen, aber die drei erwarteten Jobs (`frontend-typecheck-and-build`, `functions-verify-and-build`, `firestore-security-rules`) enthalten weiterhin keine ausgeführten Steps. Das entspricht dem bekannten GitHub-Actions-Billing-/Spending-Limit-Blocker und ist **kein bestätigter TypeScript-, Build- oder Firestore-Testfehler**.
+Für den jeweils neuesten PR-Head ist der Workflow **WissenPur quality checks** maßgeblich. Solange dessen drei erwartete Jobs (`frontend-typecheck-and-build`, `functions-verify-and-build`, `firestore-security-rules`) ohne ausgeführte Steps enden, gilt der bekannte GitHub-Actions-Billing-/Spending-Limit-Blocker als aktiv. Dieser Zustand ist **kein bestätigter TypeScript-, Build- oder Firestore-Testfehler**, aber ebenso kein erfolgreicher CI-Nachweis.
+
+Konkrete Commit-SHAs und Workflow-Run-IDs werden hier bewusst nicht fest eingetragen, da sie nach jedem weiteren Härtungscommit sofort veralten. Der aktuelle Stand ist direkt am Head von Draft-PR #2 und im zugehörigen GitHub-Actions-Lauf abzulesen.
 
 PR #2 bleibt deshalb bewusst **Draft** und darf erst nach vollständiger Verifikation, Produktionsmigration, Rechtsfinalisierung und Realgerätetest gemergt werden.
