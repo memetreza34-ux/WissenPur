@@ -9,6 +9,7 @@ Der aktuelle Entwicklungsstand liegt auf `agent/release-foundation`. Pull Reques
 - `wissenpur/` – React-/Vite-Web-App, PWA, Firestore-Regeln und Produktdokumentation
 - `functions/` – Firebase Cloud Functions, Economy, sichere Quiz-Sitzungen, Account-Export/-Löschung und Release-Gates
 - `rules-tests/` – Firestore-Emulator-Tests mit getrennten Testkonten
+- `scripts/` – repositoryweite Release-Helfer, insbesondere reproduzierbare Lockfile-Erzeugung
 - `.github/workflows/wissenpur-quality.yml` – Frontend-, Functions- und Rules-Qualitätsjobs
 - `firebase.json` / `.firebaserc` – Firebase-Hosting-, Functions- und Rules-Konfiguration
 
@@ -50,48 +51,92 @@ Nutzererstellte Lerninhalte werden beim ersten Login nicht unnötig gelöscht:
 
 Gastpunkte, Gastmünzen, Gaststreaks und andere Economy-Werte werden dagegen nicht in das Konto migriert.
 
-## Lokaler Start
+## Freigegebene Toolchain
 
-Voraussetzung: Node.js 22.
+Für reproduzierbare Release-Arbeit gilt:
 
-### Frontend
+- **Node.js `22.12.0`**
+- **npm `10.9.2`**
+- Java 21 für die Firestore-Emulatortests
 
-```bash
-cd wissenpur
-npm install
-npm run lint
-npm run dev
-```
+Frontend, Functions und Rules-Tests deklarieren `npm@10.9.2`. Der Quality-Workflow pinnt Node und npm ebenfalls exakt. Die verwendeten offiziellen GitHub Actions sind auf konkrete Commit-SHAs festgelegt; Checkout persistiert das GitHub-Token nicht im Git-Config.
 
-### Functions
+## Lokaler Start während des Lockfile-Blockers
 
-```bash
-cd functions
-npm install
-npm run verify
-npm run compile
-```
-
-### Firestore-Regeln
-
-Die Rules-Tests benötigen Java und die Firebase Emulator Suite:
-
-```bash
-cd rules-tests
-npm install
-npm test
-```
-
-## Release-Build
+Solange die drei neuen Lockfiles noch nicht reproduzierbar committed sind, werden Abhängigkeiten lokal vorübergehend mit `npm install` installiert.
 
 Frontend:
 
 ```bash
 cd wissenpur
+npm install --no-audit --no-fund
 npm run lint
-npm run check:release
-npm run build
+npm run dev
 ```
+
+Functions:
+
+```bash
+cd functions
+npm install --no-audit --no-fund
+npm run verify
+npm run compile
+```
+
+Firestore-Regeln:
+
+```bash
+cd rules-tests
+npm install --no-audit --no-fund
+npm test
+```
+
+Dieser temporäre Installationsweg ist **kein** Nachweis für einen reproduzierbaren Release.
+
+## Package-Lock-Strategie
+
+Der Release benötigt drei committed, zum jeweiligen Manifest passende Lockfiles:
+
+- `wissenpur/package-lock.json` – aktuell noch aus der alten Demo-Abhängigkeitsstruktur und deshalb veraltet
+- `functions/package-lock.json` – aktuell noch nicht committed
+- `rules-tests/package-lock.json` – aktuell noch nicht committed
+
+`npm --prefix functions run check:package-locks` blockiert fehlende, veraltete oder nicht mit dem Manifest synchronisierte Lockfiles.
+
+Sobald Registry-Zugriff verfügbar ist, aus dem Repository-Root mit **Node 22.12.0 / npm 10.9.2** ausführen:
+
+```bash
+node scripts/regenerate-package-locks.mjs
+```
+
+Der Helfer erzeugt alle drei Lockfiles mit `--package-lock-only --ignore-scripts`. Scheitert ein Workspace, werden bereits veränderte Lockfiles auf den Zustand vor dem Lauf zurückgesetzt.
+
+Danach aus einem sauberen Checkout beziehungsweise nach Entfernen alter `node_modules`:
+
+```bash
+npm ci --prefix wissenpur
+npm ci --prefix functions
+npm ci --prefix rules-tests
+
+npm --prefix wissenpur run lint
+npm --prefix wissenpur run build
+npm --prefix functions run verify
+npm --prefix functions run compile
+npm --prefix rules-tests test
+```
+
+Erst wenn diese Prüfung erfolgreich ist, werden alle drei Lockfiles committed und die drei CI-Installationen gemeinsam von `npm install` auf `npm ci` umgestellt.
+
+## Release-Build
+
+Ein echter Produktions-Build des Frontends läuft fail-closed über:
+
+```bash
+cd wissenpur
+npm run build:release
+```
+
+`build:release` führt den Typecheck, den Produktions-Preflight und anschließend den Vite-Build aus. Der Produktions-Preflight erwartet bewusst echte Firebase-, TTL-, Rechts- und Freigabewerte und darf mit Platzhaltern nicht erfolgreich sein.
 
 Functions:
 
@@ -100,23 +145,21 @@ cd functions
 npm run build
 ```
 
-Der Functions-Verifikationspfad prüft unter anderem Secrets, Firebase-/Hosting-Konfiguration, Architekturgrenzen, Frontend-Manifest, **Frontend-Lockfile**, Konto-Isolation, Economy-Hydrierung, Ranglisten-Snapshots, PWA-Runtime, Lernset-Bibliothek, Lernanalyse und Inhaltsqualität.
+Der Functions-Verifikationspfad prüft unter anderem Secrets, CI-Rechte und Action-Allowlist, Hosting/CSP, Architekturgrenzen, Frontend-Manifest/Toolchain, **alle drei Package-Lockfiles**, Konto-/Session-Isolation, App Check, Economy-Hydrierung, Ranked-Snapshots, Callable-Limits, PWA-Runtime, Accessibility, Datenschutz, Lernbibliothek/SRS/Analytics, Produktions-Preflight, Migration/Rollback und Inhaltsqualität.
 
-## Frontend-Lockfile
+## PWA-Stand
 
-`wissenpur/package-lock.json` ist derzeit **bewusst als Release-Blocker markiert**, weil der Root-Eintrag noch aus der älteren Demo-Abhängigkeitsstruktur stammt und direkte aktuelle Pakete wie `@types/react` und `@types/react-dom` nicht vollständig aufgelöst enthält.
+Bereits committed und verdrahtet sind:
 
-Sobald Registry-Zugriff verfügbar ist:
+- 192×192 PNG-App-Icon
+- 512×512 PNG-App-Icon
+- 512×512 maskable PNG-Icon
+- 180×180 Apple-Touch-Icon
+- lokale SVG-Avatare
+- Service Worker v7 mit App-Shell-/Build-Asset-/Icon-Caching
+- globale Offline-/Online-Anzeige
 
-```bash
-cd wissenpur
-rm -rf node_modules package-lock.json
-npm install --no-audit --no-fund
-npm run lint
-npm run build
-```
-
-Danach muss das neue `package-lock.json` committed werden. Anschließend kann der GitHub-Workflow wieder von `npm install` auf `npm ci` umgestellt werden. Der Gate `check:frontend-lock` verhindert bis dahin einen irrtümlich reproduzierbar genannten Release.
+Noch offen sind reale Installations-, Update- und Offline-Start-Tests auf Android und iPhone.
 
 ## Produktionskonfiguration
 
@@ -126,36 +169,41 @@ Vor einem öffentlichen Deployment müssen mindestens vollständig gesetzt bezie
 - Firebase AI Logic
 - Cloud Functions
 - Firestore `(default)` und kontrollierte Migration vorhandener Daten
+- TTL für `quizSessions.expiresAt` und `serverRateLimits.expiresAt`
 - Quotas, Budgetwarnungen und Monitoring
+- echter `production`-Alias erst nach bewusster Zielprojektwahl
 - echte Betreiber-, Datenschutz- und Supportangaben
 - definierte Log-/Session-/Support-Aufbewahrungsfristen
-- rechtliche Freigabe
+- bestätigte rechtliche Prüfung
 
-Die Release-App blockiert eine vollständige rechtliche Freigabe, solange die erforderliche Konfiguration fehlt.
+Die Release-App und der Produktions-Preflight blockieren eine vollständige Freigabe, solange diese Konfiguration fehlt.
 
 ## Bekannte Release-Blocker
 
-- GitHub Actions startet aktuell keine Runner wegen Billing-/Spending-Limit des GitHub-Kontos.
-- Deshalb existiert noch kein bestätigter echter Frontend-, Functions- oder Firestore-Regelbuild dieses Branches.
-- Das Frontend-Lockfile muss aus dem bereinigten Manifest neu erzeugt werden.
-- Firebase-Zielprojekt, App Check, AI Logic, Quotas und Monitoring müssen final konfiguriert werden.
-- Firestore-Daten müssen kontrolliert nach `(default)` migriert werden.
-- Emulator-Tests mit zwei echten Testkonten müssen tatsächlich ausgeführt werden.
-- alte Lobby-/Duel-Daten müssen bereinigt werden.
-- echte Betreiberangaben und rechtliche Prüfung fehlen noch.
-- mobile/desktop End-to-End- und Rollback-Tests fehlen.
-- PNG-/Apple-Touch-PWA-Icons und reale iOS-/Android-Installationstests fehlen.
+1. GitHub Actions startet aktuell keine Runner wegen Billing-/Spending-Limit des GitHub-Kontos. Deshalb existiert weiterhin kein bestätigter Hosted-CI-Nachweis.
+2. Alle drei Package-Lockfiles müssen mit der freigegebenen Toolchain reproduzierbar erzeugt und committed werden; danach CI auf `npm ci` umstellen.
+3. Frontend-Build, Functions-Verify/Compile und Firestore-Emulatortests müssen aus einem frischen Checkout vollständig erfolgreich laufen.
+4. Firebase-Zielprojekt, App Check, AI Logic, Functions, Quotas, Budgetwarnungen und Monitoring müssen final konfiguriert werden.
+5. Firestore muss kontrolliert nach `(default)` migriert und die benötigte TTL real aktiviert werden.
+6. Legacy-Daten-Cleanup muss erst als Dry Run und danach kontrolliert gegen die bestätigte Allowlist erfolgen.
+7. Echte Betreiberangaben, Aufbewahrungsfristen, Mindestalter und Rechtsprüfung müssen finalisiert werden.
+8. Hosting-Snapshot/Restore muss real getestet werden.
+9. Android-, iPhone- und Desktop-E2E inklusive Installation, Offline-Start, Update, Auth-Wechsel, Konto-Löschung, Ranked, KI und SRS fehlen noch.
 
 ## Wichtige Dokumente
 
+- `wissenpur/docs/README_RELEASE_STATUS.md`
 - `wissenpur/docs/PRODUCT_RELEASE_ROADMAP.md`
 - `wissenpur/docs/ACCOUNT_PRIVACY.md`
 - `wissenpur/docs/FIREBASE_RELEASE_CHECKLIST.md`
 - `wissenpur/docs/FIRESTORE_DEFAULT_MIGRATION.md`
+- `wissenpur/docs/HOSTING_ROLLBACK.md`
+- `wissenpur/docs/PRODUCTION_PREFLIGHT.md`
+- `wissenpur/docs/PWA_RELEASE_CHECKLIST.md`
 - `wissenpur/docs/LEARNING_SET_IMPORT.md`
 - `wissenpur/docs/LEARNING_ANALYTICS.md`
 - `wissenpur/docs/RANKED_CONTENT_POLICY.md`
 
 ## Release-Regel
 
-PR #2 bleibt Draft. Er darf erst als releasefähig gelten, wenn **echte** Builds und Emulator-Tests erfolgreich gelaufen sind, das Lockfile reproduzierbar ist, die Produktionskonfiguration vollständig ist und die rechtlichen Pflichtangaben freigegeben wurden.
+PR #2 bleibt Draft. Er darf erst als releasefähig gelten, wenn **echte** Builds und Emulator-Tests erfolgreich gelaufen sind, alle drei Lockfiles reproduzierbar sind, die Produktionskonfiguration und Migration vollständig sind, die rechtlichen Pflichtangaben freigegeben wurden und die Realgerät-/Rollback-Tests abgeschlossen sind.
