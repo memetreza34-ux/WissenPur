@@ -5,10 +5,26 @@ import { fileURLToPath } from 'node:url';
 
 const currentDir = resolve(fileURLToPath(new URL('.', import.meta.url)));
 const repoRoot = resolve(currentDir, '../..');
-const workflow = await readFile(
-  resolve(repoRoot, '.github/workflows/wissenpur-quality.yml'),
-  'utf8',
-);
+const [workflow, frontendPackageText, functionsPackageText, rulesPackageText] = await Promise.all([
+  readFile(resolve(repoRoot, '.github/workflows/wissenpur-quality.yml'), 'utf8'),
+  readFile(resolve(repoRoot, 'wissenpur/package.json'), 'utf8'),
+  readFile(resolve(repoRoot, 'functions/package.json'), 'utf8'),
+  readFile(resolve(repoRoot, 'rules-tests/package.json'), 'utf8'),
+]);
+
+const packageManifests = new Map<string, Record<string, unknown>>([
+  ['wissenpur/package.json', JSON.parse(frontendPackageText) as Record<string, unknown>],
+  ['functions/package.json', JSON.parse(functionsPackageText) as Record<string, unknown>],
+  ['rules-tests/package.json', JSON.parse(rulesPackageText) as Record<string, unknown>],
+]);
+
+for (const [path, manifest] of packageManifests) {
+  assert.equal(
+    manifest.packageManager,
+    'npm@10.9.2',
+    `${path} muss npm@10.9.2 als packageManager festlegen.`,
+  );
+}
 
 assert.match(workflow, /permissions:\s*\n\s*contents: read/);
 assert.match(workflow, /concurrency:\s*\n\s*group: wissenpur-quality-/);
@@ -32,15 +48,13 @@ for (const job of jobNames) {
     /node-version:\s*['"]22\.12\.0['"]/,
     `${job} muss die freigegebene Node-Version 22.12.0 exakt pinnen.`,
   );
+  assert.match(
+    section,
+    /npm install --global npm@10\.9\.2 --no-audit --no-fund/,
+    `${job} muss die freigegebene npm-Version 10.9.2 exakt pinnen.`,
+  );
   jobSections.set(job, section);
 }
-
-const frontendSection = jobSections.get('frontend-typecheck-and-build') || '';
-assert.match(
-  frontendSection,
-  /npm install --global npm@10\.9\.2 --no-audit --no-fund/,
-  'Der Frontend-Job muss die im Manifest festgelegte npm-Version 10.9.2 verwenden.',
-);
 
 assert.doesNotMatch(workflow, /permissions:\s*\n(?:\s+[^\n]+\n)*\s*(?:write-all|contents:\s*write|actions:\s*write|id-token:\s*write)/,
   'Der Quality-Workflow darf keine Schreibrechte oder OIDC-Token anfordern.');
@@ -49,4 +63,4 @@ assert.doesNotMatch(workflow, /pull_request_target\s*:/,
 assert.doesNotMatch(workflow, /firebase\s+deploy|cleanup:legacy|gcloud\s+firestore\s+(?:import|export)/,
   'Quality-CI darf weder deployen noch Produktionsdaten migrieren/löschen.');
 
-console.log('GitHub-Actions-Rechte, Toolchain-Pins, Concurrency, Zeitlimits und Nicht-Deployment-Grenzen geprüft.');
+console.log('GitHub-Actions-Rechte, einheitliche Toolchain-Pins, Concurrency, Zeitlimits und Nicht-Deployment-Grenzen geprüft.');
