@@ -33,6 +33,8 @@ const [
   main,
   accountBoundary,
   firestoreRules,
+  indexCss,
+  firebaseJson,
 ] = await Promise.all([
   readFile(resolve(repoRoot, 'functions/src/secureSubmit.ts'), 'utf8'),
   readFile(resolve(repoRoot, 'functions/src/economyCallables.ts'), 'utf8'),
@@ -48,6 +50,8 @@ const [
   readFile(resolve(repoRoot, 'wissenpur/src/main.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/components/AccountSessionBoundary.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/firestore.rules'), 'utf8'),
+  readFile(resolve(repoRoot, 'wissenpur/src/index.css'), 'utf8'),
+  readFile(resolve(repoRoot, 'firebase.json'), 'utf8'),
 ]);
 
 for (const [name, source] of [
@@ -106,8 +110,11 @@ assert.match(avatarManager, /equip\('default'\)/);
 assert.match(avatarManager, /Gekaufte Avatare kannst du jederzeit kostenlos wechseln/);
 assert.match(avatarManager, /wissenpur:stats-updated/);
 
-assert.match(releaseApp, /const profilePhotoURL = stats\.customPhotoURL \|\| user\?\.photoURL \|\| null;/,
-  'Der lokal/serverseitig ausgerüstete WissenPur-Avatar muss in der Hauptoberfläche Vorrang vor dem Provider-Foto haben.');
+assert.match(
+  releaseApp,
+  /const profilePhotoURL = stats\.customPhotoURL \|\|(?: user\?\.photoURL \|\|)? null;/,
+  'Die Hauptoberfläche muss den lokal/serverseitig ausgerüsteten WissenPur-Avatar priorisieren und einen providerfreien Zustand unterstützen.',
+);
 assert.ok(
   (releaseApp.match(/profilePhotoURL \? <img src=\{profilePhotoURL\}/g) || []).length >= 2,
   'Heute- und Profilansicht müssen dieselbe priorisierte Avatarquelle rendern.',
@@ -118,7 +125,22 @@ assert.doesNotMatch(
   'Die Hauptoberfläche darf einen ausgerüsteten WissenPur-Avatar nicht durch das Provider-Foto übersteuern.',
 );
 
+const hosting = JSON.parse(firebaseJson) as {
+  hosting?: { headers?: Array<{ source?: string; headers?: Array<{ key?: string; value?: string }> }> };
+};
+const globalHeaders = hosting.hosting?.headers?.find((entry) => entry.source === '**')?.headers || [];
+const imageCsp = globalHeaders.find((entry) => entry.key?.toLowerCase() === 'content-security-policy')?.value || '';
+assert.equal(
+  imageCsp,
+  "img-src 'self' data: blob:",
+  'Production Hosting muss externe Profil-/Trackingbilder browserseitig blockieren.',
+);
+assert.match(indexCss, /img\[alt="Profil"\]\[src\^="https:\/\/"\]/,
+  'Für historische Provider-Foto-URLs muss ein visueller Offline-/Privacy-Fallback existieren.');
+assert.match(indexCss, /content: "U";/,
+  'Geblockte Provider-Fotos dürfen keinen kaputten leeren Avatar hinterlassen.');
+
 assert.match(main, /<AvatarManagerPanel\s*\/>/);
 assert.match(accountBoundary, /wissenpur:stats-updated/);
 
-console.log('Avatar-Privacy, Provider-Foto-Minimierung, lokale Assets, Hauptprofil-Rendering, serverseitiger Besitzcheck, Kauf-Sync und kostenloser Equip-/Reset-Flow geprüft.');
+console.log('Avatar-Privacy, same-origin Bild-CSP, Provider-Foto-Fallback, lokale Assets, Hauptprofil-Rendering, serverseitiger Besitzcheck, Kauf-Sync und kostenloser Equip-/Reset-Flow geprüft.');
