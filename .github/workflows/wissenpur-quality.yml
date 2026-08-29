@@ -42,7 +42,10 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '22.12.0'
+
+      - name: Pin frontend npm version
+        run: npm install --global npm@10.9.2 --no-audit --no-fund
 
       # Temporary until wissenpur/package-lock.json is regenerated from the
       # current manifest. check:frontend-lock intentionally keeps this visible.
@@ -66,7 +69,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '22.12.0'
 
       - name: Install pinned Functions dependencies
         run: npm install --prefix functions --no-audit --no-fund
@@ -88,7 +91,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '22.12.0'
 
       - name: Set up Java 21
         uses: actions/setup-java@v4
