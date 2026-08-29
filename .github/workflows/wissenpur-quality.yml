@@ -6,6 +6,7 @@ on:
       - 'wissenpur/**'
       - 'functions/**'
       - 'rules-tests/**'
+      - 'scripts/**'
       - 'firebase.json'
       - '.firebaserc'
       - '.github/workflows/wissenpur-quality.yml'
@@ -16,6 +17,7 @@ on:
       - 'wissenpur/**'
       - 'functions/**'
       - 'rules-tests/**'
+      - 'scripts/**'
       - 'firebase.json'
       - '.firebaserc'
       - '.github/workflows/wissenpur-quality.yml'
@@ -48,7 +50,7 @@ jobs:
         run: npm install --global npm@10.9.2 --no-audit --no-fund
 
       # Temporary until wissenpur/package-lock.json is regenerated from the
-      # current manifest. check:frontend-lock intentionally keeps this visible.
+      # current manifest. check:package-locks intentionally keeps this visible.
       - name: Install corrected frontend dependency graph
         run: npm install --no-audit --no-fund
 
