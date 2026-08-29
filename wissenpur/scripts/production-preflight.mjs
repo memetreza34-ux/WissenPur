@@ -5,6 +5,8 @@ import { resolve } from 'node:path';
 
 const PLACEHOLDER_PATTERN = /(todo|replace|muster|beispiel|dein[_ -]|example\.|example@|xxx)/i;
 const EXPECTED_FIRESTORE_TTL_CONFIRMATION = 'quizSessions.expiresAt,serverRateLimits.expiresAt';
+const MIN_AI_RATE_LIMIT_RPM = 1;
+const MAX_AI_RATE_LIMIT_RPM = 20;
 
 const parseEnvText = (text) => {
   const values = {};
@@ -66,6 +68,7 @@ export const validateProductionTarget = ({ env, firebaseConfig, firebaseRc }) =>
   const expectedConfirmation = targetProjectId
     ? `PRODUCTION:${targetProjectId}:RELEASE`
     : '';
+  const aiRateLimitRpm = Number(text(env.RELEASE_AI_RATE_LIMIT_RPM));
 
   if (!targetProjectId || PLACEHOLDER_PATTERN.test(targetProjectId)) {
     errors.push('RELEASE_PRODUCTION_FIREBASE_PROJECT_ID muss die echte Produktions-Projekt-ID enthalten.');
@@ -107,6 +110,25 @@ export const validateProductionTarget = ({ env, firebaseConfig, firebaseRc }) =>
     errors.push('Functions-Emulator ist für Produktion verboten.');
   }
 
+  if (!isTrue(env.RELEASE_AI_AUTHENTICATED_USERS_CONFIRMED)) {
+    errors.push('RELEASE_AI_AUTHENTICATED_USERS_CONFIRMED=true muss bestätigen, dass Firebase AI Logic nur authentifizierte Nutzer akzeptiert.');
+  }
+  if (
+    !Number.isInteger(aiRateLimitRpm) ||
+    aiRateLimitRpm < MIN_AI_RATE_LIMIT_RPM ||
+    aiRateLimitRpm > MAX_AI_RATE_LIMIT_RPM
+  ) {
+    errors.push(
+      `RELEASE_AI_RATE_LIMIT_RPM muss das real konfigurierte Firebase-AI-Logic-Limit als ganze Zahl zwischen ${MIN_AI_RATE_LIMIT_RPM} und ${MAX_AI_RATE_LIMIT_RPM} enthalten.`,
+    );
+  }
+  if (!isTrue(env.RELEASE_AI_MONITORING_CONFIRMED)) {
+    errors.push('RELEASE_AI_MONITORING_CONFIRMED=true muss die aktivierte AI-Logic-Überwachung bestätigen.');
+  }
+  if (!isTrue(env.RELEASE_BUDGET_GUARDS_CONFIRMED)) {
+    errors.push('RELEASE_BUDGET_GUARDS_CONFIRMED=true muss Budgetwarnungen und den vorgesehenen Kostenschutz bestätigen.');
+  }
+
   const publicAppUrl = text(env.VITE_PUBLIC_APP_URL);
   if (publicAppUrl && /localhost|127\.0\.0\.1|\.local(?=[:/]|$)/i.test(publicAppUrl)) {
     errors.push('Die öffentliche Produktions-URL darf nicht auf localhost oder eine lokale Domain zeigen.');
@@ -122,6 +144,10 @@ const runSelfTest = () => {
     RELEASE_PRODUCTION_CONFIRMATION: 'PRODUCTION:wissenpur-prod:RELEASE',
     RELEASE_DEPLOYMENT_REVIEW_CONFIRMED: 'true',
     RELEASE_FIRESTORE_TTL_CONFIRMATION: EXPECTED_FIRESTORE_TTL_CONFIRMATION,
+    RELEASE_AI_AUTHENTICATED_USERS_CONFIRMED: 'true',
+    RELEASE_AI_RATE_LIMIT_RPM: '10',
+    RELEASE_AI_MONITORING_CONFIRMED: 'true',
+    RELEASE_BUDGET_GUARDS_CONFIRMED: 'true',
     VITE_FIRESTORE_DATABASE_ID: '(default)',
     VITE_ENABLE_APPCHECK_DEBUG: 'false',
     VITE_USE_FUNCTIONS_EMULATOR: 'false',
@@ -144,6 +170,34 @@ const runSelfTest = () => {
       firebaseConfig,
       firebaseRc,
     }).some((error) => error.includes('RELEASE_FIRESTORE_TTL_CONFIRMATION')),
+  );
+  assert.ok(
+    validateProductionTarget({
+      env: { ...env, RELEASE_AI_AUTHENTICATED_USERS_CONFIRMED: 'false' },
+      firebaseConfig,
+      firebaseRc,
+    }).some((error) => error.includes('RELEASE_AI_AUTHENTICATED_USERS_CONFIRMED')),
+  );
+  assert.ok(
+    validateProductionTarget({
+      env: { ...env, RELEASE_AI_RATE_LIMIT_RPM: '100' },
+      firebaseConfig,
+      firebaseRc,
+    }).some((error) => error.includes('RELEASE_AI_RATE_LIMIT_RPM')),
+  );
+  assert.ok(
+    validateProductionTarget({
+      env: { ...env, RELEASE_AI_MONITORING_CONFIRMED: 'false' },
+      firebaseConfig,
+      firebaseRc,
+    }).some((error) => error.includes('RELEASE_AI_MONITORING_CONFIRMED')),
+  );
+  assert.ok(
+    validateProductionTarget({
+      env: { ...env, RELEASE_BUDGET_GUARDS_CONFIRMED: 'false' },
+      firebaseConfig,
+      firebaseRc,
+    }).some((error) => error.includes('RELEASE_BUDGET_GUARDS_CONFIRMED')),
   );
   assert.ok(
     validateProductionTarget({
@@ -216,4 +270,5 @@ if (baseCheck.status !== 0) {
 }
 
 console.log(`Produktionsziel ${env.RELEASE_PRODUCTION_FIREBASE_PROJECT_ID} ist für den Release-Build freigegeben.`);
+console.log(`Firebase AI Logic: authenticated-users mode bestätigt, per-user Limit ${env.RELEASE_AI_RATE_LIMIT_RPM} RPM.`);
 console.log('Es wurde nichts deployed, migriert oder gelöscht.');
