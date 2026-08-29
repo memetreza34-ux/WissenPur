@@ -12,6 +12,7 @@ const [
   privacyPanel,
   avatarManager,
   onboarding,
+  legalPanel,
   main,
   indexCss,
 ] = await Promise.all([
@@ -20,6 +21,7 @@ const [
   readFile(resolve(repoRoot, 'wissenpur/src/components/AccountPrivacyPanel.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/components/AvatarManagerPanel.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/components/FirstRunOnboarding.tsx'), 'utf8'),
+  readFile(resolve(repoRoot, 'wissenpur/src/components/LegalPanel.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/main.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/index.css'), 'utf8'),
 ]);
@@ -75,6 +77,15 @@ assert.match(onboarding, /tabIndex=\{-1\}/);
 assert.match(onboarding, /aria-label="Einführung überspringen"/);
 assert.match(main, /<FirstRunOnboarding\s*\/>/);
 
+assert.match(legalPanel, /useAccessibleDialog\(isOpen, close\)/);
+assert.match(legalPanel, /ref=\{dialogRef\}/);
+assert.match(legalPanel, /tabIndex=\{-1\}/);
+assert.match(legalPanel, /role="dialog"/);
+assert.match(legalPanel, /aria-modal="true"/);
+assert.match(legalPanel, /aria-labelledby="legal-dialog-title"/);
+assert.match(legalPanel, /aria-label="Rechtliche Informationen schließen"/);
+assert.match(legalPanel, /focus-visible:ring-2/);
+
 assert.match(main, /import \{ MotionConfig \} from 'motion\/react'/);
 assert.match(main, /<MotionConfig reducedMotion="user">/);
 assert.match(indexCss, /@media \(prefers-reduced-motion: reduce\)/);
@@ -83,4 +94,4 @@ assert.match(indexCss, /transition-duration: 0\.01ms !important/);
 assert.match(indexCss, /\.animate-shimmer[\s\S]*?animation: none !important/);
 assert.doesNotMatch(indexCss, /fonts\.googleapis\.com|fonts\.gstatic\.com/);
 
-console.log('Dialog-A11y, First-Run-Onboarding, reduzierte Bewegung und lokale Schriftstapel sind regressiv abgesichert.');
+console.log('Dialog-A11y inklusive Rechtliches, First-Run-Onboarding, reduzierte Bewegung und lokale Schriftstapel sind regressiv abgesichert.');
