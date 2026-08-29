@@ -20,7 +20,7 @@ Die Release-Oberfläche bündelt inzwischen:
 - persönlichen Prüfungs-Lernplan
 - lokale persönliche Lernanalyse mit Verlauf, Trend und Empfehlungen
 - Datenexport und technische Kontolöschung
-- installierbare PWA-Grundlage
+- installierbare PWA-Grundlage mit committed PNG-/Apple-Touch-Assets
 
 ## Sicherheits- und Kontogrenzen
 
@@ -73,10 +73,15 @@ Beim ersten Login werden nutzererstellte Lerninhalte erhalten, ohne Gast-Economy
 - [x] Gast→Login-Migration für Lernsets und Fehlertraining ohne Economy-Übernahme
 - [x] Auth-Hydrierung gegen verspätete Antworten nach Logout/Kontowechsel absichern
 - [x] Firestore-Profilregeln für Lernplanstruktur, Listenlimits und Zeit-Einstellungen verschärfen
-- [x] statischen Gate für Frontend-Lockfile-Konsistenz ergänzen
-- [ ] Frontend-Lockfile aus dem aktuellen Manifest vollständig regenerieren
+- [x] Package-Lock-Gate für Frontend, Functions und Rules-Tests ergänzen
+- [x] Node 22.12.0 / npm 10.9.2 in Hosted-CI reproduzierbar pinnen
+- [x] Root-Release-Skripte in die CI-Trigger aufnehmen
+- [x] verwendete GitHub Actions auf Commit-SHAs pinnen, Checkout-Credentials nicht persistieren und Action-Allowlist erzwingen
+- [x] transaktionalen Helfer zur Erzeugung aller drei Lockfiles hinzufügen
+- [ ] alle drei Lockfiles aus den aktuellen Manifesten vollständig regenerieren und committen
+- [ ] danach alle drei CI-Installationen gemeinsam auf `npm ci` umstellen
 - [ ] GitHub-Actions-Billing/Spending-Limit korrigieren
-- [ ] App Check, AI Logic, Functions, Quotas und Monitoring im Produktionsprojekt aktivieren
+- [ ] App Check, AI Logic, Functions, Quotas, Budgetwarnungen und Monitoring im Produktionsprojekt aktivieren
 - [ ] Firestore-Regeln mit echter Emulator-Ausführung bestätigen
 - [ ] vollständige Release-Konfiguration und Datenschutz-/Betreiberangaben eintragen
 
@@ -90,11 +95,12 @@ Beim ersten Login werden nutzererstellte Lerninhalte erhalten, ohne Gast-Economy
 - [x] persönlicher Prüfungs-Lernplan
 - [x] Wissensprofil mit Stärken/Schwächen und persönlicher Analyse
 - [x] installierbare PWA mit Offline-Grundfunktionen
-- [ ] erfolgreiche echte Frontend-/Functions-Builds
+- [x] 192×192-, 512×512-, maskable-512×512- und Apple-Touch-180×180-PNG-Assets committed und statisch geprüft
+- [ ] erfolgreiche echte Frontend-/Functions-Builds aus frischem Checkout
 - [ ] erfolgreiche Firestore-Emulator-Suite mit zwei Testkonten
 - [ ] echtes Impressum und rechtlich geprüfte Datenschutzerklärung
 - [ ] mobile und Desktop-End-to-End-Tests
-- [ ] PNG-/Apple-Touch-PWA-Icons und Gerätetest
+- [ ] reale Android-/iPhone-Installation, Offline-Erststart und Updatepfad
 
 ### Release 1.1 – konkurrenzfähige KI-Lernwerkzeuge
 
@@ -130,24 +136,26 @@ Beim ersten Login werden nutzererstellte Lerninhalte erhalten, ohne Gast-Economy
 
 Der Functions-Verifikationspfad prüft unter anderem:
 
-- Repository-Secrets
+- Repository-Secrets über alle versionierten Textdateien
 - Hosting- und Firebase-Konfiguration
+- CI-Rechte, Trigger-Abdeckung, Action-Allowlist, Action-SHA-Pins und Checkout-Credential-Grenzen
 - Architektur- und Trust-Boundaries
-- Frontend-Paketmanifest
-- **Frontend-Lockfile-Konsistenz**
+- Frontend-Paketmanifest und freigegebene Toolchain
+- **Package-Lock-Konsistenz für Frontend, Functions und Rules-Tests**
 - Konto-Isolation und Gast→Login-Regeln
 - autoritative Economy-Hydrierung, UI-Maskierung und Auth-Race-Schutz
 - unveränderliche Ranglisten-Snapshots
-- PWA-/Service-Worker-Laufzeit
+- PWA-/Service-Worker-Laufzeit einschließlich echter PNG-Signaturen und erwarteter Bildmaße
 - Functions-Runtime und Produktions-App-Check
 - Lernset-Import, Bibliothekslimits und Cloud-Merge
 - manuellen Lernset-Editor und SRS-Reset bei Inhaltsänderung
 - persönliche Lernanalyse, Export und Löschung
-- Legacy-Economy-Migration
+- Legacy-Economy-Migration und kontrollierten Cleanup-Pfad
+- Produktions-Preflight, Hosting-Rollback-Plan und Firestore-Migrationsplan
 - Fragenkataloggrenzen und Inhaltsqualität
 - Unit-Tests und TypeScript
 
-Das Lockfile-Gate ist derzeit absichtlich rot, bis `wissenpur/package-lock.json` mit Registry-Zugriff aus dem bereinigten `package.json` neu erzeugt wurde. Es fehlen dort unter anderem die direkten Pakete `@types/react` und `@types/react-dom`, während alte Demo-Abhängigkeiten noch im Root-Eintrag stehen. Integritäts-Hashes werden nicht manuell erfunden.
+Der Package-Lock-Gate ist derzeit absichtlich rot: `wissenpur/package-lock.json` stammt noch aus der älteren Demo-Struktur, während `functions/package-lock.json` und `rules-tests/package-lock.json` noch fehlen. Alle drei werden erst mit Registry-Zugriff über `node scripts/regenerate-package-locks.mjs` und exakt Node 22.12.0 / npm 10.9.2 neu erzeugt. Integritäts-Hashes werden nicht manuell erfunden.
 
 ## Bewusste Abgrenzung
 
