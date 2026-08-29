@@ -35,7 +35,6 @@ const jobNames = [
   'functions-verify-and-build',
   'firestore-security-rules',
 ];
-const jobSections = new Map<string, string>();
 
 for (const job of jobNames) {
   const section = workflow.match(new RegExp(`\\n  ${job}:[\\s\\S]*?(?=\\n  [a-z][a-z0-9-]+:|$)`))?.[0] || '';
@@ -53,7 +52,6 @@ for (const job of jobNames) {
     /npm install --global npm@10\.9\.2 --no-audit --no-fund/,
     `${job} muss die freigegebene npm-Version 10.9.2 exakt pinnen.`,
   );
-  jobSections.set(job, section);
 }
 
 assert.doesNotMatch(workflow, /permissions:\s*\n(?:\s+[^\n]+\n)*\s*(?:write-all|contents:\s*write|actions:\s*write|id-token:\s*write)/,
