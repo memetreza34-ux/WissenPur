@@ -11,7 +11,13 @@ const geminiService = await readFile(
 );
 
 assert.match(geminiService, /import \{ app, assertProtectedOnlineRuntimeReady, auth \} from ['"]\.\.\/firebase['"]/);
-assert.match(geminiService, /assertProtectedOnlineRuntimeReady\(\);\s*const expectedUser = auth\.currentUser;/);
+assert.match(geminiService, /const expectedUser = auth\.currentUser;\s*if \(!expectedUser\) \{/);
+assert.match(geminiService, /KI-Fragengenerierung erfordert ein angemeldetes Konto/);
+assert.match(
+  geminiService,
+  /if \(!expectedUser\) \{[\s\S]{0,180}return null;\s*\}\s*assertProtectedOnlineRuntimeReady\(\);/,
+  'Gastzugriffe müssen vor App-Check-/KI-Netzwerkvorbereitung abgewiesen werden.',
+);
 assert.match(geminiService, /const result = await model\.generateContent\(prompt\);/);
 assert.match(
   geminiService,
@@ -20,12 +26,23 @@ assert.match(
 );
 assert.match(geminiService, /KI-Ergebnis wurde verworfen, weil sich die Kontositzung geändert hat/);
 
+const userGuardIndex = geminiService.indexOf('const expectedUser = auth.currentUser;');
+const unauthenticatedReturnIndex = geminiService.indexOf('return null;', userGuardIndex);
 const appCheckGuardIndex = geminiService.indexOf('assertProtectedOnlineRuntimeReady();');
 const generationIndex = geminiService.indexOf('const result = await model.generateContent(prompt);');
 const sessionGuardIndex = geminiService.indexOf('if (auth.currentUser !== expectedUser)', generationIndex);
 const parseIndex = geminiService.indexOf('const jsonText = result.response.text().trim();', generationIndex);
 const returnQuestionsIndex = geminiService.indexOf('return validatedQuestions.map', generationIndex);
-assert.ok(appCheckGuardIndex >= 0 && generationIndex > appCheckGuardIndex, 'App Check muss vor dem KI-Netzwerkrequest geprüft werden.');
+
+assert.ok(userGuardIndex >= 0, 'KI-Service muss die gestartete Auth-Sitzung erfassen.');
+assert.ok(
+  unauthenticatedReturnIndex > userGuardIndex && unauthenticatedReturnIndex < appCheckGuardIndex,
+  'Nicht angemeldete Nutzer müssen vor dem geschützten Onlinepfad abgewiesen werden.',
+);
+assert.ok(
+  appCheckGuardIndex > unauthenticatedReturnIndex && generationIndex > appCheckGuardIndex,
+  'App Check muss nach dem Login-Gate und vor dem KI-Netzwerkrequest geprüft werden.',
+);
 assert.ok(generationIndex >= 0 && sessionGuardIndex > generationIndex);
 assert.ok(parseIndex > sessionGuardIndex, 'Das KI-Ergebnis darf erst nach Sessionprüfung geparst werden.');
 assert.ok(returnQuestionsIndex > sessionGuardIndex, 'Fragen dürfen erst nach Sessionprüfung an den Aufrufer zurückgegeben werden.');
@@ -57,4 +74,4 @@ assert.doesNotMatch(
   'Der KI-Prompt darf keine Konto-, Economy- oder Analysedaten einbetten.',
 );
 
-console.log('KI-Fragengenerierung ist gegen fehlendes App Check, Sessionwechsel, Prompt-Trennzeichen, Duplikate, Teilantworten und rohe Fehlerlogs abgesichert.');
+console.log('KI-Fragengenerierung erfordert Login und ist gegen fehlendes App Check, Sessionwechsel, Prompt-Trennzeichen, Duplikate, Teilantworten und rohe Fehlerlogs abgesichert.');
