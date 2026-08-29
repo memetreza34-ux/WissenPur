@@ -30,6 +30,13 @@ assert.match(workflow, /permissions:\s*\n\s*contents: read/);
 assert.match(workflow, /concurrency:\s*\n\s*group: wissenpur-quality-/);
 assert.match(workflow, /cancel-in-progress: true/);
 
+const rootScriptsTriggerCount = workflow.match(/- 'scripts\/\*\*'/g)?.length || 0;
+assert.equal(
+  rootScriptsTriggerCount,
+  2,
+  'Der Quality-Workflow muss Root-Release-Skripte bei pull_request und push berücksichtigen.',
+);
+
 const jobNames = [
   'frontend-typecheck-and-build',
   'functions-verify-and-build',
@@ -61,4 +68,4 @@ assert.doesNotMatch(workflow, /pull_request_target\s*:/,
 assert.doesNotMatch(workflow, /firebase\s+deploy|cleanup:legacy|gcloud\s+firestore\s+(?:import|export)/,
   'Quality-CI darf weder deployen noch Produktionsdaten migrieren/löschen.');
 
-console.log('GitHub-Actions-Rechte, einheitliche Toolchain-Pins, Concurrency, Zeitlimits und Nicht-Deployment-Grenzen geprüft.');
+console.log('GitHub-Actions-Rechte, Trigger-Abdeckung, einheitliche Toolchain-Pins, Concurrency, Zeitlimits und Nicht-Deployment-Grenzen geprüft.');
