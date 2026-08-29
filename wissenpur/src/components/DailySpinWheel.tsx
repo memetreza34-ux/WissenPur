@@ -36,6 +36,14 @@ export const SPIN_REWARDS: SpinReward[] = [
   { id: 5, label: '1× zweite Chance', type: 'secondChance', amount: 1, color: '#ec4899', icon: '🛡️' },
 ];
 
+const berlinDateKey = () =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Berlin',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+
 const preserveLocalLearningData = (serverStats: ServerEconomyStats) => {
   const localStats = getStats();
   return {
@@ -138,18 +146,28 @@ export const DailySpinWheel: React.FC<DailySpinWheelProps> = ({ onClaimReward })
     }
   };
 
+  const openWheel = () => {
+    soundManager.init();
+    soundManager.playClick();
+    setErrorMessage(null);
+
+    // A reward is intentionally kept visible for the rest of the same day,
+    // but an app that stays open across midnight must allow the new day's spin
+    // without requiring a reload.
+    if (getStats().lastSpinDate !== berlinDateKey()) {
+      setWonReward(null);
+    }
+
+    setIsOpen(true);
+  };
+
   return (
     <>
       <Button
         variant="primary"
         size="sm"
         className="bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-600 hover:to-rose-600 text-white font-extrabold gap-2 shadow-lg shadow-amber-500/20"
-        onClick={() => {
-          soundManager.init();
-          soundManager.playClick();
-          setErrorMessage(null);
-          setIsOpen(true);
-        }}
+        onClick={openWheel}
       >
         <Sparkles className="w-4 h-4 fill-current text-amber-200" />
         <span>Glücksrad</span>
