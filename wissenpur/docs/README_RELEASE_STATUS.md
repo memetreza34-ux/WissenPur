@@ -20,8 +20,11 @@ Der aktive Release-Stand wird in Draft-PR #2 (`agent/release-foundation`) entwic
 - Das tägliche Glücksrad gibt einen neuen Tagesdreh auch dann frei, wenn die App über den Berlin-Kalendertagswechsel hinweg geöffnet bleibt.
 - Das Rechtliches-Modal verwendet den gemeinsamen Accessibility-Hook für Fokusfalle, Escape, Fokus-Rückgabe und Scroll-Lock.
 - Frontend, Functions und Firestore-Regeltests deklarieren einheitlich `npm@10.9.2`; die drei Hosted-CI-Jobs pinnen Node `22.12.0` und npm `10.9.2`.
+- Root-Release-Skripte unter `scripts/**` lösen den Quality-Workflow sowohl bei Pull Requests als auch bei Pushes auf `main` aus.
+- `actions/checkout`, `actions/setup-node` und `actions/setup-java` sind auf konkrete Commit-SHAs gepinnt; Checkout persistiert das GitHub-Token nicht im Git-Config.
+- Der CI-Safety-Gate verwendet eine explizite Action-Allowlist, sodass neue Actions erst nach bewusster Freigabe in den Release-Workflow gelangen können.
 - Der Package-Lock-Gate prüft alle drei Node-Arbeitsbereiche und blockiert fehlende, veraltete oder nicht zum jeweiligen Manifest passende Lockfiles.
-- `node scripts/regenerate-package-locks.mjs` erzeugt die drei Lockfiles nur unter exakt Node `22.12.0` und npm `10.9.2` und verweigert abweichende Toolchains.
+- `node scripts/regenerate-package-locks.mjs` erzeugt die drei Lockfiles nur unter exakt Node `22.12.0` und npm `10.9.2`; bei einem Fehler werden bereits veränderte Lockfiles auf den Zustand vor dem Lauf zurückgesetzt.
 - automatische Release-Gates decken u. a. Secrets, Architektur, Account-Isolation, App Check, Ranked-Snapshots, Rate-Limits, PWA, Accessibility, Datenschutz, Lernbibliothek, SRS, Analytics, Migration und Production-Preflight ab.
 
 ## Weiterhin offene Release-Blocker
@@ -38,7 +41,7 @@ Der aktive Release-Stand wird in Draft-PR #2 (`agent/release-foundation`) entwic
 
 ## Aktueller CI-Status
 
-Für den jeweils neuesten PR-Head ist der Workflow **WissenPur quality checks** maßgeblich. Solange dessen drei erwartete Jobs (`frontend-typecheck-and-build`, `functions-verify-and-build`, `firestore-security-rules`) ohne ausgeführte Steps enden, gilt der bekannte GitHub-Actions-Billing-/Spending-Limit-Blocker als aktiv. Dieser Zustand ist **kein bestätigter TypeScript-, Build- oder Firestore-Testfehler**, aber ebenso kein erfolgreicher CI-Nachweis.
+Für den jeweils neuesten PR-Head ist der Workflow **WissenPur quality checks** maßgeblich. Solange dessen drei erwartete Jobs (`frontend-typecheck-and-build`, `functions-verify-and-build`, `firestore-security-rules`) ohne ausgeführte Steps und ohne zugewiesenen Runner enden, gilt der bekannte GitHub-Actions-Billing-/Spending-Limit-Blocker als aktiv. Dieser Zustand ist **kein bestätigter TypeScript-, Build- oder Firestore-Testfehler**, aber ebenso kein erfolgreicher CI-Nachweis.
 
 Konkrete Commit-SHAs und Workflow-Run-IDs werden hier bewusst nicht fest eingetragen, da sie nach jedem weiteren Härtungscommit sofort veralten. Der aktuelle Stand ist direkt am Head von Draft-PR #2 und im zugehörigen GitHub-Actions-Lauf abzulesen.
 
