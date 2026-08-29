@@ -19,6 +19,21 @@
     @apply text-slate-900 antialiased bg-white dark:bg-slate-950 dark:text-slate-100 transition-colors duration-300;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
+
+  /* Production CSP permits only same-origin/data/blob images. If an old
+     provider photo URL still reaches the UI, hide it and keep the avatar
+     container usable instead of showing a broken external image. */
+  img[alt="Profil"][src^="http://"],
+  img[alt="Profil"][src^="https://"] {
+    display: none;
+  }
+
+  button:has(> img[alt="Profil"][src^="http://"])::before,
+  button:has(> img[alt="Profil"][src^="https://"])::before,
+  div:has(> img[alt="Profil"][src^="http://"])::before,
+  div:has(> img[alt="Profil"][src^="https://"])::before {
+    content: "U";
+  }
 }
 
 @layer utilities {
