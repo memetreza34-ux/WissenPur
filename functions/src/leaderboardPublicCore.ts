@@ -61,6 +61,19 @@ export const sanitizePublicLeaderboardEntry = (
   };
 };
 
+/**
+ * Do not distribute stable Firebase account IDs through the public list.
+ * A signed-in caller may receive only their own UID so the client can mark
+ * their row; all other rows get ephemeral rank-local identifiers.
+ */
+export const redactPublicLeaderboardAccountIds = (
+  entries: readonly PublicLeaderboardEntry[],
+  callerUid?: string,
+): PublicLeaderboardEntry[] => entries.map((entry, index) => ({
+  ...entry,
+  uid: callerUid && entry.uid === callerUid ? callerUid : `rank-${index + 1}`,
+}));
+
 export const selectPublicLeaderboardEntries = (
   rows: readonly LeaderboardSourceRow[],
   limit: number,
