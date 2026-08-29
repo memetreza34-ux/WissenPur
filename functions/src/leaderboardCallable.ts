@@ -8,6 +8,7 @@ import { db, enforceAppCheck } from './database.js';
 import {
   getEffectivePublicLeaderboardLimit,
   normalizePublicLeaderboardLimit,
+  redactPublicLeaderboardAccountIds,
   sanitizePublicLeaderboardAvatar as safeAvatar,
   sanitizePublicLeaderboardEntry as sanitizeEntry,
   type PublicLeaderboardEntry,
@@ -67,17 +68,6 @@ const readSanitizedLeaderboard = async (
   return entries;
 };
 
-const redactAccountIdentifiersForTransport = (
-  entries: readonly PublicLeaderboardEntry[],
-  callerUid: string | undefined,
-): PublicLeaderboardEntry[] => entries.map((entry, index) => ({
-  ...entry,
-  // The signed-in browser already knows its own UID and needs it only to
-  // highlight itself. Every other row receives an ephemeral rank-local key,
-  // preventing the public leaderboard from distributing stable account IDs.
-  uid: callerUid && entry.uid === callerUid ? callerUid : `rank-${index + 1}`,
-}));
-
 /**
  * Public leaderboard reads flow through a callable instead of a browser
  * Firestore collection query. This keeps the response schema minimal and lets
@@ -102,7 +92,7 @@ export const getTrustedLeaderboard = onCall<LeaderboardRequest>(
       const fetchLimit = Math.min(200, requestedLimit * 2);
       const entries = (await readSanitizedLeaderboard(fetchLimit)).slice(0, requestedLimit);
 
-      return { entries: redactAccountIdentifiersForTransport(entries, uid) };
+      return { entries: redactPublicLeaderboardAccountIds(entries, uid) };
     } catch (error) {
       if (error instanceof HttpsError) throw error;
       logUnexpectedServerError('Failed to read trusted leaderboard', error);
