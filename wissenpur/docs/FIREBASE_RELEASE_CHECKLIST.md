@@ -43,17 +43,33 @@ Produktion verwendet die Firestore-Datenbank **`(default)`**. Eine benannte Prod
 
 ## 4. Firebase AI Logic
 
+Vor Produktion:
+
 1. Firebase AI Logic im echten Zielprojekt aktivieren.
 2. das im Frontend konfigurierte Modell und Backend prüfen.
-3. Abrechnung, APIs und Nutzungsbedingungen kontrollieren.
-4. App Check für die AI-Logic-Nutzung konfigurieren und erzwingen.
-5. Testanfragen im Staging-Projekt ausführen.
-6. Fehlerquote, Latenz, Tokens, 429-Antworten und Kosten überwachen.
-7. nutzerbezogene Kontingente und Kostenlimits festlegen.
+3. App Check für AI Logic konfigurieren und erzwingen.
+4. den **Authenticated-users mode** aktivieren, sodass anonyme AI-Logic-Anfragen projektseitig abgewiesen werden.
+5. das per-user Generate-Content-Limit bewusst reduzieren. WissenPur akzeptiert als Release-Policy nur einen real konfigurierten Wert von **1 bis 20 RPM pro Nutzer**.
+6. AI-Monitoring aktivieren und Requests, Latenz, Fehler, 429-Antworten und Tokennutzung beobachten können.
+7. Budgetwarnungen und den vorgesehenen Kosten-/Spendschutz des Produktionsprojekts aktivieren.
+8. Testanfragen im Staging-Projekt ausführen.
 
 Ein privater Gemini/API-Schlüssel darf nicht als Vite-Variable oder Browser-Bundle-Konstante ausgeliefert werden.
 
-Die aktive KI-Implementierung validiert Schema, Frageanzahl, eindeutige Optionen, Lösungsindex, Erklärung und Duplikate. Schlägt die Generierung fehl oder ist die Ausgabe nicht vollständig gültig, wird die Anfrage kontrolliert abgebrochen. Es existiert **kein automatischer lokaler KI-Fallback**, der in diesem Fall still andere Fragen einsetzt.
+Die aktive KI-Implementierung verlangt im Client ein angemeldetes Konto, validiert Schema, Frageanzahl, eindeutige Optionen, Lösungsindex, Erklärung und Duplikate und verwirft Ergebnisse nach einem Auth-Wechsel. Schlägt die Generierung fehl oder ist die Ausgabe nicht vollständig gültig, wird die Anfrage kontrolliert abgebrochen. Es existiert **kein automatischer lokaler KI-Fallback**, der in diesem Fall still andere Fragen einsetzt.
+
+Der Client-Login-Check ist nur Defense-in-Depth. Er ersetzt weder den projektseitigen Authenticated-users mode noch App Check oder Quotas.
+
+Erst nach realer Prüfung dürfen die folgenden Release-Bestätigungen gesetzt werden:
+
+```env
+RELEASE_AI_AUTHENTICATED_USERS_CONFIRMED=true
+RELEASE_AI_RATE_LIMIT_RPM=10
+RELEASE_AI_MONITORING_CONFIRMED=true
+RELEASE_BUDGET_GUARDS_CONFIRMED=true
+```
+
+`10` RPM ist nur ein konservatives Beispiel. `RELEASE_AI_RATE_LIMIT_RPM` muss mit dem real eingestellten Firebase-AI-Logic-Limit übereinstimmen und für den Release ganzzahlig zwischen 1 und 20 liegen.
 
 ## 5. App Check
 
@@ -134,6 +150,7 @@ Vor Produktion mit Lasttests prüfen:
 - Ranked-Quizstarts: maximal 12 Starts pro Minute und Konto.
 - allgemeine geschützte Callables: 120 Aktionen pro Minute und Konto.
 - Kontodatenexport: 5 Exporte pro 10 Minuten.
+- Firebase AI Logic: projektseitiger Authenticated-users mode aktiv und per-user Generate-Content-Limit entsprechend `RELEASE_AI_RATE_LIMIT_RPM` gesetzt.
 - Kontolöschung verwendet nicht den engen Export-Bucket, benötigt aber App Check und Recent-Reauth.
 
 `serverRateLimits/{uid}` ist für Browser vollständig gesperrt und besitzt `expiresAt` für eine vorgesehene TTL von 24 Stunden.
@@ -147,8 +164,9 @@ Mit echten Testkonten prüfen:
 - lokale + Cloud-Fehlerfragen werden vereinigt; lokale Fassung gewinnt bei gleicher Frage-ID.
 - Lernplan verwendet `updatedAt` zur Konfliktentscheidung.
 - Gastpunkte/Münzen werden **nicht** als Kontopunkte übernommen.
-- Konto A → Konto B entfernt beziehungsweise isoliert lokale Daten von Konto A.
-- Konto → Logout/Auth-Verlust entfernt kontoabhängige Browserdaten.
+- Konto A → Konto B entfernt lokale Stats, Lernplan sowie Lernanalyse und deren Owner-Marker von Konto A.
+- Konto → Logout/Auth-Verlust entfernt dieselben kontoabhängigen Browserdaten.
+- `wissenpur:account-storage-reset` führt zu einem Produktoberflächen-Refresh; Analytics wird zusätzlich direkt bei der Auth-Transition entfernt.
 - Logout/Kontowechsel während Hydrierung darf keine verspätete Antwort lokal persistieren.
 - Lernplan-Laden, -Speichern und -Löschen bleibt an die UID gebunden, mit der der Vorgang gestartet wurde.
 - Glücksrad-Serverstand wird UID-gebunden übernommen; Animationstimer dürfen keine Kontodaten schreiben.
@@ -229,6 +247,7 @@ Prüfen:
 - Kontolöschung verlangt ausreichend aktuelle Authentifizierung.
 - Kontolöschung entfernt die vorgesehenen nutzerbezogenen Release-/Legacy-Daten und das Auth-Konto.
 - Browser-LocalStorage/SessionStorage werden anschließend aus dem Kontokontext bereinigt.
+- eine verspätete Löschantwort darf nach einem Wechsel auf ein anderes Konto dessen lokale Daten nicht verändern.
 
 ## 15. PWA, Offline und Hosting
 
@@ -271,13 +290,22 @@ VITE_RECAPTCHA_ENTERPRISE_SITE_KEY=...
 VITE_ENABLE_APPCHECK_DEBUG=false
 VITE_USE_FUNCTIONS_EMULATOR=false
 VITE_FIRESTORE_DATABASE_ID=(default)
+
 RELEASE_EXPECTED_FIREBASE_PROJECT_ID=...
 RELEASE_PRODUCTION_FIREBASE_PROJECT_ID=...
+RELEASE_PRODUCTION_CONFIRMATION=PRODUCTION:<PROJECT_ID>:RELEASE
 RELEASE_DEPLOYMENT_REVIEW_CONFIRMED=true
+
+RELEASE_AI_AUTHENTICATED_USERS_CONFIRMED=true
+RELEASE_AI_RATE_LIMIT_RPM=10
+RELEASE_AI_MONITORING_CONFIRMED=true
+RELEASE_BUDGET_GUARDS_CONFIRMED=true
+
 RELEASE_FIRESTORE_TTL_CONFIRMATION=quizSessions.expiresAt,serverRateLimits.expiresAt
+RELEASE_FIREBASE_PROJECT_REVIEW_CONFIRMED=true
 ```
 
-Zusätzlich müssen echte Betreiber-/Rechtswerte und der exakte Produktionsbestätigungstext gesetzt sein. `npm --prefix wissenpur run build:release` muss fail-closed blockieren, solange diese Werte fehlen oder Platzhalter enthalten.
+Zusätzlich müssen echte Betreiber-/Rechtswerte und der exakte Produktionsbestätigungstext gesetzt sein. `npm --prefix wissenpur run build:release` muss fail-closed blockieren, solange diese Werte fehlen, Platzhalter enthalten oder die bestätigte AI-Quota außerhalb der freigegebenen 1–20 RPM liegt.
 
 Nicht als Browsergeheimnis verwenden:
 
@@ -285,13 +313,12 @@ Nicht als Browsergeheimnis verwenden:
 GEMINI_API_KEY=...
 ```
 
-Quotas, Budgetwarnungen, Error Monitoring und Functions-/Firestore-/AI-Kostenüberwachung aktivieren.
-
 ## 17. Manueller Release-Test
 
 - Google-Login auf Desktop, Android und iPhone.
 - Gast → Login mit vorhandenen Lernsets und Fehlerfragen.
 - schneller Logout/Kontowechsel während Profil-/Economy-Hydrierung.
+- Konto A → B: lokale Stats, Lernplan, Analytics und Owner-Marker von A dürfen nicht in B sichtbar sein.
 - Lernplan speichern/laden/löschen während simuliertem Kontowechsel.
 - bestehender Cloud-Spielstand auf zweitem Gerät.
 - gewertete Runde zweimal abgeben.
@@ -305,12 +332,15 @@ Quotas, Budgetwarnungen, Error Monitoring und Functions-/Firestore-/AI-Kostenüb
 - fällige SRS-Karten über einen realen Zeitübergang prüfen.
 - kleine Due-Queue (0, 2, 10+) im Lernplan prüfen.
 - Offline-Lernsetänderung und spätere Cloud-Synchronisierung testen.
+- Gast versucht KI-Lernset zu erzeugen: kein AI-Logic-Netzwerkrequest.
+- angemeldeter Nutzer erzeugt KI-Lernset mit realem Authenticated-users mode und reduziertem per-user Limit.
 - blockierte/ungültige AI-Logic-Anfrage: kontrollierte Fehlermeldung und **keine** still eingesetzten Ersatzfragen prüfen.
 - vollständigen Account-Export prüfen.
 - Kontolöschung mit alter und frischer Auth-Sitzung testen.
+- Logout/Kontowechsel während Export und Löschung testen.
 - PWA frisch installieren, offline starten, aktualisieren und deinstallieren.
 - Dark Mode, Browser-Zoom, Tastaturbedienung, Dialog-Fokus und kleine Displays prüfen.
 
 ## Release-Regel
 
-Draft-PR #2 darf erst als review-ready markiert oder gemergt werden, wenn die echten Hosted-CI-Läufe, reproduzierbaren Lockfiles, Clean-Checkout-Builds, Emulator-/E2E-Tests, Produktionskonfiguration, `(default)`-Migration, TTL, Rechtsangaben, Cleanup-, Rollback- und Realgerätechecks abgeschlossen sind.
+Draft-PR #2 darf erst als review-ready markiert oder gemergt werden, wenn die echten Hosted-CI-Läufe, reproduzierbaren Lockfiles, Clean-Checkout-Builds, Emulator-/E2E-Tests, Produktionskonfiguration einschließlich AI-Auth/Quota/Monitoring/Budgetschutz, `(default)`-Migration, TTL, Rechtsangaben, Cleanup-, Rollback- und Realgerätechecks abgeschlossen sind.
