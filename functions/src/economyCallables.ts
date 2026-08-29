@@ -71,12 +71,10 @@ function leaderboardProfile(
   uid: string,
   userData: Record<string, unknown> | undefined,
   state: EconomyState,
-  authToken: Record<string, unknown> | undefined,
 ) {
-  const customName = stringOrNull(userData?.customName, 100);
-  const storedName = stringOrNull(userData?.displayName, 100);
-  const tokenName = stringOrNull(authToken?.name, 100);
-  const displayName = customName || storedName || tokenName || 'WissenPur-Nutzer';
+  // Public identity is opt-in. Firebase/Google provider names are private
+  // authentication metadata and must never become leaderboard names by default.
+  const displayName = stringOrNull(userData?.customName, 100) || 'WissenPur-Nutzer';
   const photoURL = safeLeaderboardAvatar(state.customPhotoURL);
 
   return {
@@ -120,7 +118,7 @@ export const claimDailyQuestReward = onCall(
         }, { merge: true });
         transaction.set(
           leaderboardRef,
-          leaderboardProfile(uid, userData, nextState, request.auth?.token),
+          leaderboardProfile(uid, userData, nextState),
           { merge: true },
         );
 
@@ -197,7 +195,7 @@ export const purchaseShopItem = onCall<PurchaseRequest>(
         }, { merge: true });
         transaction.set(
           leaderboardRef,
-          leaderboardProfile(uid, userData, purchase.state, request.auth?.token),
+          leaderboardProfile(uid, userData, purchase.state),
           { merge: true },
         );
 
