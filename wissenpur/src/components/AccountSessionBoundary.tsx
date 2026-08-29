@@ -2,6 +2,10 @@ import { Fragment, type ReactNode, useEffect, useRef, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebase';
 import { shouldClearLocalAccountDataForTransition } from '../services/accountSessionPolicy';
+import {
+  ANALYTICS_OWNER_KEY,
+  ANALYTICS_STORAGE_KEY,
+} from '../services/learningAnalytics';
 import { clearLocalAccountData } from '../storage';
 
 interface AccountSessionBoundaryProps {
@@ -38,6 +42,11 @@ export const AccountSessionBoundary = ({ children }: AccountSessionBoundaryProps
 
     if (shouldClearLocalAccountDataForTransition(previous, nextUid)) {
       clearLocalAccountData();
+      // Learning analytics are intentionally device-local and have their own
+      // owner marker. Remove both values directly so privacy cleanup does not
+      // depend on a mounted panel receiving the reset event.
+      localStorage.removeItem(ANALYTICS_STORAGE_KEY);
+      localStorage.removeItem(ANALYTICS_OWNER_KEY);
     }
 
     previousUid.current = nextUid;
@@ -49,9 +58,11 @@ export const AccountSessionBoundary = ({ children }: AccountSessionBoundaryProps
     const refreshProductContent = () => setContentRevision((value) => value + 1);
     window.addEventListener('wissenpur:library-updated', refreshProductContent);
     window.addEventListener('wissenpur:stats-updated', refreshProductContent);
+    window.addEventListener('wissenpur:account-storage-reset', refreshProductContent);
     return () => {
       window.removeEventListener('wissenpur:library-updated', refreshProductContent);
       window.removeEventListener('wissenpur:stats-updated', refreshProductContent);
+      window.removeEventListener('wissenpur:account-storage-reset', refreshProductContent);
     };
   }, []);
 
