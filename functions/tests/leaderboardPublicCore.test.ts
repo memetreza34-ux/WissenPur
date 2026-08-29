@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   getEffectivePublicLeaderboardLimit,
   normalizePublicLeaderboardLimit,
+  redactPublicLeaderboardAccountIds,
   sanitizePublicLeaderboardAvatar,
   sanitizePublicLeaderboardEntry,
   selectPublicLeaderboardEntries,
@@ -131,4 +132,33 @@ test('selection skips malformed rows and honors the requested output limit', () 
       totalPoints: 400,
     },
   ]);
+});
+
+test('guest transport redacts every stable account identifier', () => {
+  const source = [
+    { uid: 'alice-firebase-uid', displayName: 'Alice', photoURL: '', totalPoints: 500 },
+    { uid: 'bob-firebase-uid', displayName: 'Bob', photoURL: '', totalPoints: 400 },
+  ];
+
+  const redacted = redactPublicLeaderboardAccountIds(source);
+
+  assert.deepEqual(redacted.map((entry) => entry.uid), ['rank-1', 'rank-2']);
+  assert.equal(source[0]?.uid, 'alice-firebase-uid', 'Redaktion darf den internen Cache nicht mutieren.');
+});
+
+test('authenticated transport reveals only the caller own known uid', () => {
+  const source = [
+    { uid: 'alice-firebase-uid', displayName: 'Alice', photoURL: '', totalPoints: 500 },
+    { uid: 'bob-firebase-uid', displayName: 'Bob', photoURL: '', totalPoints: 400 },
+    { uid: 'carol-firebase-uid', displayName: 'Carol', photoURL: '', totalPoints: 300 },
+  ];
+
+  const redacted = redactPublicLeaderboardAccountIds(source, 'bob-firebase-uid');
+
+  assert.deepEqual(
+    redacted.map((entry) => entry.uid),
+    ['rank-1', 'bob-firebase-uid', 'rank-3'],
+  );
+  assert.equal(redacted[1]?.displayName, 'Bob');
+  assert.equal(redacted[1]?.totalPoints, 400);
 });
