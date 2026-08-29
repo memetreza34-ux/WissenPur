@@ -15,6 +15,11 @@ const [workflow, frontendPackageText, functionsPackageText, rulesPackageText] = 
 const CHECKOUT_SHA = '11d5960a326750d5838078e36cf38b85af677262';
 const SETUP_NODE_SHA = '49933ea5288caeca8642d1e84afbd3f7d6820020';
 const SETUP_JAVA_SHA = 'cf277c60eb25467037889841efdb72551f06f6c3';
+const allowedActionRefs = new Set([
+  `actions/checkout@${CHECKOUT_SHA}`,
+  `actions/setup-node@${SETUP_NODE_SHA}`,
+  `actions/setup-java@${SETUP_JAVA_SHA}`,
+]);
 
 const packageManifests = new Map<string, Record<string, unknown>>([
   ['wissenpur/package.json', JSON.parse(frontendPackageText) as Record<string, unknown>],
@@ -40,6 +45,15 @@ assert.equal(
   2,
   'Der Quality-Workflow muss Root-Release-Skripte bei pull_request und push berücksichtigen.',
 );
+
+const actionRefs = [...workflow.matchAll(/^\s*uses:\s*([^\s#]+)/gm)].map((match) => match[1]);
+assert.ok(actionRefs.length > 0, 'Der Quality-Workflow enthält keine prüfbaren Action-Referenzen.');
+for (const actionRef of actionRefs) {
+  assert.ok(
+    actionRef && allowedActionRefs.has(actionRef),
+    `Nicht freigegebene GitHub Action im Quality-Workflow: ${String(actionRef)}.`,
+  );
+}
 
 const jobNames = [
   'frontend-typecheck-and-build',
@@ -93,4 +107,4 @@ assert.doesNotMatch(workflow, /pull_request_target\s*:/,
 assert.doesNotMatch(workflow, /firebase\s+deploy|cleanup:legacy|gcloud\s+firestore\s+(?:import|export)/,
   'Quality-CI darf weder deployen noch Produktionsdaten migrieren/löschen.');
 
-console.log('GitHub-Actions-Rechte, Trigger-Abdeckung, SHA-Pins, Credential-Grenzen, Toolchain-Pins, Concurrency, Zeitlimits und Nicht-Deployment-Grenzen geprüft.');
+console.log('GitHub-Actions-Rechte, Trigger-Abdeckung, Action-Allowlist, SHA-Pins, Credential-Grenzen, Toolchain-Pins, Concurrency, Zeitlimits und Nicht-Deployment-Grenzen geprüft.');
