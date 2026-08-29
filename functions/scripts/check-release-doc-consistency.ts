@@ -67,7 +67,10 @@ assert.doesNotMatch(
 // trustedLeaderboard is callable-only. Direct Firestore reads are intentionally
 // denied, while the callable sanitizes public output.
 assert.match(leaderboardCore, /sanitizePublicLeaderboardAvatar/);
-assert.match(leaderboardCore, /\^\\\/avatars\\\//);
+assert.ok(
+  leaderboardCore.includes('return /^\\/avatars\\/'),
+  'Leaderboard-Sanitizer muss Avatare weiterhin auf lokale /avatars/-Assets begrenzen.',
+);
 assert.match(firebaseChecklist, /Browser \*\*weder lesbar noch beschreibbar\*\*/);
 assert.match(functionsReadme, /Browser-Direktreads und -writes gesperrt/);
 for (const [name, doc] of [
@@ -115,8 +118,8 @@ assert.match(pwaChecklist, /verbleibende PWA-Blocker ist die reale Geräteverifi
 // silently substitute local questions.
 assert.doesNotMatch(
   firebaseChecklist,
-  /KI-Fallback/i,
-  'Die Firebase-Checkliste darf keinen automatischen KI-Fallback behaupten.',
+  /KI-Fallback bei blockierter|fällt[^\n]{0,100}auf die lokalen Fragen zurück/i,
+  'Die Firebase-Checkliste darf keinen stillen lokalen KI-Ersatzpfad behaupten.',
 );
 assert.match(firebaseChecklist, /kein automatischer lokaler KI-Fallback/i);
 assert.match(appReadme, /kein automatischer lokaler KI-Ersatz/i);
