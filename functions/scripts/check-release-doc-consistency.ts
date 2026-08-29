@@ -16,6 +16,8 @@ const [
   pwaChecklist,
   roadmap,
   releaseStatus,
+  accountPrivacy,
+  productionPreflightDoc,
   releaseApp,
   leaderboardCore,
   functionsDatabase,
@@ -27,6 +29,8 @@ const [
   read('wissenpur/docs/PWA_RELEASE_CHECKLIST.md'),
   read('wissenpur/docs/PRODUCT_RELEASE_ROADMAP.md'),
   read('wissenpur/docs/README_RELEASE_STATUS.md'),
+  read('wissenpur/docs/ACCOUNT_PRIVACY.md'),
+  read('wissenpur/docs/PRODUCTION_PREFLIGHT.md'),
   read('wissenpur/src/ReleaseApp.tsx'),
   read('functions/src/leaderboardPublicCore.ts'),
   read('functions/src/database.ts'),
@@ -89,6 +93,18 @@ for (const [name, doc] of [
   );
 }
 
+// Provider photo URLs may exist in Firebase Auth, but the hardened release CSP
+// and CSS fallback must not be documented as an active external image path.
+assert.match(accountPrivacy, /Produktions-CSP erlaubt Bilder nur von derselben Origin sowie `data:`\/`blob:`/);
+assert.match(accountPrivacy, /neutralen lokalen Buchstaben-Fallback/);
+assert.doesNotMatch(
+  accountPrivacy,
+  /Google-Profilbild[^\n]{0,180}weiterhin[^\n]{0,80}angezeigt/i,
+  'Account-Privacy darf externe Google-Profilbilder nicht als sichtbaren Produktionspfad dokumentieren.',
+);
+assert.match(accountPrivacy, /Konto A → Konto B/);
+assert.match(accountPrivacy, /Lernanalyse und deren Owner-Marker direkt entfernt/);
+
 // Production Firestore is always (default); named DBs are emulator-only.
 assert.match(functionsDatabase, /Production Functions must use Firestore \(default\)/);
 assert.match(functionsDatabase, /Named databases are allowed only in the local emulator/);
@@ -114,8 +130,9 @@ for (const [name, doc] of [
 }
 assert.match(pwaChecklist, /verbleibende PWA-Blocker ist die reale Geräteverifikation/i);
 
-// AI generation fails closed for an invalid/failed generation. It does not
-// silently substitute local questions.
+// AI generation fails closed for invalid output and production additionally
+// requires project-side authenticated-users mode, a reduced per-user quota,
+// monitoring and budget guard confirmation.
 assert.doesNotMatch(
   firebaseChecklist,
   /KI-Fallback bei blockierter|fällt[^\n]{0,100}auf die lokalen Fragen zurück/i,
@@ -123,5 +140,15 @@ assert.doesNotMatch(
 );
 assert.match(firebaseChecklist, /kein automatischer lokaler KI-Fallback/i);
 assert.match(appReadme, /kein automatischer lokaler KI-Ersatz/i);
+for (const [name, doc] of [
+  ['Firebase-Checkliste', firebaseChecklist],
+  ['Produktions-Preflight', productionPreflightDoc],
+] as const) {
+  assert.match(doc, /Authenticated-users mode/, `${name} muss den projektseitigen AI-Login-Schutz dokumentieren.`);
+  assert.match(doc, /RELEASE_AI_AUTHENTICATED_USERS_CONFIRMED/, `${name} muss die AI-Auth-Freigabe dokumentieren.`);
+  assert.match(doc, /RELEASE_AI_RATE_LIMIT_RPM/, `${name} muss das per-user AI-Limit dokumentieren.`);
+  assert.match(doc, /RELEASE_AI_MONITORING_CONFIRMED/, `${name} muss AI-Monitoring als Release-Grenze dokumentieren.`);
+  assert.match(doc, /RELEASE_BUDGET_GUARDS_CONFIRMED/, `${name} muss Budgetschutz als Release-Grenze dokumentieren.`);
+}
 
-console.log('Release-Dokumentation stimmt mit ReleaseApp-, Leaderboard-, Firestore-, Lockfile-, PWA- und KI-Grenzen überein.');
+console.log('Release-Dokumentation stimmt mit ReleaseApp-, Account-, Leaderboard-, Firestore-, Lockfile-, PWA- und KI-Grenzen überein.');
