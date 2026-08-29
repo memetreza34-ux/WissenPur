@@ -10,9 +10,12 @@ Der aktive Release-Stand wird in Draft-PR #2 (`agent/release-foundation`) entwic
 - Ranked-Inhalte sind von KI-/Nutzer-Übungsinhalten getrennt.
 - Ranked-Fragen, Antworten, Economy, Shop, Streaks und Ranglistenwerte werden serverseitig autoritativ behandelt.
 - Konto-, Logout- und Accountwechsel-Grenzen schützen vor verspäteten Cross-Session-Writes.
+- Konto A → B beziehungsweise Konto → Logout entfernt lokale Stats, Lernplan sowie Lernanalyse und deren Owner-Marker direkt; ein Account-Storage-Reset remountet zusätzlich die Produktoberfläche.
 - zentrale SRS-/Due-Queue für Heute, Bibliothek und Lernplan.
 - lokale Wissens-/Lernanalyse und fällige Wiederholungen.
 - App-Check-/Produktions-Runtime-Grenzen und `(default)`-Firestore-Policy sind vorbereitet.
+- KI-Fragengenerierung verlangt im Client ein angemeldetes Konto und verwirft Ergebnisse nach einem Auth-Wechsel.
+- Der Produktions-Preflight verlangt zusätzlich den real aktivierten Firebase-AI-Logic-Authenticated-users-mode, ein bestätigtes per-user Limit von 1–20 RPM, AI-Monitoring und Budget-/Kostenschutz.
 - Datenschutz- und Hosting-Härtung mit CSP, datensparsamen Logs und callable-only Rangliste ist vorbereitet.
 - PWA-App-Icons sind committed und verdrahtet: 192×192, 512×512, maskable 512×512 und Apple-Touch 180×180.
 - Service Worker v7 cached App-Shell, gehashte Build-Assets, lokale Avatare und Icons.
@@ -25,19 +28,21 @@ Der aktive Release-Stand wird in Draft-PR #2 (`agent/release-foundation`) entwic
 - Der CI-Safety-Gate verwendet eine explizite Action-Allowlist, sodass neue Actions erst nach bewusster Freigabe in den Release-Workflow gelangen können.
 - Der Package-Lock-Gate prüft alle drei Node-Arbeitsbereiche und blockiert fehlende, veraltete oder nicht zum jeweiligen Manifest passende Lockfiles.
 - `node scripts/regenerate-package-locks.mjs` erzeugt die drei Lockfiles nur unter exakt Node `22.12.0` und npm `10.9.2`; bei einem Fehler werden bereits veränderte Lockfiles auf den Zustand vor dem Lauf zurückgesetzt.
-- automatische Release-Gates decken u. a. Secrets, Architektur, Account-Isolation, App Check, Ranked-Snapshots, Rate-Limits, PWA, Accessibility, Datenschutz, Lernbibliothek, SRS, Analytics, Migration und Production-Preflight ab.
+- Der bekannte Lockfile-Gate läuft am Ende von `verify`, damit bei wieder funktionierenden Runnern zuerst Architektur-, Datenschutz-, Unit- und TypeScript-Diagnostik vollständig sichtbar wird.
+- Ein eigener Release-Doku-Gate hält README, Firebase-/PWA-/Account-Dokumentation und den tatsächlichen Release-Code an zentralen Trust-Boundaries synchron.
+- automatische Release-Gates decken u. a. Secrets, Architektur, Account-Isolation, App Check, AI-Auth/Quota, Ranked-Snapshots, Rate-Limits, PWA, Accessibility, Datenschutz, Lernbibliothek, SRS, Analytics, Migration und Production-Preflight ab.
 
 ## Weiterhin offene Release-Blocker
 
 1. **GitHub Actions Billing/Spending-Limit korrigieren.** Die aktuellen Workflow-Läufe starten weiterhin keinen Runner; die Jobs enden ohne ausgeführte Steps. Dadurch liegt weiterhin kein bestätigter Hosted-CI-Codefehler vor, aber auch kein erfolgreicher Hosted-CI-Nachweis.
 2. **Alle drei Node-Lockfiles reproduzierbar herstellen.** `wissenpur/package-lock.json` stammt noch aus dem alten Frontend-Manifest und enthält veraltete direkte Pakete; `@types/react` und `@types/react-dom` fehlen dort vollständig. `functions/package-lock.json` und `rules-tests/package-lock.json` fehlen derzeit ganz. Mit exakt Node `22.12.0` und npm `10.9.2` im Repository-Root `node scripts/regenerate-package-locks.mjs` ausführen, die drei erzeugten Lockfiles prüfen und committen. Erst danach alle drei CI-Installationen gemeinsam auf `npm ci` umstellen.
 3. **Clean-Checkout-Verifikation durchführen:** Frontend-Typecheck und Build, Functions-Verify/Compile sowie Firestore-Emulatortests vollständig erfolgreich bestätigen.
-4. **Produktions-Firebase konfigurieren:** App Check, AI Logic, Functions, Quotas, Budgetwarnungen und Monitoring im echten Zielprojekt aktivieren.
+4. **Produktions-Firebase konfigurieren:** App Check, AI Logic, Functions und den Firebase-AI-Logic-Authenticated-users-mode aktivieren; reales per-user AI-Limit auf den bestätigten 1–20-RPM-Wert setzen sowie Quotas, Monitoring, Budgetwarnungen und Kostenschutz prüfen.
 5. **Firestore-Produktion fertigstellen:** `(default)` als Produktionsdatenbank verwenden, kontrollierte Migration durchführen und TTL für `quizSessions.expiresAt` sowie `serverRateLimits.expiresAt` aktivieren.
 6. **Legacy-Cleanup kontrolliert ausführen:** zuerst Dry Run, danach nur mit explizit bestätigter Allowlist im Zielprojekt.
 7. **Rechtsangaben finalisieren:** echte Betreiber-/Kontaktangaben, Aufbewahrungsfristen, Mindestalter und bestätigte Rechtsprüfung eintragen.
 8. **Hosting-Rollback real testen:** Snapshot-/Restore-Probe gegen die echte Produktions-Site durchführen.
-9. **Realgeräte/E2E testen:** Android, iPhone und Desktop inklusive Installation, Offline-Start, Update, Login, Accountwechsel, Logout, Konto-Löschung, Ranked, KI, SRS und langsamer/unterbrochener Verbindung.
+9. **Realgeräte/E2E testen:** Android, iPhone und Desktop inklusive Installation, Offline-Start, Update, Login, Accountwechsel, Logout, Konto-Löschung, Ranked, KI, SRS und langsamer/unterbrochener Verbindung. Für KI zusätzlich Gast ohne Netzwerkrequest sowie angemeldeter Nutzer mit realem Authenticated-users-/Quota-Setup prüfen.
 
 ## Aktueller CI-Status
 
