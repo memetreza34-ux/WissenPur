@@ -143,6 +143,9 @@ service cloud.firestore {
       ]);
     }
 
+    // Kept as executable schema documentation for the server-owned public row.
+    // Browser access is denied below; the callable applies an equivalent
+    // sanitizer before returning a minimal transport representation.
     function isValidTrustedLeaderboard(userId, data) {
       return data.keys().hasOnly([
                'uid',
@@ -194,12 +197,11 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Browser collection enumeration is disabled. Public ranked lists are
-    // served by the App-Check-protected getTrustedLeaderboard callable, which
-    // sanitizes every returned row. A direct single-document read remains
-    // available only for a minimal valid display profile.
+    // Public ranked lists are callable-only. Cloud Functions use the Admin SDK
+    // and sanitize/redact rows before transport; browser get/list/write access
+    // is completely denied even when a document ID is already known.
     match /trustedLeaderboard/{userId} {
-      allow get: if isValidTrustedLeaderboard(userId, resource.data);
+      allow get: if false;
       allow list: if false;
       allow write: if false;
     }
