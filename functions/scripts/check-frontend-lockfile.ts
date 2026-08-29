@@ -4,16 +4,15 @@ import { fileURLToPath } from 'node:url';
 
 const currentDir = resolve(fileURLToPath(new URL('.', import.meta.url)));
 const repoRoot = resolve(currentDir, '../..');
-const manifestPath = resolve(repoRoot, 'wissenpur/package.json');
-const lockPath = resolve(repoRoot, 'wissenpur/package-lock.json');
 
-const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {
+type Manifest = {
   name?: string;
   version?: string;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
 };
-const lock = JSON.parse(await readFile(lockPath, 'utf8')) as {
+
+type Lockfile = {
   name?: string;
   version?: string;
   lockfileVersion?: number;
@@ -25,28 +24,84 @@ const lock = JSON.parse(await readFile(lockPath, 'utf8')) as {
   }>;
 };
 
-const failures: string[] = [];
-const root = lock.packages?.[''];
-const removedTopLevelPackages = [
-  '@google/genai',
-  '@types/express',
-  'autoprefixer',
-  'dotenv',
-  'express',
-  'tsx',
-] as const;
+type Workspace = {
+  label: string;
+  manifestPath: string;
+  lockPath: string;
+  removedTopLevelPackages?: readonly string[];
+};
 
-if (lock.lockfileVersion !== 3) {
-  failures.push(`wissenpur/package-lock.json: lockfileVersion ${String(lock.lockfileVersion)} statt 3.`);
+const workspaces: Workspace[] = [
+  {
+    label: 'Frontend',
+    manifestPath: 'wissenpur/package.json',
+    lockPath: 'wissenpur/package-lock.json',
+    removedTopLevelPackages: [
+      '@google/genai',
+      '@types/express',
+      'autoprefixer',
+      'dotenv',
+      'express',
+      'tsx',
+    ],
+  },
+  {
+    label: 'Functions',
+    manifestPath: 'functions/package.json',
+    lockPath: 'functions/package-lock.json',
+  },
+  {
+    label: 'Firestore-Regeltests',
+    manifestPath: 'rules-tests/package.json',
+    lockPath: 'rules-tests/package-lock.json',
+  },
+];
+
+const failures: string[] = [];
+
+async function readJson<T>(relativePath: string): Promise<T | null> {
+  try {
+    return JSON.parse(await readFile(resolve(repoRoot, relativePath), 'utf8')) as T;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') return null;
+    throw error;
+  }
 }
-if (!root) {
-  failures.push('wissenpur/package-lock.json: Root-Paket fehlt unter packages[""].');
-} else {
+
+for (const workspace of workspaces) {
+  const manifest = await readJson<Manifest>(workspace.manifestPath);
+  if (!manifest) {
+    failures.push(`${workspace.manifestPath}: Manifest fehlt.`);
+    continue;
+  }
+
+  const lock = await readJson<Lockfile>(workspace.lockPath);
+  if (!lock) {
+    failures.push(
+      `${workspace.lockPath}: Lockfile fehlt. Erzeuge es mit der freigegebenen Toolchain Node 22.12.0 / npm 10.9.2.`,
+    );
+    continue;
+  }
+
+  const root = lock.packages?.[''];
+  if (lock.lockfileVersion !== 3) {
+    failures.push(`${workspace.lockPath}: lockfileVersion ${String(lock.lockfileVersion)} statt 3.`);
+  }
+  if (!root) {
+    failures.push(`${workspace.lockPath}: Root-Paket fehlt unter packages[""].`);
+    continue;
+  }
+
   if (lock.name !== manifest.name || root.name !== manifest.name) {
-    failures.push(`wissenpur/package-lock.json: Paketname ist nicht mit package.json synchron (${String(lock.name)} / ${String(root.name)}).`);
+    failures.push(
+      `${workspace.lockPath}: Paketname ist nicht mit ${workspace.manifestPath} synchron (${String(lock.name)} / ${String(root.name)}).`,
+    );
   }
   if (lock.version !== manifest.version || root.version !== manifest.version) {
-    failures.push(`wissenpur/package-lock.json: Version ist nicht mit package.json synchron (${String(lock.version)} / ${String(root.version)}).`);
+    failures.push(
+      `${workspace.lockPath}: Version ist nicht mit ${workspace.manifestPath} synchron (${String(lock.version)} / ${String(root.version)}).`,
+    );
   }
 
   for (const section of ['dependencies', 'devDependencies'] as const) {
@@ -57,34 +112,36 @@ if (!root) {
 
     if (JSON.stringify(expectedNames) !== JSON.stringify(lockedNames)) {
       failures.push(
-        `wissenpur/package-lock.json: ${section} enthält andere direkte Pakete als package.json. Erwartet: ${expectedNames.join(', ')}. Lock: ${lockedNames.join(', ')}.`,
+        `${workspace.lockPath}: ${section} enthält andere direkte Pakete als ${workspace.manifestPath}. Erwartet: ${expectedNames.join(', ')}. Lock: ${lockedNames.join(', ')}.`,
       );
     }
 
     for (const [name, version] of Object.entries(expected)) {
       if (locked[name] !== version) {
-        failures.push(`wissenpur/package-lock.json: ${section}.${name} ist ${String(locked[name])} statt ${version}.`);
+        failures.push(`${workspace.lockPath}: ${section}.${name} ist ${String(locked[name])} statt ${version}.`);
       }
       if (!lock.packages?.[`node_modules/${name}`]) {
-        failures.push(`wissenpur/package-lock.json: Aufgelöster Eintrag node_modules/${name} fehlt.`);
+        failures.push(`${workspace.lockPath}: Aufgelöster Eintrag node_modules/${name} fehlt.`);
       }
+    }
+  }
+
+  for (const packageName of workspace.removedTopLevelPackages || []) {
+    if (lock.packages?.[`node_modules/${packageName}`]) {
+      failures.push(
+        `${workspace.lockPath}: Entferntes Alt-Paket ${packageName} liegt noch als Top-Level-Lockeintrag vor. Das Lockfile muss aus dem bereinigten Manifest neu erzeugt werden.`,
+      );
     }
   }
 }
 
-for (const packageName of removedTopLevelPackages) {
-  if (lock.packages?.[`node_modules/${packageName}`]) {
-    failures.push(
-      `wissenpur/package-lock.json: Entferntes Alt-Paket ${packageName} liegt noch als Top-Level-Lockeintrag vor. Das Lockfile muss aus dem bereinigten Manifest neu erzeugt werden.`,
-    );
-  }
-}
-
 if (failures.length > 0) {
-  console.error('\nWissenPur-Frontend-Lockfile ist nicht reproduzierbar:\n');
+  console.error('\nWissenPur-Package-Lockfiles sind nicht vollständig reproduzierbar:\n');
   for (const failure of failures) console.error(`- ${failure}`);
-  console.error('\nRegeneriere wissenpur/package-lock.json aus dem aktuellen package.json und verwende danach wieder npm ci.\n');
+  console.error(
+    '\nErzeuge alle drei package-lock.json mit Node 22.12.0 und npm 10.9.2 neu. Stelle die drei CI-Installationen erst danach gemeinsam auf npm ci um.\n',
+  );
   process.exit(1);
 }
 
-console.log('Frontend-Lockfile stimmt mit dem Manifest überein und enthält keine bekannten Top-Level-Alt-Pakete.');
+console.log('Frontend-, Functions- und Rules-Test-Lockfiles stimmen mit ihren Manifesten überein.');
