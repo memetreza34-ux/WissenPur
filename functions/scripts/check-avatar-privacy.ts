@@ -59,8 +59,12 @@ for (const [name, source] of [
   ['economyCallables.ts', economyCallables],
 ] as const) {
   assert.match(source, /safeLeaderboardAvatar/);
-  assert.doesNotMatch(source, /authToken\?\.picture|providerPhoto/,
-    `${name}: Trusted leaderboard darf keine Identity-Provider-Fotos speichern.`);
+  assert.match(source, /userData\?\.customName/,
+    `${name}: Ein bewusst gesetzter WissenPur-customName muss als öffentlicher Name unterstützt werden.`);
+  assert.match(source, /'WissenPur-Nutzer'/,
+    `${name}: Ohne customName muss die öffentliche Rangliste pseudonym bleiben.`);
+  assert.doesNotMatch(source, /authToken|tokenName|storedName|userData\?\.displayName|providerPhoto/,
+    `${name}: Trusted leaderboard darf keine Identity-Provider-Namen oder -Fotos automatisch veröffentlichen.`);
 }
 
 assert.doesNotMatch(economyCore, /dicebear|api\.dicebear\.com/i);
@@ -90,6 +94,13 @@ assert.match(avatarEquipCallable, /enforceGlobalCallableRateLimit\(uid\)/);
 assert.match(avatarEquipCallable, /equipAvatarItem\(currentState, avatarId\)/);
 assert.match(avatarEquipCallable, /trustedLeaderboard/);
 assert.match(avatarEquipCallable, /safeLocalAvatar/);
+assert.match(avatarEquipCallable, /userData\?\.customName/);
+assert.match(avatarEquipCallable, /'WissenPur-Nutzer'/);
+assert.doesNotMatch(
+  avatarEquipCallable,
+  /authToken|request\.auth\?\.token|userData\?\.displayName|tokenName|storedName/,
+  'Auch Avatarwechsel dürfen keinen Identity-Provider-Namen in die öffentliche Rangliste schreiben.',
+);
 assert.match(entry, /export \{ equipShopAvatar \} from '\.\/avatarEquipCallable\.js';/);
 assert.match(economyService, /equipShopAvatarCallable/);
 assert.match(economyService, /export const equipServerShopAvatar/);
@@ -98,7 +109,7 @@ const purchaseBlock = economyCallables.match(
   /export const purchaseShopItem[\s\S]*?export const consumePowerUp/,
 )?.[0] || '';
 assert.match(purchaseBlock, /const leaderboardRef = db\.collection\('trustedLeaderboard'\)\.doc\(uid\)/);
-assert.match(purchaseBlock, /transaction\.set\(\s*leaderboardRef,\s*leaderboardProfile\(uid, userData, purchase\.state, request\.auth\?\.token\)/);
+assert.match(purchaseBlock, /transaction\.set\(\s*leaderboardRef,\s*leaderboardProfile\(uid, userData, purchase\.state\)/);
 
 for (const [itemId, item] of avatarItems) {
   assert.match(avatarManager, new RegExp(`id: '${itemId}'`));
@@ -143,4 +154,4 @@ assert.match(indexCss, /content: "U";/,
 assert.match(main, /<AvatarManagerPanel\s*\/>/);
 assert.match(accountBoundary, /wissenpur:stats-updated/);
 
-console.log('Avatar-Privacy, hardened same-origin Bild-CSP, Provider-Foto-Fallback, lokale Assets, Hauptprofil-Rendering, serverseitiger Besitzcheck, Kauf-Sync und kostenloser Equip-/Reset-Flow geprüft.');
+console.log('Avatar- und Ranglisten-Privacy, pseudonyme Default-Identität, hardened same-origin Bild-CSP, lokale Assets, serverseitiger Besitzcheck sowie kostenloser Equip-/Reset-Flow geprüft.');
