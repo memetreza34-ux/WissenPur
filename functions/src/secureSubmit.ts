@@ -104,12 +104,10 @@ function leaderboardProfile(
   uid: string,
   userData: Record<string, unknown> | undefined,
   state: EconomyState,
-  authToken: Record<string, unknown> | undefined,
 ) {
-  const customName = stringOrNull(userData?.customName, 100);
-  const storedName = stringOrNull(userData?.displayName, 100);
-  const tokenName = stringOrNull(authToken?.name, 100);
-  const displayName = customName || storedName || tokenName || 'WissenPur-Nutzer';
+  // Public leaderboard identity is opt-in. Never publish the Google/Firebase
+  // provider name automatically; only an app-specific customName is public.
+  const displayName = stringOrNull(userData?.customName, 100) || 'WissenPur-Nutzer';
   const photoURL = safeLeaderboardAvatar(state.customPhotoURL);
 
   return {
@@ -251,7 +249,7 @@ export const submitRankedQuiz = onCall<SubmitQuizRequest>(
         }, { merge: true });
         transaction.set(
           leaderboardRef,
-          leaderboardProfile(uid, userData, outcome.state, request.auth?.token),
+          leaderboardProfile(uid, userData, outcome.state),
           { merge: true },
         );
         transaction.update(sessionRef, {
