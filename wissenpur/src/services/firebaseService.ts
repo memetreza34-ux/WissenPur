@@ -95,7 +95,8 @@ const mergeProfileContent = (
   return {
     ...localStats,
     uid: cloudStats.uid ?? localStats.uid,
-    displayName: cloudStats.displayName ?? localStats.displayName,
+    // Firebase/Google provider identity remains in Firebase Auth. Only the
+    // app-specific customName is synchronized as learning-profile identity.
     customName: cloudStats.customName ?? localStats.customName,
     age: cloudStats.age ?? localStats.age,
     wrongQuestions: mergedWrongQuestions,
@@ -132,12 +133,10 @@ const getProfileUpdate = (
   expectedUid: string,
 ): Partial<UserStats> & { uid: string } => {
   assertActiveAuthUid(expectedUid);
-  const currentUser = auth.currentUser!;
   const library = applyLearningLibraryPolicy(stats.customQuizzes);
   const wrongQuestions = mergeWrongQuestions(stats.wrongQuestions, []);
   return sanitizeForFirestore({
     uid: expectedUid,
-    displayName: currentUser.displayName || 'Anonym',
     customName: stats.customName,
     age: stats.age,
     wrongQuestions,
