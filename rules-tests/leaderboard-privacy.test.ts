@@ -3,7 +3,6 @@ import { resolve } from 'node:path';
 import test, { after, before, beforeEach } from 'node:test';
 import {
   assertFails,
-  assertSucceeds,
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
@@ -49,10 +48,13 @@ after(async () => {
   await testEnv.cleanup();
 });
 
-test('minimal trusted leaderboard document is public-readable by direct id', async () => {
+test('even a minimal trusted leaderboard document is not directly browser-readable', async () => {
   await seed('trustedLeaderboard/alice', validLeaderboard());
   const anonymous = testEnv.unauthenticatedContext().firestore();
-  await assertSucceeds(getDoc(doc(anonymous, 'trustedLeaderboard/alice')));
+  const alice = testEnv.authenticatedContext('alice').firestore();
+
+  await assertFails(getDoc(doc(anonymous, 'trustedLeaderboard/alice')));
+  await assertFails(getDoc(doc(alice, 'trustedLeaderboard/alice')));
 });
 
 test('browser collection enumeration is denied even when rows are valid', async () => {
@@ -66,16 +68,16 @@ test('browser collection enumeration is denied even when rows are valid', async 
   await assertFails(getDocs(collection(anonymous, 'trustedLeaderboard')));
 });
 
-test('empty local avatar is allowed for users without a shop avatar', async () => {
+test('known document ids do not bypass the callable-only boundary', async () => {
   await seed('trustedLeaderboard/alice', {
     ...validLeaderboard(),
     photoURL: '',
   });
   const anonymous = testEnv.unauthenticatedContext().firestore();
-  await assertSucceeds(getDoc(doc(anonymous, 'trustedLeaderboard/alice')));
+  await assertFails(getDoc(doc(anonymous, 'trustedLeaderboard/alice')));
 });
 
-test('unexpected sensitive fields fail closed for public leaderboard reads', async () => {
+test('unexpected sensitive fields remain inaccessible through direct reads', async () => {
   await seed('trustedLeaderboard/alice', {
     ...validLeaderboard(),
     email: 'alice@example.invalid',
@@ -84,7 +86,7 @@ test('unexpected sensitive fields fail closed for public leaderboard reads', asy
   await assertFails(getDoc(doc(anonymous, 'trustedLeaderboard/alice')));
 });
 
-test('external avatar URLs fail closed for public leaderboard reads', async () => {
+test('external avatar URLs remain inaccessible through direct reads', async () => {
   await seed('trustedLeaderboard/alice', {
     ...validLeaderboard(),
     photoURL: 'https://accounts.google.com/avatar.png',
@@ -93,7 +95,7 @@ test('external avatar URLs fail closed for public leaderboard reads', async () =
   await assertFails(getDoc(doc(anonymous, 'trustedLeaderboard/alice')));
 });
 
-test('mismatched identity and malformed score fail closed', async () => {
+test('mismatched identity and malformed score are never browser-readable', async () => {
   const anonymous = testEnv.unauthenticatedContext().firestore();
 
   await seed('trustedLeaderboard/alice', validLeaderboard('bob'));
