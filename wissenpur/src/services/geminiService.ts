@@ -134,8 +134,13 @@ export const generateQuestions = async (
   difficulty: Difficulty | 'all',
   count: number = 10
 ): Promise<Question[] | null> => {
-  assertProtectedOnlineRuntimeReady();
   const expectedUser = auth.currentUser;
+  if (!expectedUser) {
+    console.warn('KI-Fragengenerierung erfordert ein angemeldetes Konto.');
+    return null;
+  }
+  assertProtectedOnlineRuntimeReady();
+
   const safeCategory = normalizeTopic(category);
   const questionCategory = resolveQuestionCategory(safeCategory);
   const safeCount = Math.min(MAX_QUESTION_COUNT, Math.max(1, Math.trunc(count) || 10));
