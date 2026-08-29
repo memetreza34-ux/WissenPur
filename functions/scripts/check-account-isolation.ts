@@ -151,6 +151,24 @@ assertIncludes(
 assertIncludes(
   'wissenpur/src/components/AccountSessionBoundary.tsx',
   sessionBoundary,
+  'localStorage.removeItem(ANALYTICS_STORAGE_KEY);',
+  'Authwechsel müssen die gerätegebundene Lernanalyse direkt entfernen und dürfen nicht nur auf einen UI-Listener vertrauen.',
+);
+assertIncludes(
+  'wissenpur/src/components/AccountSessionBoundary.tsx',
+  sessionBoundary,
+  'localStorage.removeItem(ANALYTICS_OWNER_KEY);',
+  'Authwechsel müssen auch den Besitzer-Marker der Lernanalyse direkt entfernen.',
+);
+assertIncludes(
+  'wissenpur/src/components/AccountSessionBoundary.tsx',
+  sessionBoundary,
+  "window.addEventListener('wissenpur:account-storage-reset', refreshProductContent);",
+  'Ein expliziter Account-Storage-Reset muss die Produktoberfläche neu mounten.',
+);
+assertIncludes(
+  'wissenpur/src/components/AccountSessionBoundary.tsx',
+  sessionBoundary,
   'const [authResolved, setAuthResolved] = useState(false);',
   'Kontoabhängige Oberflächen dürfen erst nach der ersten Firebase-Auth-Auflösung gerendert werden.',
 );
@@ -164,13 +182,19 @@ assertIncludes(
   'wissenpur/src/components/AccountSessionBoundary.tsx',
   sessionBoundary,
   '<Fragment key={`${sessionKey}:${contentRevision}`}>',
-  'Die vollständige Produktoberfläche muss bei Auth- und Bibliothekswechseln neu gemountet werden.',
+  'Die vollständige Produktoberfläche muss bei Auth-, Bibliotheks- und Account-Storage-Wechseln neu gemountet werden.',
 );
 assertIncludes(
   'wissenpur/src/components/LearningAnalyticsPanel.tsx',
   analyticsPanel,
   'shouldClearLocalAccountDataForTransition(previousIdentity, nextIdentity)',
   'Auch die lokale Lernanalyse muss dieselbe Gast-/Kontowechsel-Policy verwenden.',
+);
+assertIncludes(
+  'wissenpur/src/components/LearningAnalyticsPanel.tsx',
+  analyticsPanel,
+  "window.addEventListener('wissenpur:account-storage-reset', reset);",
+  'Die sichtbare Lernanalyse muss einen expliziten Storage-Reset sofort übernehmen.',
 );
 assertIncludes(
   'wissenpur/src/main.tsx',
@@ -186,4 +210,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('Gastdaten-Übernahme, Konto-Isolation, Economy-Hydrierungssperre, Lernplan-UID-Bindung, Analyse-Löschung, Authwechsel, Logout und Löschung geprüft.');
+console.log('Gastdaten-Übernahme, Konto-Isolation, direkte Analytics-Bereinigung, Economy-Hydrierungssperre, Lernplan-UID-Bindung, Authwechsel, Logout und Löschung geprüft.');
