@@ -36,8 +36,10 @@ const normalizeWrongQuestion = (value: unknown): Question | null => {
   const categoryText = text(raw.category, 50) as CategoryId;
   const category = categoryIds.has(categoryText) ? categoryText : 'allgemein';
   const difficulty = normalizeDifficulty(raw.difficulty);
-  const imageUrl = text(raw.imageUrl, 1_000);
 
+  // Wrong-question history is user-controlled profile content. Keep it fully
+  // text-only so legacy or manipulated entries cannot trigger remote image
+  // requests when error training is opened.
   return {
     id,
     category,
@@ -46,7 +48,6 @@ const normalizeWrongQuestion = (value: unknown): Question | null => {
     correctAnswer,
     explanation,
     ...(difficulty ? { difficulty } : {}),
-    ...(imageUrl.startsWith('https://') ? { imageUrl } : {}),
   };
 };
 
