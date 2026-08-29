@@ -4,6 +4,7 @@ import {
   legalConfig,
   legalConfigurationComplete,
 } from '../config/legalConfig';
+import { useAccessibleDialog } from '../hooks/useAccessibleDialog';
 
 type LegalTab = 'imprint' | 'privacy' | 'terms';
 
@@ -19,6 +20,8 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
 export const LegalPanel = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [tab, setTab] = useState<LegalTab>('imprint');
+  const close = () => setIsOpen(false);
+  const dialogRef = useAccessibleDialog(isOpen, close);
 
   return (
     <>
@@ -35,10 +38,12 @@ export const LegalPanel = () => {
       {isOpen && (
         <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
           <section
+            ref={dialogRef}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby="legal-dialog-title"
-            className="max-h-[94dvh] w-full max-w-3xl overflow-y-auto rounded-[2rem] border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-7"
+            className="max-h-[94dvh] w-full max-w-3xl overflow-y-auto rounded-[2rem] border border-slate-200 bg-white p-5 shadow-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 dark:border-slate-700 dark:bg-slate-900 sm:p-7"
           >
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -50,8 +55,8 @@ export const LegalPanel = () => {
               <button
                 type="button"
                 aria-label="Rechtliche Informationen schließen"
-                onClick={() => setIsOpen(false)}
-                className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-white"
+                onClick={close}
+                className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 dark:hover:bg-slate-800 dark:hover:text-white"
               >
                 <X size={20} />
               </button>
@@ -73,7 +78,7 @@ export const LegalPanel = () => {
                   key={id}
                   type="button"
                   onClick={() => setTab(id)}
-                  className={`flex flex-col items-center justify-center gap-1 rounded-xl px-2 py-3 text-[10px] font-black uppercase tracking-wider sm:flex-row sm:text-xs ${tab === id ? 'bg-white text-slate-950 shadow-sm dark:bg-slate-950 dark:text-white' : 'text-slate-500'}`}
+                  className={`flex flex-col items-center justify-center gap-1 rounded-xl px-2 py-3 text-[10px] font-black uppercase tracking-wider focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 sm:flex-row sm:text-xs ${tab === id ? 'bg-white text-slate-950 shadow-sm dark:bg-slate-950 dark:text-white' : 'text-slate-500'}`}
                 >
                   <Icon size={16} />
                   {label}
