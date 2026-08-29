@@ -17,11 +17,11 @@ Angemeldete Nutzer finden in der Release-App die Schaltfläche **Daten**. Dort s
 - eigene Lernsets, Lernplan und gespeicherte Fehlerfragen, soweit sie im Nutzerdokument liegen
 - serververifiziertem Ranglisteneintrag aus `trustedLeaderboard`
 - gegebenenfalls historischem Alt-Ranglisteneintrag, klar getrennt vom verifizierten Eintrag
-- eigenen Quiz-Sitzungen und öffentlichen Rundenergebnissen
-- serverseitigem Quizstart-Limit des eigenen Kontos
+- eigenen Quiz-Sitzungen und serverseitigen Rundennachweisen
+- serverseitigem Rate-Limit-Dokument des eigenen Kontos
 - selbst erstellten Alt-Lobbys sowie zuordenbaren Alt-Duellen
 
-Die Web-App ergänzt anschließend **nur lokal im Browser** die gerätegebundene persönliche Lernanalyse (`learningAnalytics`). Diese Historie wird für den Export nicht nach Firestore hochgeladen.
+Die Web-App ergänzt anschließend **nur lokal im Browser** die gerätegebundene persönliche Lernanalyse (`localDevice.learningAnalytics`). Diese Historie wird für den Export nicht nach Firestore hochgeladen.
 
 #### Sicherheitsredaktion
 
@@ -37,7 +37,7 @@ Der serverinterne `answerKey` einer Quiz-Sitzung wird niemals exportiert. Das gi
 
 Der Lösungsschlüssel ist kein vom Nutzer bereitgestelltes Kontodatum, sondern ein vertrauliches Prüfungsgeheimnis. Nach einer erfolgreichen Abgabe liefert der geschützte Auswertungsendpunkt die für die persönliche Auswertung notwendigen richtigen Antworten und Erklärungen.
 
-Firestore-Zeitstempel werden als ISO-Datum ausgegeben. Pro zugeordneter Sammlung werden höchstens 500 Dokumente exportiert. Dieser Grenzwert muss vor einem größeren öffentlichen Betrieb durch paginierten Export oder einen Supportprozess ersetzt werden.
+Firestore-Zeitstempel werden als ISO-Datum ausgegeben. Pro zugeordneter Sammlung werden höchstens 500 Dokumente exportiert. Für ungewöhnlich große Konten ist deshalb vor einem größeren öffentlichen Betrieb ein paginierter Export oder ein klar definierter Supportprozess erforderlich.
 
 ## Browser- und Inhalts-Privacy
 
@@ -51,7 +51,7 @@ WissenPur reduziert vermeidbare Drittanbieterrequests im Lernbetrieb:
 - `trustedLeaderboard.photoURL` darf nur einen freigegebenen lokalen Avatarpfad enthalten. Profilbilder des Login-Anbieters werden nicht in die vertrauenswürdige Rangliste übernommen.
 - Die lokalen Shop-Avatare gehören zur Service-Worker-App-Shell und stehen dadurch auch nach erfolgreicher PWA-Installation offline zur Verfügung.
 
-Das eigene Google-Profilbild eines angemeldeten Nutzers kann in dessen persönlicher Oberfläche weiterhin aus dem Firebase-Auth-Profil angezeigt werden. Dabei setzt die App `referrerPolicy="no-referrer"`. Dieser persönliche Auth-Profilpfad ist getrennt von der öffentlichen Rangliste und den Lerninhalten.
+Firebase Auth kann weiterhin eine Provider-`photoURL` im Authobjekt enthalten. WissenPur spiegelt diesen Wert **nicht** als Lernprofilfeld in Firestore und **nicht** in die öffentliche Rangliste. Die Produktions-CSP erlaubt Bilder nur von derselben Origin sowie `data:`/`blob:`. Falls ein externer Providerbild-URL als persönlicher UI-Fallback vorhanden ist, wird dieser durch die Release-CSS ausgeblendet und durch den neutralen lokalen Buchstaben-Fallback ersetzt; dadurch wird das externe Bild im gehärteten Releasepfad nicht als sichtbares Profilbild verwendet.
 
 ### Datensparsame Serverlogs
 
@@ -91,6 +91,16 @@ Während dieser Hydrierung:
 
 Jeder asynchrone Sync ist außerdem an die erwartete Firebase-UID gebunden. Ändert sich die Auth-Sitzung während eines laufenden Reads/Callables/Writes, wird die verspätete Antwort verworfen und darf keine alten Kontodaten erneut in LocalStorage speichern.
 
+## Konto- und Browserwechsel
+
+`AccountSessionBoundary` behandelt den Wechsel zwischen Auth-Kontexten als harte Datenschutzgrenze:
+
+- **Gast → erstes Konto:** lokale Lerninhalte dürfen für die bewusste Erstübernahme erhalten bleiben.
+- **Konto → Logout/Auth-Verlust:** kontoabhängige lokale Daten werden entfernt.
+- **Konto A → Konto B:** lokale Daten von Konto A werden vor dem neuen Kontokontext entfernt.
+
+Bei einer Löschtransition werden Nutzerstand, Owner-Marker, Lernplan sowie Lernanalyse und deren Owner-Marker direkt entfernt. Zusätzlich löst `wissenpur:account-storage-reset` einen Produktoberflächen-Refresh aus. Die Analytics-Bereinigung hängt dadurch nicht davon ab, dass das Analysefenster gerade geöffnet oder sein Listener montiert ist.
+
 ## Kontolöschung
 
 `deleteMyAccount` löscht serverseitig:
@@ -120,6 +130,8 @@ Die Löschung verlangt:
 4. die sichtbare Bestätigung `LÖSCHEN` in der Oberfläche.
 
 Ist die Anmeldung zu alt, öffnet die Web-App für das derzeit ausschließlich unterstützte Google-Konto eine Neuauthentifizierung. Nach erfolgreicher Bestätigung wird das ID-Token erneuert und die Löschanfrage genau einmal wiederholt.
+
+Export und Löschung erfassen die UID, mit der der Vorgang gestartet wurde. Eine verspätete Antwort darf nach Logout oder Kontowechsel nicht in einen anderen Kontokontext übernommen werden. Nach erfolgreicher Löschung werden lokale Daten nur dann vom Löschpfad selbst entfernt, wenn noch dasselbe Konto aktiv ist; ist bereits ein anderes Konto aktiv, wird dieses nicht verändert.
 
 Die Löschung ist wiederholbar ausgelegt. Wird ein Versuch nach der Firestore-Löschung unterbrochen, kann die Aktion erneut gestartet werden, um den Authentication-Eintrag zu entfernen.
 
