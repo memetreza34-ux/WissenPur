@@ -27,6 +27,18 @@ assert.equal(mergedWrong.length, 2);
 assert.equal(mergedWrong[0]?.question, 'Lokale Fehlerfrage');
 assert.equal(mergedWrong[1]?.question, 'Nur Cloud');
 
+const legacyRemoteImage = {
+  ...question('legacy-remote-image', 'Altfrage mit externem Bild'),
+  imageUrl: 'https://tracker.example/question.png',
+};
+const sanitizedLegacyWrong = mergeWrongQuestions([legacyRemoteImage], []);
+assert.equal(sanitizedLegacyWrong.length, 1);
+assert.equal(
+  sanitizedLegacyWrong[0]?.imageUrl,
+  undefined,
+  'Fehlerfragen dürfen keine externen Bild-URLs aus Alt-/Cloud-Daten übernehmen.',
+);
+
 const invalidWrong = mergeWrongQuestions([
   { id: 'bad', question: 'Ungültig', options: ['gleich', 'gleich'], correctAnswer: 0, explanation: 'x' },
 ], []);
@@ -46,10 +58,11 @@ const cloudDeck = deck('cloud-deck', 'Cloud', 'cloud-deck-question');
 const mergedLibrary = mergeLearningLibraries([localDeck], [cloudDeck]);
 assert.deepEqual(mergedLibrary.decks.map((entry) => entry.id), ['local-deck', 'cloud-deck']);
 
-const [firebaseService, sessionBoundary, analyticsPanel] = await Promise.all([
+const [firebaseService, sessionBoundary, analyticsPanel, wrongQuestionMerge] = await Promise.all([
   readFile(resolve(repoRoot, 'wissenpur/src/services/firebaseService.ts'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/components/AccountSessionBoundary.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/components/LearningAnalyticsPanel.tsx'), 'utf8'),
+  readFile(resolve(repoRoot, 'wissenpur/src/services/wrongQuestionMerge.ts'), 'utf8'),
 ]);
 
 assert.match(firebaseService, /mergeLearningLibraries/);
@@ -67,7 +80,12 @@ assert.doesNotMatch(
   /console\.(?:warn|error)\([^\n]*stats|console\.(?:warn|error)\([^\n]*uid/i,
   'Best-Effort-Logging darf keine Profilinhalte oder UID ausgeben.',
 );
+assert.doesNotMatch(
+  wrongQuestionMerge,
+  /imageUrl\.startsWith|https:\/\//,
+  'Die Fehlerfragen-Normalisierung darf externe Bild-URLs nicht wieder freigeben.',
+);
 assert.match(sessionBoundary, /shouldClearLocalAccountDataForTransition/);
 assert.match(analyticsPanel, /shouldClearLocalAccountDataForTransition/);
 
-console.log('Gast-/Cloud-Merge, strikte Erst-Hydrierung, Best-Effort-Folge-Sync und gemeinsame Konto-Transition geprüft.');
+console.log('Gast-/Cloud-Merge, text-only Fehlerfragen, strikte Erst-Hydrierung, Best-Effort-Folge-Sync und gemeinsame Konto-Transition geprüft.');
