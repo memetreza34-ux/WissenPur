@@ -57,7 +57,7 @@
     "build": "npm run verify && npm run compile",
     "lint": "npm run verify",
     "serve": "npm run build && firebase emulators:start --only auth,functions,firestore",
-    "deploy": "firebase deploy --only functions"
+    "deploy:dev": "firebase deploy --only functions --project dev"
   },
   "dependencies": {
     "firebase-admin": "14.2.0",
