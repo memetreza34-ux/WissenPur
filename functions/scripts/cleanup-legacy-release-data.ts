@@ -1,4 +1,4 @@
-import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
+import { applicationDefault, deleteApp, initializeApp } from 'firebase-admin/app';
 import { FieldPath, getFirestore, type CollectionReference } from 'firebase-admin/firestore';
 
 const LEGACY_COLLECTIONS = [
@@ -11,12 +11,14 @@ const LEGACY_COLLECTIONS = [
 const APPLY_FLAG = '--apply';
 const CONFIRM_PHRASE = 'DELETE-WISSENPUR-LEGACY-DATA';
 const PAGE_SIZE = 200;
+const CLEANUP_APP_NAME = 'wissenpur-legacy-cleanup';
 
 const args = new Set(process.argv.slice(2));
 const apply = args.has(APPLY_FLAG);
 const targetProjectId = process.env.WISSENPUR_TARGET_PROJECT_ID?.trim();
 const confirmedProjectId = process.env.WISSENPUR_CONFIRM_PROJECT_ID?.trim();
 const confirmPhrase = process.env.WISSENPUR_CONFIRM_LEGACY_CLEANUP?.trim();
+const emulatorHost = process.env.FIRESTORE_EMULATOR_HOST?.trim();
 
 if (!targetProjectId) {
   throw new Error(
@@ -35,12 +37,26 @@ if (apply) {
       `Abbruch: WISSENPUR_CONFIRM_LEGACY_CLEANUP muss exakt ${CONFIRM_PHRASE} sein.`,
     );
   }
+  if (emulatorHost) {
+    throw new Error(
+      'Abbruch: --apply darf nicht mit FIRESTORE_EMULATOR_HOST ausgeführt werden. Entferne die Emulatorvariable und prüfe das echte Zielprojekt erneut.',
+    );
+  }
 }
 
-const app = getApps()[0] || initializeApp({
+// Never reuse a pre-existing Admin app here. A cleanup process must be bound to
+// the explicitly named and confirmed project instead of inheriting unrelated
+// process-global Firebase state.
+const app = initializeApp({
   credential: applicationDefault(),
   projectId: targetProjectId,
-});
+}, CLEANUP_APP_NAME);
+
+if (app.options.projectId !== targetProjectId) {
+  await deleteApp(app);
+  throw new Error('Abbruch: Die initialisierte Firebase-App stimmt nicht mit der bestätigten Ziel-Projekt-ID überein.');
+}
+
 const db = getFirestore(app, '(default)');
 
 const countDocuments = async (collection: CollectionReference): Promise<number> => {
@@ -71,33 +87,37 @@ const deleteCollection = async (collection: CollectionReference): Promise<number
   return deleted;
 };
 
-console.log(`WissenPur Legacy-Cleanup für Projekt: ${targetProjectId}`);
-console.log(`Modus: ${apply ? 'APPLY – Dokumente werden gelöscht' : 'DRY RUN – keine Schreiboperationen'}`);
-console.log(`Firestore-Datenbank: (default)`);
-console.log('Aktuelle quizSessions, users, trustedLeaderboard und serverRateLimits werden nicht angefasst.');
+try {
+  console.log(`WissenPur Legacy-Cleanup für Projekt: ${targetProjectId}`);
+  console.log(`Modus: ${apply ? 'APPLY – Dokumente werden gelöscht' : 'DRY RUN – keine Schreiboperationen'}`);
+  console.log('Firestore-Datenbank: (default)');
+  console.log('Aktuelle quizSessions, users, trustedLeaderboard und serverRateLimits werden nicht angefasst.');
 
-let totalFound = 0;
-let totalDeleted = 0;
+  let totalFound = 0;
+  let totalDeleted = 0;
 
-for (const collectionName of LEGACY_COLLECTIONS) {
-  const collection = db.collection(collectionName);
-  const found = await countDocuments(collection);
-  totalFound += found;
+  for (const collectionName of LEGACY_COLLECTIONS) {
+    const collection = db.collection(collectionName);
+    const found = await countDocuments(collection);
+    totalFound += found;
 
-  if (!apply) {
-    console.log(`- ${collectionName}: ${found} Dokument(e) gefunden, 0 gelöscht`);
-    continue;
+    if (!apply) {
+      console.log(`- ${collectionName}: ${found} Dokument(e) gefunden, 0 gelöscht`);
+      continue;
+    }
+
+    const deleted = await deleteCollection(collection);
+    totalDeleted += deleted;
+    console.log(`- ${collectionName}: ${found} Dokument(e) gefunden, ${deleted} gelöscht`);
   }
 
-  const deleted = await deleteCollection(collection);
-  totalDeleted += deleted;
-  console.log(`- ${collectionName}: ${found} Dokument(e) gefunden, ${deleted} gelöscht`);
-}
+  console.log('');
+  console.log(`Gesamt gefunden: ${totalFound}`);
+  console.log(`Gesamt gelöscht: ${totalDeleted}`);
 
-console.log('');
-console.log(`Gesamt gefunden: ${totalFound}`);
-console.log(`Gesamt gelöscht: ${totalDeleted}`);
-
-if (!apply) {
-  console.log('Dry Run abgeschlossen. Für echtes Löschen sind --apply und beide Bestätigungsvariablen erforderlich.');
+  if (!apply) {
+    console.log('Dry Run abgeschlossen. Für echtes Löschen sind --apply und beide Bestätigungsvariablen erforderlich.');
+  }
+} finally {
+  await deleteApp(app);
 }
