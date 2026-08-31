@@ -1,5 +1,11 @@
-import { QUESTIONS as RANKED_QUESTIONS } from '../content/rankedQuestions.ts';
-import { QUESTIONS as OFFLINE_QUESTIONS } from '../../wissenpur/src/data.ts';
+import {
+  CATEGORIES as RANKED_CATEGORIES,
+  QUESTIONS as RANKED_QUESTIONS,
+} from '../content/rankedQuestions.ts';
+import {
+  CATEGORIES as PUBLIC_CATEGORIES,
+  QUESTIONS as OFFLINE_QUESTIONS,
+} from '../../wissenpur/src/data.ts';
 
 const rankedIds = new Set(RANKED_QUESTIONS.map((question) => question.id));
 const offlineIds = new Set(OFFLINE_QUESTIONS.map((question) => question.id));
@@ -16,6 +22,44 @@ if (duplicateRankedIds.length > 0) {
 }
 if (duplicateOfflineIds.length > 0) {
   throw new Error(`Duplicate offline IDs: ${[...new Set(duplicateOfflineIds)].join(', ')}`);
+}
+
+const rankedCategoryIds = RANKED_CATEGORIES.map((category) => category.id);
+const publicCategoryIds = PUBLIC_CATEGORIES.map((category) => category.id);
+const duplicateRankedCategoryIds = rankedCategoryIds.filter(
+  (id, index, ids) => ids.indexOf(id) !== index,
+);
+const duplicatePublicCategoryIds = publicCategoryIds.filter(
+  (id, index, ids) => ids.indexOf(id) !== index,
+);
+if (duplicateRankedCategoryIds.length > 0) {
+  throw new Error(`Duplicate ranked category IDs: ${[...new Set(duplicateRankedCategoryIds)].join(', ')}`);
+}
+if (duplicatePublicCategoryIds.length > 0) {
+  throw new Error(`Duplicate public category IDs: ${[...new Set(duplicatePublicCategoryIds)].join(', ')}`);
+}
+
+const sortedRankedCategories = [...rankedCategoryIds].sort();
+const sortedPublicCategories = [...publicCategoryIds].sort();
+if (JSON.stringify(sortedRankedCategories) !== JSON.stringify(sortedPublicCategories)) {
+  const rankedOnly = sortedRankedCategories.filter((id) => !sortedPublicCategories.includes(id));
+  const publicOnly = sortedPublicCategories.filter((id) => !sortedRankedCategories.includes(id));
+  throw new Error(
+    `Ranked/public category catalogs differ. Ranked-only: ${rankedOnly.join(', ') || 'none'}; public-only: ${publicOnly.join(', ') || 'none'}.`,
+  );
+}
+
+const rankedCategorySet = new Set(rankedCategoryIds);
+const publicCategorySet = new Set(publicCategoryIds);
+for (const question of RANKED_QUESTIONS) {
+  if (!rankedCategorySet.has(question.category)) {
+    throw new Error(`Ranked question ${question.id} uses undeclared category ${question.category}.`);
+  }
+}
+for (const question of OFFLINE_QUESTIONS) {
+  if (!publicCategorySet.has(question.category)) {
+    throw new Error(`Offline question ${question.id} uses undeclared category ${question.category}.`);
+  }
 }
 
 const invalidOfflineIds = [...offlineIds].filter((id) => !id.startsWith('offline-'));
@@ -52,5 +96,5 @@ for (const question of RANKED_QUESTIONS) {
 }
 
 console.log(
-  `Content boundary verified: ${RANKED_QUESTIONS.length} ranked questions and ${OFFLINE_QUESTIONS.length} offline questions; no question-triggered remote images.`,
+  `Content boundary verified: ${RANKED_QUESTIONS.length} ranked questions, ${OFFLINE_QUESTIONS.length} offline questions and ${publicCategoryIds.length} aligned categories; no question-triggered remote images.`,
 );
