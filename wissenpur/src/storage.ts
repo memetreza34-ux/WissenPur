@@ -226,6 +226,16 @@ const applyServerStats = (serverStats: UserStats): UserStats => {
   return merged;
 };
 
+const browserSyncErrorMetadata = (error: unknown) => {
+  const candidate = error && typeof error === 'object'
+    ? error as { name?: unknown; code?: unknown }
+    : {};
+  return {
+    errorName: typeof candidate.name === 'string' ? candidate.name.slice(0, 80) : 'UnknownError',
+    ...(typeof candidate.code === 'string' ? { errorCode: candidate.code.slice(0, 100) } : {}),
+  };
+};
+
 const reconcileServerMutation = (
   operation: Promise<{ stats: UserStats }>,
   label: string,
@@ -233,7 +243,10 @@ const reconcileServerMutation = (
   void operation
     .then(({ stats }) => applyServerStats(stats))
     .catch((error) => {
-      console.warn(`${label} konnte nicht mit dem Server abgeglichen werden.`, error);
+      console.warn(
+        `${label} konnte nicht mit dem Server abgeglichen werden.`,
+        browserSyncErrorMetadata(error),
+      );
     });
 };
 
