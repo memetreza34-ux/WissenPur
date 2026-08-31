@@ -1,0 +1,8 @@
+lib/
+node_modules/
+src/generated/questionBank.ts
+firebase-debug.log
+firebase-debug.*.log
+.env
+.env.*
+!.env.example

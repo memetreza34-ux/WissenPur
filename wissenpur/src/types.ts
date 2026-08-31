@@ -36,6 +36,7 @@ export interface UserStats {
   age?: number;
   photoURL?: string;
   customPhotoURL?: string;
+  economyVersion?: number;
   totalPoints: number;
   currentStreak: number;
   bestStreak: number;
@@ -46,7 +47,9 @@ export interface UserStats {
   lastDailyQuestionsDate?: string | null;
   dailyRewardClaimed?: boolean;
   lastPlayedDate: string | null;
+  lastDailyChallengeDate?: string | null;
   lastDailyRewardDate?: string | null;
+  lastSpinDate?: string | null;
   lastCategory?: CategoryId | 'all' | 'daily' | 'review' | 'blitz' | 'custom' | 'project';
   achievements?: string[];
   coins: number;
@@ -100,7 +103,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'perfect_10', title: 'Perfekt', description: '10 Fragen in einer Runde richtig', icon: '🎯', threshold: 10, type: 'correct' },
   { id: 'correct_100', title: 'Wissensprofi', description: '100 richtige Antworten insgesamt', icon: '✅', threshold: 100, type: 'correct' },
   { id: 'correct_500', title: 'Lexikon', description: '500 richtige Antworten insgesamt', icon: '📖', threshold: 500, type: 'correct' },
-  { id: 'all_categories', title: 'Allrounder', description: 'Spiele in allen Kategorien', icon: '🌈', threshold: 10, type: 'categories' },
+  { id: 'all_categories', title: 'Allrounder', description: 'Spiele in 10 verschiedenen Kategorien', icon: '🌈', threshold: 10, type: 'categories' },
   { id: 'rounds_50', title: 'Dauerbrenner', description: '50 Quiz-Runden gespielt', icon: '🔄', threshold: 50, type: 'rounds' }
 ];
 
@@ -174,8 +177,8 @@ export interface MultiplayerPlayer {
   photoURL?: string;
   status: PlayerStatus;
   score: number;
-  currentAnswer?: number | null; // index of the selected option, null if not answered
-  answerTime?: number; // time taken to answer
+  currentAnswer?: number | null;
+  answerTime?: number;
 }
 
 export type GameState = 'waiting' | 'starting' | 'playing' | 'round_end' | 'finished';
@@ -222,7 +225,7 @@ export interface Lobby {
   categoryId: CategoryId | 'all';
   numberOfQuestions: number;
   timePerQuestion: number;
-  players: Record<string, MultiplayerPlayer>; // Keyed by uid
+  players: Record<string, MultiplayerPlayer>;
   state: GameState;
   currentRound: number;
   totalRounds: number;

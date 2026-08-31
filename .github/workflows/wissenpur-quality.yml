@@ -1,0 +1,122 @@
+name: WissenPur quality checks
+
+on:
+  pull_request:
+    paths:
+      - 'wissenpur/**'
+      - 'functions/**'
+      - 'rules-tests/**'
+      - 'scripts/**'
+      - 'firebase.json'
+      - '.firebaserc'
+      - '.github/workflows/wissenpur-quality.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'wissenpur/**'
+      - 'functions/**'
+      - 'rules-tests/**'
+      - 'scripts/**'
+      - 'firebase.json'
+      - '.firebaserc'
+      - '.github/workflows/wissenpur-quality.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wissenpur-quality-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend-typecheck-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: wissenpur
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22.12.0'
+
+      - name: Pin npm version
+        run: npm install --global npm@10.9.2 --no-audit --no-fund
+
+      # Temporary until wissenpur/package-lock.json is regenerated from the
+      # current manifest. check:package-locks intentionally keeps this visible.
+      - name: Install corrected frontend dependency graph
+        run: npm install --no-audit --no-fund
+
+      - name: Type-check frontend
+        run: npm run lint
+
+      - name: Build production bundle
+        run: npm run build
+
+  functions-verify-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22.12.0'
+
+      - name: Pin npm version
+        run: npm install --global npm@10.9.2 --no-audit --no-fund
+
+      # Temporary until functions/package-lock.json is generated and committed.
+      - name: Install pinned Functions dependencies
+        run: npm install --prefix functions --no-audit --no-fund
+
+      - name: Verify secrets, hosting, architecture, content and tests
+        run: npm --prefix functions run verify
+
+      - name: Compile Cloud Functions
+        run: npm --prefix functions run compile
+
+  firestore-security-rules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22.12.0'
+
+      - name: Pin npm version
+        run: npm install --global npm@10.9.2 --no-audit --no-fund
+
+      - name: Set up Java 21
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # Temporary until rules-tests/package-lock.json is generated and committed.
+      - name: Install pinned rules-test dependencies
+        run: npm install --prefix rules-tests --no-audit --no-fund
+
+      - name: Test Firestore rules with two accounts
+        run: npm --prefix rules-tests test

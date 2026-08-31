@@ -1,0 +1,23 @@
+{
+  "name": "wissenpur-firestore-rules-tests",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "node": "22"
+  },
+  "packageManager": "npm@10.9.2",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test:rules": "firebase emulators:exec --config ../firebase.json --only firestore --project demo-wissenpur-rules \"tsx firestore.rules.test.ts && tsx leaderboard-privacy.test.ts\"",
+    "test": "npm run typecheck && npm run test:rules"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "5.0.1",
+    "@types/node": "22.14.0",
+    "firebase": "12.11.0",
+    "firebase-tools": "15.24.0",
+    "tsx": "4.21.0",
+    "typescript": "6.0.3"
+  }
+}

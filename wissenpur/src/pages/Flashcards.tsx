@@ -1,15 +1,49 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { X, Brain, Check, ChevronLeft, ChevronRight, Frown, Meh, Smile } from 'lucide-react';
-import { Question } from '../types';
-import { Button } from '../components/Button';
+import { motion } from 'motion/react';
+import { X, Brain, Check, Frown, Meh, Smile } from 'lucide-react';
+import { auth } from '../firebase';
+import { syncUserStats } from '../services/firebaseService';
 import { calculateNextReview, initSRSData, Quality } from '../services/srsService';
+import { getStats, saveStats } from '../storage';
+import { Question, type UserStats } from '../types';
 
 interface FlashcardsProps {
   questions: Question[];
   onClose: () => void;
   onQuestionsUpdated?: (updatedQuestions: Question[]) => void;
 }
+
+const sameSrsData = (left: Question['srsData'], right: Question['srsData']): boolean =>
+  left?.interval === right?.interval &&
+  left?.easeFactor === right?.easeFactor &&
+  left?.repetitions === right?.repetitions &&
+  left?.nextReviewDate === right?.nextReviewDate;
+
+const persistSrsUpdates = (updatedQuestions: Question[]) => {
+  const updates = new Map(updatedQuestions.map((question) => [question.id, question]));
+  const stats = getStats();
+  let changed = false;
+  const customQuizzes = (stats.customQuizzes || []).map((deck) => ({
+    ...deck,
+    questions: deck.questions.map((question) => {
+      const updated = updates.get(question.id);
+      if (!updated || sameSrsData(question.srsData, updated.srsData)) return question;
+      changed = true;
+      return updated;
+    }),
+  }));
+
+  if (!changed) return;
+  const next: UserStats = { ...stats, customQuizzes };
+  saveStats(next);
+  window.dispatchEvent(new CustomEvent<UserStats>('wissenpur:stats-updated', { detail: next }));
+  if (auth.currentUser) {
+    void syncUserStats(next).catch((error: unknown) => {
+      const errorName = error instanceof Error ? error.name.slice(0, 80) : 'UnknownError';
+      console.warn('Karteikartenfortschritt konnte nicht mit der Cloud synchronisiert werden.', { errorName });
+    });
+  }
+};
 
 export const Flashcards: React.FC<FlashcardsProps> = ({ questions, onClose, onQuestionsUpdated }) => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -22,91 +56,104 @@ export const Flashcards: React.FC<FlashcardsProps> = ({ questions, onClose, onQu
   const handleRating = (quality: Quality) => {
     const srsData = q.srsData || initSRSData();
     const newSrsData = calculateNextReview(srsData, quality);
-    
+
     const updatedQuestions = [...localQuestions];
     updatedQuestions[currentQuestionIndex] = { ...q, srsData: newSrsData };
     setLocalQuestions(updatedQuestions);
-    
-    if (onQuestionsUpdated) {
-      onQuestionsUpdated(updatedQuestions);
-    }
+
+    // Let the active screen persist first. The global fallback then checks the
+    // stored SRS values and writes only when the caller had no usable deck
+    // context, such as the older global due-card entry point.
+    onQuestionsUpdated?.(updatedQuestions);
+    persistSrsUpdates(updatedQuestions);
 
     setIsFlipped(false);
-    setTimeout(() => {
+    window.setTimeout(() => {
       if (currentQuestionIndex < localQuestions.length - 1) {
-        setCurrentQuestionIndex(prev => prev + 1);
+        setCurrentQuestionIndex((previousIndex) => previousIndex + 1);
       } else {
-        // End of deck
         onClose();
       }
     }, 150);
   };
 
   return (
-    <div className="flex flex-col h-full bg-transparent overflow-hidden">
-      <header className="shrink-0 p-6 flex justify-between items-center glass-panel z-50">
-        <button onClick={() => { onClose(); setIsFlipped(false); }} className="p-2 -ml-2 text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors">
+    <div className="flex h-full flex-col overflow-hidden bg-transparent">
+      <header className="glass-panel z-50 flex shrink-0 items-center justify-between p-6">
+        <button
+          type="button"
+          aria-label="Karteikarten schließen"
+          onClick={() => {
+            onClose();
+            setIsFlipped(false);
+          }}
+          className="-ml-2 p-2 text-slate-400 transition-colors hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:hover:text-white"
+        >
           <X size={24} strokeWidth={2.5} />
         </button>
-        <div className="font-black text-slate-900 dark:text-white tracking-widest text-sm">
+        <div className="text-sm font-black tracking-widest text-slate-900 dark:text-white">
           {currentQuestionIndex + 1} / {localQuestions.length}
         </div>
-        <div className="w-8" />
+        <div className="w-8" aria-hidden="true" />
       </header>
 
-      <main className="flex-1 p-6 flex flex-col items-center justify-center perspective-1000 relative">
-        <div 
-          className={`w-full max-w-sm aspect-[3/4] relative transform-style-3d transition-transform duration-700 cursor-pointer ${isFlipped ? 'rotate-y-180' : ''}`}
+      <main className="perspective-1000 relative flex flex-1 flex-col items-center justify-center p-6">
+        <button
+          type="button"
+          aria-label={isFlipped ? 'Antwortseite der Karteikarte' : 'Karteikarte umdrehen'}
+          aria-pressed={isFlipped}
+          className={`transform-style-3d relative aspect-[3/4] w-full max-w-sm cursor-pointer border-0 bg-transparent p-0 text-inherit transition-transform duration-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isFlipped ? 'rotate-y-180' : ''}`}
           onClick={() => !isFlipped && setIsFlipped(true)}
         >
-          {/* Front */}
-          <div className="absolute inset-0 backface-hidden glass-card rounded-[2.5rem] p-6 flex flex-col items-center text-center">
+          <div className="backface-hidden glass-card absolute inset-0 flex flex-col items-center rounded-[2.5rem] p-6 text-center">
             {q.imageUrl ? (
-              <div className="w-full h-48 rounded-2xl overflow-hidden mb-6 bg-slate-100 dark:bg-slate-800 shrink-0 shadow-inner">
-                <img src={q.imageUrl} alt="Frage Illustration" className="w-full h-full object-cover" />
+              <div className="mb-6 h-48 w-full shrink-0 overflow-hidden rounded-2xl bg-slate-100 shadow-inner dark:bg-slate-800">
+                <img src={q.imageUrl} alt="Illustration zur Frage" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
               </div>
             ) : (
-              <div className="w-20 h-20 bg-blue-100 dark:bg-blue-900/30 text-blue-500 rounded-2xl flex items-center justify-center mb-6 shrink-0">
+              <div className="mb-6 flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-blue-500 dark:bg-blue-900/30">
                 <Brain size={40} />
               </div>
             )}
-            <h2 className="text-xl font-black text-slate-900 dark:text-white leading-tight mt-auto mb-auto">{q.question}</h2>
-            <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mt-auto">Tippen zum Umdrehen</p>
+            <h2 className="mb-auto mt-auto text-xl font-black leading-tight text-slate-900 dark:text-white">{q.question}</h2>
+            <p className="mt-auto text-xs font-bold uppercase tracking-widest text-slate-400">Tippen zum Umdrehen</p>
           </div>
 
-          {/* Back */}
-          <div className="absolute inset-0 backface-hidden glass-card rounded-[2.5rem] p-6 flex flex-col items-center text-center rotate-y-180 bg-gradient-to-br from-purple-50/90 to-blue-50/90 dark:from-purple-900/40 dark:to-blue-900/40">
-            <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 text-green-500 rounded-full flex items-center justify-center mb-6 shrink-0">
+          <div className="backface-hidden glass-card rotate-y-180 absolute inset-0 flex flex-col items-center rounded-[2.5rem] bg-gradient-to-br from-purple-50/90 to-blue-50/90 p-6 text-center dark:from-purple-900/40 dark:to-blue-900/40">
+            <div className="mb-6 flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-green-100 text-green-500 dark:bg-green-900/30">
               <Check size={32} strokeWidth={3} />
             </div>
-            <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-4 text-green-600 dark:text-green-400">{q.options[q.correctAnswer]}</h2>
-            <div className="w-12 h-1 bg-slate-200 dark:bg-slate-700 rounded-full mb-6 shrink-0" />
-            <p className="text-slate-600 dark:text-slate-300 font-medium leading-relaxed overflow-y-auto no-scrollbar">{q.explanation}</p>
+            <h2 className="mb-4 text-2xl font-black text-green-600 dark:text-green-400">{q.options[q.correctAnswer]}</h2>
+            <div className="mb-6 h-1 w-12 shrink-0 rounded-full bg-slate-200 dark:bg-slate-700" />
+            <p className="no-scrollbar overflow-y-auto font-medium leading-relaxed text-slate-600 dark:text-slate-300">{q.explanation}</p>
           </div>
-        </div>
+        </button>
 
         {isFlipped ? (
-          <div className="mt-12 w-full max-w-sm flex flex-col items-center animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <p className="text-sm font-bold text-slate-500 dark:text-slate-400 mb-4 uppercase tracking-wider">Wie war das?</p>
-            <div className="flex gap-2 w-full">
-              <button onClick={() => handleRating(1)} className="flex-1 py-3 px-2 rounded-2xl bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 font-black hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors flex flex-col items-center gap-1">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-12 flex w-full max-w-sm flex-col items-center"
+          >
+            <p className="mb-4 text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Wie sicher warst du?</p>
+            <div className="flex w-full gap-2">
+              <button type="button" onClick={() => handleRating(1)} className="flex flex-1 flex-col items-center gap-1 rounded-2xl bg-red-100 px-2 py-3 font-black text-red-600 transition-colors hover:bg-red-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50">
                 <Frown size={24} />
                 <span className="text-xs">Schwer</span>
               </button>
-              <button onClick={() => handleRating(3)} className="flex-1 py-3 px-2 rounded-2xl bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 font-black hover:bg-yellow-200 dark:hover:bg-yellow-900/50 transition-colors flex flex-col items-center gap-1">
+              <button type="button" onClick={() => handleRating(3)} className="flex flex-1 flex-col items-center gap-1 rounded-2xl bg-yellow-100 px-2 py-3 font-black text-yellow-600 transition-colors hover:bg-yellow-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-500 dark:bg-yellow-900/30 dark:text-yellow-400 dark:hover:bg-yellow-900/50">
                 <Meh size={24} />
                 <span className="text-xs">Gut</span>
               </button>
-              <button onClick={() => handleRating(5)} className="flex-1 py-3 px-2 rounded-2xl bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 font-black hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors flex flex-col items-center gap-1">
+              <button type="button" onClick={() => handleRating(5)} className="flex flex-1 flex-col items-center gap-1 rounded-2xl bg-green-100 px-2 py-3 font-black text-green-600 transition-colors hover:bg-green-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50">
                 <Smile size={24} />
                 <span className="text-xs">Leicht</span>
               </button>
             </div>
-          </div>
+          </motion.div>
         ) : (
-          <div className="flex gap-4 mt-12 w-full max-w-sm opacity-0 pointer-events-none">
-            {/* Placeholder to keep layout stable */}
-            <div className="h-16 w-full"></div>
+          <div className="pointer-events-none mt-12 flex w-full max-w-sm gap-4 opacity-0" aria-hidden="true">
+            <div className="h-16 w-full" />
           </div>
         )}
       </main>

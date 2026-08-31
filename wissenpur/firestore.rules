@@ -1,11 +1,7 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // ===============================================================
-    // Helper Functions
-    // ===============================================================
-    
+
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -15,82 +11,227 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isAuthenticated() &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-          (request.auth.token.email == "song75099@gmail.com" && request.auth.token.email_verified == true));
+      return isAuthenticated() && request.auth.token.admin == true;
     }
 
-    function isValidUser(data) {
-      return data.uid is string &&
-             data.totalPoints is int && data.totalPoints >= 0 &&
-             data.currentStreak is int && data.currentStreak >= 0 &&
-             data.bestStreak is int && data.bestStreak >= 0 &&
-             data.roundsPlayed is int && data.roundsPlayed >= 0 &&
-             data.correctAnswers is int && data.correctAnswers >= 0 &&
-             data.totalQuestionsAnswered is int && data.totalQuestionsAnswered >= 0 &&
-             (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 100)) &&
-             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500)) &&
-             (!('achievements' in data) || (data.achievements is list && data.achievements.size() <= 100));
+    function hasValidOptionalString(data, field, maxLength) {
+      return !(field in data) ||
+             (data[field] is string && data[field].size() <= maxLength);
     }
 
-    function isValidLeaderboardEntry(data) {
-      return data.uid is string &&
-             data.displayName is string && data.displayName.size() <= 100 &&
-             data.totalPoints is int && data.totalPoints >= 0 &&
-             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500));
+    function hasValidOptionalList(data, field, maxItems) {
+      return !(field in data) ||
+             (data[field] is list && data[field].size() <= maxItems);
     }
 
-    function isValidLobby(data) {
-      return data.hostUid is string &&
-             data.status in ['waiting', 'starting', 'playing', 'finished'] &&
-             data.players is list && data.players.size() <= 4;
+    function hasValidOptionalBool(data, field) {
+      return !(field in data) || data[field] is bool;
     }
 
-    function isValidDuel(data) {
-      return data.player1Uid is string &&
-             data.player2Uid is string &&
-             data.status in ['active', 'finished'] &&
-             data.player1Score is int && data.player1Score >= 0 &&
-             data.player2Score is int && data.player2Score >= 0;
+    function hasValidOptionalAge(data) {
+      return !('age' in data) ||
+             (data.age is int && data.age >= 0 && data.age <= 120);
     }
 
-    // ===============================================================
-    // Rules Definition
-    // ===============================================================
+    function isValidDifficultyTime(value) {
+      return value is int && value >= 5 && value <= 120;
+    }
 
-    // Users Collection
+    function hasValidOptionalDifficultyTimes(data) {
+      return !('customDifficultyTimes' in data) ||
+             (
+               data.customDifficultyTimes is map &&
+               data.customDifficultyTimes.keys().hasOnly([
+                 'leicht',
+                 'mittel',
+                 'schwer',
+                 'all'
+               ]) &&
+               (!('leicht' in data.customDifficultyTimes) || isValidDifficultyTime(data.customDifficultyTimes.leicht)) &&
+               (!('mittel' in data.customDifficultyTimes) || isValidDifficultyTime(data.customDifficultyTimes.mittel)) &&
+               (!('schwer' in data.customDifficultyTimes) || isValidDifficultyTime(data.customDifficultyTimes.schwer)) &&
+               (!('all' in data.customDifficultyTimes) || isValidDifficultyTime(data.customDifficultyTimes.all))
+             );
+    }
+
+    function hasValidLearningPlan(data) {
+      return !('learningPlan' in data) ||
+             data.learningPlan == null ||
+             (
+               data.learningPlan is map &&
+               data.learningPlan.keys().hasOnly([
+                 'version',
+                 'examTitle',
+                 'examDate',
+                 'category',
+                 'dailyMinutes',
+                 'weeklyDays',
+                 'createdAt',
+                 'updatedAt',
+                 'completedSessions',
+                 'lastCompletedDate'
+               ]) &&
+               data.learningPlan.version == 1 &&
+               data.learningPlan.examTitle is string &&
+               data.learningPlan.examTitle.size() > 0 &&
+               data.learningPlan.examTitle.size() <= 100 &&
+               data.learningPlan.examDate is string &&
+               data.learningPlan.examDate.size() == 10 &&
+               data.learningPlan.category is string &&
+               data.learningPlan.category.size() > 0 &&
+               data.learningPlan.category.size() <= 50 &&
+               data.learningPlan.dailyMinutes is int &&
+               (
+                 data.learningPlan.dailyMinutes == 10 ||
+                 data.learningPlan.dailyMinutes == 20 ||
+                 data.learningPlan.dailyMinutes == 30 ||
+                 data.learningPlan.dailyMinutes == 45
+               ) &&
+               data.learningPlan.weeklyDays is int &&
+               data.learningPlan.weeklyDays >= 3 &&
+               data.learningPlan.weeklyDays <= 7 &&
+               data.learningPlan.createdAt is int &&
+               data.learningPlan.createdAt >= 0 &&
+               data.learningPlan.updatedAt is int &&
+               data.learningPlan.updatedAt >= data.learningPlan.createdAt &&
+               data.learningPlan.completedSessions is int &&
+               data.learningPlan.completedSessions >= 0 &&
+               (
+                 data.learningPlan.lastCompletedDate == null ||
+                 (
+                   data.learningPlan.lastCompletedDate is string &&
+                   data.learningPlan.lastCompletedDate.size() == 10
+                 )
+               )
+             );
+    }
+
+    function isValidClientProfile(userId, data) {
+      return data.uid == userId &&
+             data.uid is string &&
+             hasValidOptionalString(data, 'customName', 100) &&
+             hasValidOptionalAge(data) &&
+             hasValidOptionalList(data, 'wrongQuestions', 300) &&
+             hasValidOptionalDifficultyTimes(data) &&
+             hasValidOptionalBool(data, 'darkMode') &&
+             hasValidOptionalList(data, 'customQuizzes', 100) &&
+             hasValidLearningPlan(data);
+    }
+
+    function clientProfileKeys() {
+      return [
+        'uid',
+        'customName',
+        'age',
+        'wrongQuestions',
+        'customDifficultyTimes',
+        'darkMode',
+        'customQuizzes',
+        'learningPlan'
+      ];
+    }
+
+    function changesOnlyProfileFields() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'customName',
+        'age',
+        'wrongQuestions',
+        'customDifficultyTimes',
+        'darkMode',
+        'customQuizzes',
+        'learningPlan'
+      ]);
+    }
+
+    // Kept as executable schema documentation for the server-owned public row.
+    // Browser access is denied below; the callable applies an equivalent
+    // sanitizer before returning a minimal transport representation.
+    function isValidTrustedLeaderboard(userId, data) {
+      return data.keys().hasOnly([
+               'uid',
+               'displayName',
+               'photoURL',
+               'totalPoints',
+               'economyVersion',
+               'updatedAt'
+             ]) &&
+             data.keys().hasAll([
+               'uid',
+               'displayName',
+               'photoURL',
+               'totalPoints',
+               'economyVersion'
+             ]) &&
+             data.uid is string &&
+             data.uid == userId &&
+             data.displayName is string &&
+             data.displayName.size() > 0 &&
+             data.displayName.size() <= 100 &&
+             data.photoURL is string &&
+             data.photoURL.size() <= 1000 &&
+             (
+               data.photoURL == '' ||
+               data.photoURL.matches('^/avatars/[A-Za-z0-9-]+[.]svg$')
+             ) &&
+             data.totalPoints is int &&
+             data.totalPoints >= 0 &&
+             data.totalPoints <= 100000000 &&
+             data.economyVersion == 1 &&
+             (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId) && isValidUser(request.resource.data);
-      allow update: if isOwner(userId) && isValidUser(request.resource.data);
+
+      // New browser-created documents contain app-specific profile and learning
+      // content only. Provider display names/photos remain in Firebase Auth;
+      // economy fields, inventory and shop avatars are server-owned.
+      allow create: if isOwner(userId) &&
+                       request.resource.data.keys().hasOnly(clientProfileKeys()) &&
+                       isValidClientProfile(userId, request.resource.data);
+
+      allow update: if isOwner(userId) &&
+                       changesOnlyProfileFields() &&
+                       isValidClientProfile(userId, request.resource.data);
+
       allow delete: if isAdmin();
     }
 
-    // Leaderboard Collection (Publicly readable)
+    // Public ranked lists are callable-only. Cloud Functions use the Admin SDK
+    // and sanitize/redact rows before transport; browser get/list/write access
+    // is completely denied even when a document ID is already known.
+    match /trustedLeaderboard/{userId} {
+      allow get: if false;
+      allow list: if false;
+      allow write: if false;
+    }
+
+    // Historical client-writable leaderboard. It is hidden from release
+    // clients and retained only until the one-time cleanup is complete.
     match /leaderboard/{userId} {
-      allow read: if true;
-      allow create: if isOwner(userId) && isValidLeaderboardEntry(request.resource.data);
-      allow update: if isOwner(userId) && isValidLeaderboardEntry(request.resource.data);
-      allow delete: if isAdmin();
+      allow read, write: if isAdmin();
     }
 
-    // Lobbies Collection (Multiplayer Rooms)
+    // Trusted scoring state and immutable answer snapshots are never exposed
+    // through the Firestore browser SDK.
+    match /quizSessions/{sessionId} {
+      allow read, write: if false;
+    }
+
+    match /serverRateLimits/{userId} {
+      allow read, write: if false;
+    }
+
+    // Multiplayer remains disabled until a new server-authoritative model is
+    // implemented. Old data is admin-only during cleanup.
     match /lobbies/{lobbyId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidLobby(request.resource.data);
-      allow update: if isAuthenticated() && isValidLobby(request.resource.data);
-      allow delete: if isAuthenticated() && (request.auth.uid == resource.data.hostUid || isAdmin());
+      allow read, write: if isAdmin();
     }
 
-    // Duels Collection (1v1 Matches)
     match /duels/{duelId} {
-      allow read: if isAuthenticated() && (request.auth.uid == resource.data.player1Uid || request.auth.uid == resource.data.player2Uid || isAdmin());
-      allow create: if isAuthenticated() && isValidDuel(request.resource.data);
-      allow update: if isAuthenticated() && isValidDuel(request.resource.data);
-      allow delete: if isAdmin();
+      allow read, write: if isAdmin();
     }
 
-    // Default Deny
     match /{allPaths=**} {
       allow read, write: if false;
     }

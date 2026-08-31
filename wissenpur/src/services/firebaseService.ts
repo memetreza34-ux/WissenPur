@@ -1,144 +1,270 @@
-import { 
-  doc, 
-  setDoc, 
-  getDoc, 
-  collection, 
-  query, 
-  orderBy, 
-  limit, 
-  getDocs,
-  onSnapshot,
-  getDocFromServer
+import { onAuthStateChanged } from 'firebase/auth';
+import { httpsCallable } from 'firebase/functions';
+import {
+  doc,
+  getDoc,
+  getDocFromServer,
+  setDoc,
 } from 'firebase/firestore';
-import { db, auth } from '../firebase';
-import { UserStats, LeaderboardEntry, ACHIEVEMENTS } from '../types';
+import { assertProtectedOnlineRuntimeReady, auth, db } from '../firebase';
+import { saveStats } from '../storage';
+import { LeaderboardEntry, UserStats } from '../types';
+import { getServerEconomyState } from './economyService';
+import { assertFunctionsClientReady, functions } from './functionsClient';
+import { mergeLearningLibraries } from './learningLibraryMerge';
+import { applyLearningLibraryPolicy } from './learningLibraryPolicy';
+import { mergeWrongQuestions } from './wrongQuestionMerge';
 
 enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
   LIST = 'list',
   GET = 'get',
   WRITE = 'write',
 }
 
 interface FirestoreErrorInfo {
-  error: string;
+  errorName: string;
   operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId: string | undefined;
-    email: string | null | undefined;
-    emailVerified: boolean | undefined;
-    isAnonymous: boolean | undefined;
-    tenantId: string | null | undefined;
-    providerInfo: {
-      providerId: string;
-      displayName: string | null;
-      email: string | null;
-      photoUrl: string | null;
-    }[];
+  resourceType: string;
+}
+
+class AuthSessionChangedError extends Error {
+  constructor() {
+    super('Authentication session changed during synchronization.');
+    this.name = 'AuthSessionChangedError';
   }
 }
 
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
-        providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
-      })) || []
-    },
+let hydratedAuthUid: string | null = null;
+
+const getTrustedLeaderboardCallable = httpsCallable<
+  { limit: number },
+  { entries: LeaderboardEntry[] }
+>(functions, 'getTrustedLeaderboard');
+
+onAuthStateChanged(auth, (user) => {
+  const nextUid = user?.uid || null;
+  if (!nextUid || nextUid !== hydratedAuthUid) {
+    hydratedAuthUid = null;
+  }
+});
+
+const assertActiveAuthUid = (expectedUid: string): void => {
+  if (auth.currentUser?.uid !== expectedUid) {
+    throw new AuthSessionChangedError();
+  }
+};
+
+function handleFirestoreError(
+  error: unknown,
+  operationType: OperationType,
+  resourceType: string,
+): never {
+  const errorInfo: FirestoreErrorInfo = {
+    errorName: error instanceof Error ? error.name : 'UnknownError',
     operationType,
-    path
+    resourceType,
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+
+  // Do not log UID, e-mail, profile values, question content or document data.
+  console.error('Firestore operation failed', errorInfo);
+  throw new Error('Die Cloud-Synchronisierung ist momentan nicht verfügbar.');
 }
 
-export const syncUserStats = async (stats: UserStats) => {
-  if (!auth.currentUser) return;
-  const path = `users/${auth.currentUser.uid}`;
-  const leaderboardPath = `leaderboard/${auth.currentUser.uid}`;
+const logBestEffortSyncFailure = (error: unknown): void => {
+  console.warn('Best-effort profile sync deferred', {
+    errorName: error instanceof Error ? error.name : 'UnknownError',
+    resourceType: 'current-user-profile',
+  });
+};
+
+const sanitizeForFirestore = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
+const mergeProfileContent = (
+  localStats: UserStats,
+  cloudStats: Partial<UserStats>,
+): UserStats => {
+  const mergedLibrary = mergeLearningLibraries(
+    localStats.customQuizzes,
+    cloudStats.customQuizzes,
+  ).decks;
+  const mergedWrongQuestions = mergeWrongQuestions(
+    localStats.wrongQuestions,
+    cloudStats.wrongQuestions,
+  );
+
+  return {
+    ...localStats,
+    uid: cloudStats.uid ?? localStats.uid,
+    // Firebase/Google provider identity remains in Firebase Auth. Only the
+    // app-specific customName is synchronized as learning-profile identity.
+    customName: cloudStats.customName ?? localStats.customName,
+    age: cloudStats.age ?? localStats.age,
+    wrongQuestions: mergedWrongQuestions,
+    customDifficultyTimes:
+      cloudStats.customDifficultyTimes ?? localStats.customDifficultyTimes,
+    darkMode: cloudStats.darkMode ?? localStats.darkMode,
+    customQuizzes: mergedLibrary,
+  };
+};
+
+const mergeCloudStats = (
+  localStats: UserStats,
+  cloudStats: Partial<UserStats>,
+): UserStats => {
+  const profileMerged = mergeProfileContent(localStats, cloudStats);
+
+  // Authenticated economy values are accepted only from the server callable.
+  if (cloudStats.economyVersion !== 1) return profileMerged;
+
+  return {
+    ...profileMerged,
+    ...cloudStats,
+    wrongQuestions: profileMerged.wrongQuestions,
+    customQuizzes: profileMerged.customQuizzes,
+    customDifficultyTimes: profileMerged.customDifficultyTimes,
+    darkMode: profileMerged.darkMode,
+    customName: profileMerged.customName,
+    age: profileMerged.age,
+  } as UserStats;
+};
+
+const getProfileUpdate = (
+  stats: UserStats,
+  expectedUid: string,
+): Partial<UserStats> & { uid: string } => {
+  assertActiveAuthUid(expectedUid);
+  const library = applyLearningLibraryPolicy(stats.customQuizzes);
+  const wrongQuestions = mergeWrongQuestions(stats.wrongQuestions, []);
+  return sanitizeForFirestore({
+    uid: expectedUid,
+    customName: stats.customName,
+    age: stats.age,
+    wrongQuestions,
+    customDifficultyTimes: stats.customDifficultyTimes,
+    darkMode: stats.darkMode,
+    customQuizzes: library.decks,
+  });
+};
+
+const persistProfileOnly = async (
+  stats: UserStats,
+  expectedUid: string,
+): Promise<UserStats> => {
+  assertActiveAuthUid(expectedUid);
+  assertProtectedOnlineRuntimeReady();
+  const library = applyLearningLibraryPolicy(stats.customQuizzes);
+  const wrongQuestions = mergeWrongQuestions(stats.wrongQuestions, []);
+  const profileNormalized = library.changed || wrongQuestions.length !== (stats.wrongQuestions || []).length;
+  const normalizedStats: UserStats = profileNormalized
+    ? { ...stats, customQuizzes: library.decks, wrongQuestions }
+    : stats;
+  const profileUpdate = getProfileUpdate(normalizedStats, expectedUid);
+  const persistedStats = { ...normalizedStats, ...profileUpdate } as UserStats;
+
+  await setDoc(doc(db, 'users', expectedUid), profileUpdate, { merge: true });
+  assertActiveAuthUid(expectedUid);
+
+  if (profileNormalized) {
+    console.warn('Lokale Lerninhalte wurden vor der Cloud-Synchronisierung normalisiert.', {
+      libraryReason: library.reason,
+    });
+    saveStats(persistedStats);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent<UserStats>('wissenpur:stats-updated', { detail: persistedStats }),
+      );
+      if (library.changed) window.dispatchEvent(new Event('wissenpur:library-updated'));
+    }
+  }
+
+  return persistedStats;
+};
+
+/**
+ * The first sync of each authenticated browser session is strict because it
+ * hydrates the server-authoritative economy. Once that boundary succeeded,
+ * later profile/learning-content writes are best effort: local changes remain
+ * valid offline and a failed background write must not become an unhandled
+ * promise rejection. Late responses from a previous auth session are always
+ * discarded.
+ */
+export const syncUserStats = async (stats: UserStats): Promise<UserStats | undefined> => {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    hydratedAuthUid = null;
+    return undefined;
+  }
+  const expectedUid = currentUser.uid;
+  const userRef = doc(db, 'users', expectedUid);
+  const requiresHydration = hydratedAuthUid !== expectedUid;
 
   try {
-    // Check for new achievements
-    const unlockedAchievements = stats.achievements || [];
-    const newAchievements = ACHIEVEMENTS.filter(a => {
-      if (unlockedAchievements.includes(a.id)) return false;
-      if (a.type === 'points' && stats.totalPoints >= a.threshold) return true;
-      if (a.type === 'streak' && stats.currentStreak >= a.threshold) return true;
-      if (a.type === 'rounds' && stats.roundsPlayed >= a.threshold) return true;
-      return false;
-    }).map(a => a.id);
+    assertProtectedOnlineRuntimeReady();
+    if (requiresHydration) {
+      const existingSnapshot = await getDoc(userRef);
+      assertActiveAuthUid(expectedUid);
+      const existingData = existingSnapshot.exists()
+        ? existingSnapshot.data() as Partial<UserStats>
+        : {};
+      const profileMerged = mergeProfileContent(stats, existingData);
+      const authoritativeEconomy = (await getServerEconomyState()).stats;
+      assertActiveAuthUid(expectedUid);
+      const hydratedStats = mergeCloudStats(profileMerged, authoritativeEconomy);
 
-    const updatedStats = {
-      ...stats,
-      uid: auth.currentUser.uid,
-      displayName: auth.currentUser.displayName || 'Anonymous',
-      photoURL: stats.customPhotoURL || auth.currentUser.photoURL || '',
-      achievements: [...unlockedAchievements, ...newAchievements]
-    };
+      const persisted = await persistProfileOnly(hydratedStats, expectedUid);
+      assertActiveAuthUid(expectedUid);
+      hydratedAuthUid = expectedUid;
+      saveStats(persisted);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent<UserStats>('wissenpur:stats-updated', { detail: persisted }),
+        );
+      }
+      return persisted;
+    }
 
-    // Remove undefined values which are not supported by Firestore
-    const sanitizedStats = JSON.parse(JSON.stringify(updatedStats));
-
-    await setDoc(doc(db, 'users', auth.currentUser.uid), sanitizedStats);
-    
-    // Update leaderboard entry
-    await setDoc(doc(db, 'leaderboard', auth.currentUser.uid), {
-      uid: auth.currentUser.uid,
-      displayName: auth.currentUser.displayName || 'Anonymous',
-      photoURL: stats.customPhotoURL || auth.currentUser.photoURL || '',
-      totalPoints: stats.totalPoints
-    });
-
-    return updatedStats;
+    return await persistProfileOnly(stats, expectedUid);
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
+    if (error instanceof AuthSessionChangedError) return undefined;
+    if (!requiresHydration) {
+      logBestEffortSyncFailure(error);
+      return stats;
+    }
+    handleFirestoreError(error, OperationType.WRITE, 'current-user-profile');
   }
 };
 
 export const fetchUserStats = async (uid: string): Promise<UserStats | null> => {
-  const path = `users/${uid}`;
   try {
-    const docSnap = await getDoc(doc(db, 'users', uid));
-    if (docSnap.exists()) {
-      return docSnap.data() as UserStats;
-    }
-    return null;
+    assertProtectedOnlineRuntimeReady();
+    const documentSnapshot = await getDoc(doc(db, 'users', uid));
+    return documentSnapshot.exists() ? (documentSnapshot.data() as UserStats) : null;
   } catch (error) {
-    handleFirestoreError(error, OperationType.GET, path);
-    return null;
+    handleFirestoreError(error, OperationType.GET, 'user-profile');
   }
 };
 
 export const getLeaderboard = async (limitCount: number = 10): Promise<LeaderboardEntry[]> => {
-  const path = 'leaderboard';
   try {
-    const q = query(collection(db, 'leaderboard'), orderBy('totalPoints', 'desc'), limit(limitCount));
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => doc.data() as LeaderboardEntry);
+    assertFunctionsClientReady();
+    const safeLimit = Math.min(100, Math.max(1, Math.trunc(limitCount) || 10));
+    const response = await getTrustedLeaderboardCallable({ limit: safeLimit });
+    return Array.isArray(response.data.entries) ? response.data.entries : [];
   } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, path);
-    return [];
+    handleFirestoreError(error, OperationType.LIST, 'trusted-leaderboard-callable');
   }
 };
 
 export const testConnection = async () => {
   try {
+    assertProtectedOnlineRuntimeReady();
     await getDocFromServer(doc(db, 'test', 'connection'));
   } catch (error) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration.");
+      console.error('Firebase connection unavailable', {
+        errorName: error.name,
+        resourceType: 'connection-check',
+      });
     }
   }
 };

@@ -1,4 +1,31 @@
 node_modules/
 dist/
+coverage/
 .DS_Store
 *.log
+firebase-debug.log*
+ui-debug.log*
+.firebase/
+
+# Local environment files. Keep only documented examples.
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+
+# Credentials and private keys must use Secret Manager or local ignored files.
+*service-account*.json
+serviceAccount*.json
+*-firebase-adminsdk-*.json
+credentials*.json
+secrets*.json
+*.pem
+*.p12
+*.pfx
+*.key
+
+# Local package and emulator artifacts.
+*.tgz
+*.tsbuildinfo
