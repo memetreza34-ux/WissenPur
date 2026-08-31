@@ -20,9 +20,19 @@ const pngAssets = [
   { url: '/apple-touch-icon.png', width: 180, height: 180 },
 ] as const;
 
-const [serviceWorker, main, indexHtml, manifestText, iconSvg, maskableSvg, firebaseText] = await Promise.all([
+const [
+  serviceWorker,
+  main,
+  updateBanner,
+  indexHtml,
+  manifestText,
+  iconSvg,
+  maskableSvg,
+  firebaseText,
+] = await Promise.all([
   readFile(resolve(publicRoot, 'sw.js'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/src/main.tsx'), 'utf8'),
+  readFile(resolve(repoRoot, 'wissenpur/src/components/PwaUpdateBanner.tsx'), 'utf8'),
   readFile(resolve(repoRoot, 'wissenpur/index.html'), 'utf8'),
   readFile(resolve(publicRoot, 'manifest.json'), 'utf8'),
   readFile(resolve(publicRoot, 'wissenpur-icon.svg'), 'utf8'),
@@ -70,6 +80,8 @@ for (const expected of [
   'return networkResponse || offlineResponse();',
   'cacheName.startsWith(APP_CACHE_PREFIX)',
   '!cacheName.startsWith(CACHE_VERSION)',
+  'self.skipWaiting()',
+  'self.clients.claim()',
 ]) requireText('wissenpur/public/sw.js', serviceWorker, expected, `PWA-Runtime-Baustein fehlt: ${expected}`);
 forbid('wissenpur/public/sw.js', serviceWorker, /networkResponsePromise\s*\|\||\|\|\s*Response\.error\(\)/, 'Promises dürfen nicht als Offline-Response verwendet werden.');
 
@@ -106,6 +118,30 @@ requireText(
   'Offline-Navigation muss ausschließlich auf die feste App-Shell zurückfallen.',
 );
 
+// The worker activates immediately, therefore controller replacement must be
+// visible to an already-open app without forcing a mid-quiz reload.
+for (const expected of [
+  "navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange)",
+  'setUpdateAvailable(true)',
+  'Neue WissenPur-Version verfügbar',
+  'Später',
+  'Neu laden',
+  'onClick={() => window.location.reload()}',
+]) {
+  requireText(
+    'wissenpur/src/components/PwaUpdateBanner.tsx',
+    updateBanner,
+    expected,
+    `Kontrollierte Update-UX fehlt: ${expected}`,
+  );
+}
+forbid(
+  'wissenpur/src/components/PwaUpdateBanner.tsx',
+  updateBanner,
+  /handleControllerChange\s*=\s*\(\)\s*=>\s*\{[^}]*window\.location\.reload\(/s,
+  'controllerchange darf eine laufende Lernsession nicht automatisch neu laden.',
+);
+
 for (const avatarUrl of avatarUrls) {
   requireText('wissenpur/public/sw.js', serviceWorker, `'${avatarUrl}'`, `${avatarUrl} muss offline gecacht werden.`);
   try { await access(resolve(publicRoot, avatarUrl.slice(1))); } catch { failures.push(`wissenpur/public${avatarUrl}: Avatar fehlt.`); }
@@ -132,6 +168,7 @@ for (const asset of pngAssets) {
 }
 
 requireText('wissenpur/src/main.tsx', main, "navigator.serviceWorker.register('/sw.js', { scope: '/' })", 'Service Worker muss Root-Scope besitzen.');
+requireText('wissenpur/src/main.tsx', main, '<PwaUpdateBanner />', 'Die kontrollierte Update-UI muss in der Produktionsoberfläche montiert sein.');
 forbid('wissenpur/index.html', indexHtml, /<script(?![^>]*type=["']module["'][^>]*src=)[^>]*>[\s\S]*?<\/script>/i, 'Statische App-Shell darf kein Inline-JavaScript enthalten.');
 for (const expected of [
   '<link rel="manifest" href="/manifest.json" />',
@@ -178,4 +215,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('PWA-v7: App-Shell, Navigation-Privacy, scoped Cache-Cleanup, Build-Asset-Precache, lokale Avatare, PNG-Maße, Apple-Touch-Icon und Cacheheader geprüft.');
+console.log('PWA-v7: App-Shell, kontrollierte Update-UX, Navigation-Privacy, scoped Cache-Cleanup, Build-Asset-Precache, lokale Avatare, PNG-Maße, Apple-Touch-Icon und Cacheheader geprüft.');
