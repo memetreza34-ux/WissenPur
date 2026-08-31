@@ -6,7 +6,8 @@ const currentDir = resolve(fileURLToPath(new URL('.', import.meta.url)));
 const repoRoot = resolve(currentDir, '../..');
 const functionsRoot = resolve(repoRoot, 'functions');
 const functionsSource = resolve(functionsRoot, 'src');
-const webSource = resolve(repoRoot, 'wissenpur/src');
+const webRoot = resolve(repoRoot, 'wissenpur');
+const webSource = resolve(webRoot, 'src');
 
 const textExtensions = new Set(['.ts', '.tsx', '.js', '.mjs', '.json']);
 const failures: string[] = [];
@@ -24,15 +25,6 @@ const walk = async (directory: string): Promise<string[]> => {
 
 const relative = (path: string) => path.slice(repoRoot.length + 1).replaceAll('\\', '/');
 
-const assertMissing = (
-  file: string,
-  content: string,
-  pattern: RegExp,
-  explanation: string,
-) => {
-  if (pattern.test(content)) failures.push(`${relative(file)}: ${explanation}`);
-};
-
 const assertIncludes = (
   file: string,
   content: string,
@@ -42,8 +34,21 @@ const assertIncludes = (
   if (!content.includes(expected)) failures.push(`${relative(file)}: ${explanation}`);
 };
 
+const assertMissing = (
+  file: string,
+  content: string,
+  pattern: RegExp,
+  explanation: string,
+) => {
+  if (pattern.test(content)) failures.push(`${relative(file)}: ${explanation}`);
+};
+
+const read = async (path: string) => readFile(path, 'utf8');
+
+// Environment files must stay out of Functions source control apart from the
+// intentionally documented example.
 const functionsGitignorePath = resolve(functionsRoot, '.gitignore');
-const functionsGitignore = await readFile(functionsGitignorePath, 'utf8');
+const functionsGitignore = await read(functionsGitignorePath);
 assertIncludes(
   functionsGitignorePath,
   functionsGitignore,
@@ -57,9 +62,11 @@ assertIncludes(
   'Die dokumentierte Functions-Beispieldatei muss trotz Env-Sperre versionierbar bleiben.',
 );
 
+// Active browser source must never regain the former client-authoritative or
+// browser-secret architecture.
 const webFiles = await walk(webSource);
 for (const file of webFiles) {
-  const content = await readFile(file, 'utf8');
+  const content = await read(file);
   assertMissing(
     file,
     content,
@@ -88,7 +95,7 @@ for (const file of webFiles) {
 
 const functionFiles = await walk(functionsSource);
 for (const file of functionFiles) {
-  const content = await readFile(file, 'utf8');
+  const content = await read(file);
   assertMissing(
     file,
     content,
@@ -103,8 +110,31 @@ for (const file of functionFiles) {
   );
 }
 
+// Vite may read a local development-only process.env value inside the Node
+// config itself, but it must not define process.env values into browser code.
+const viteConfigPath = resolve(webRoot, 'vite.config.ts');
+const viteConfig = await read(viteConfigPath);
+assertMissing(
+  viteConfigPath,
+  viteConfig,
+  /['"]process\.env\.[A-Z0-9_]+['"]\s*:/i,
+  'Vite darf keine process.env-Werte als Browser-Konstanten definieren.',
+);
+assertMissing(
+  viteConfigPath,
+  viteConfig,
+  /\bloadEnv\s*\(/,
+  'Vite darf keine komplette Env-Datei in die Build-Konfiguration laden.',
+);
+assertIncludes(
+  viteConfigPath,
+  viteConfig,
+  'sourcemap: false',
+  'Produktionsbundles müssen Source Maps explizit deaktiviert lassen.',
+);
+
 const entryPath = resolve(functionsSource, 'entry.ts');
-const entry = await readFile(entryPath, 'utf8');
+const entry = await read(entryPath);
 for (const requiredExport of [
   'getMyEconomyState',
   'getTrustedLeaderboard',
@@ -120,12 +150,18 @@ for (const requiredExport of [
 }
 
 const economyCallablesPath = resolve(functionsSource, 'economyCallables.ts');
-const economyCallables = await readFile(economyCallablesPath, 'utf8');
+const economyCallables = await read(economyCallablesPath);
 assertIncludes(
   economyCallablesPath,
   economyCallables,
   "db.collection('trustedLeaderboard')",
   'Serverbelohnungen mit Punktwirkung müssen trustedLeaderboard aktualisieren.',
+);
+assertIncludes(
+  economyCallablesPath,
+  economyCallables,
+  'safeLeaderboardAvatar',
+  'Öffentliche Ranglistenbilder müssen auf lokale Avatarassets begrenzt sein.',
 );
 assertMissing(
   economyCallablesPath,
@@ -139,21 +175,15 @@ assertMissing(
   /export const submitRankedQuiz|QUESTION_BANK|fallbackAnswerKey/,
   'Gewertete Abgaben und Fragenkatalog-Fallbacks dürfen nicht in economyCallables zurückkehren.',
 );
-assertIncludes(
-  economyCallablesPath,
-  economyCallables,
-  'safeLeaderboardAvatar',
-  'Öffentliche Ranglistenbilder müssen auf lokale Avatarassets begrenzt sein.',
-);
 assertMissing(
   economyCallablesPath,
   economyCallables,
   /authToken\?\.picture|providerPhoto|userData\?\.photoURL/,
-  'Öffentliche Ranglistenbilder dürfen weder Identity-Provider- noch clientbeschreibbare Profilbilder verwenden.',
+  'Öffentliche Ranglistenbilder dürfen weder Provider- noch clientbeschreibbare Profilbilder verwenden.',
 );
 
 const secureSubmitPath = resolve(functionsSource, 'secureSubmit.ts');
-const secureSubmit = await readFile(secureSubmitPath, 'utf8');
+const secureSubmit = await read(secureSubmitPath);
 assertIncludes(
   secureSubmitPath,
   secureSubmit,
@@ -180,7 +210,7 @@ assertMissing(
 );
 
 const leaderboardCallablePath = resolve(functionsSource, 'leaderboardCallable.ts');
-const leaderboardCallable = await readFile(leaderboardCallablePath, 'utf8');
+const leaderboardCallable = await read(leaderboardCallablePath);
 for (const expected of [
   '{ enforceAppCheck }',
   "collection('trustedLeaderboard')",
@@ -204,7 +234,7 @@ assertMissing(
 );
 
 const economyStatePath = resolve(functionsSource, 'economyStateCallable.ts');
-const economyState = await readFile(economyStatePath, 'utf8');
+const economyState = await read(economyStatePath);
 assertIncludes(
   economyStatePath,
   economyState,
@@ -219,7 +249,7 @@ assertIncludes(
 );
 
 const accountPath = resolve(functionsSource, 'account.ts');
-const account = await readFile(accountPath, 'utf8');
+const account = await read(accountPath);
 assertIncludes(
   accountPath,
   account,
@@ -233,92 +263,51 @@ assertIncludes(
   'Der Export muss die Sicherheitsredaktion maschinenlesbar ausweisen.',
 );
 
-const syncQuestionBankPath = resolve(repoRoot, 'functions/scripts/sync-question-bank.ts');
-const syncQuestionBank = await readFile(syncQuestionBankPath, 'utf8');
-assertIncludes(
-  syncQuestionBankPath,
-  syncQuestionBank,
+const syncQuestionBankPath = resolve(functionsRoot, 'scripts/sync-question-bank.ts');
+const syncQuestionBank = await read(syncQuestionBankPath);
+for (const expected of [
   'selectReleaseQuestions',
-  'Der Ranglistenkatalog muss Zeitabhängigkeit und Textduplikate filtern.',
-);
-assertIncludes(
-  syncQuestionBankPath,
-  syncQuestionBank,
   'minimumQuestionsPerCategory',
-  'Jede sichtbare Kategorie benötigt eine geprüfte Mindestabdeckung.',
-);
-assertIncludes(
-  syncQuestionBankPath,
-  syncQuestionBank,
   'imageUrl: null',
-  'Gewertete Fragen müssen aktuell ohne externe Bild-URLs erzeugt werden.',
-);
-assertIncludes(
-  syncQuestionBankPath,
-  syncQuestionBank,
   'four distinct options',
-  'Der Build muss vier unterschiedliche Antwortoptionen erzwingen.',
-);
+]) {
+  assertIncludes(
+    syncQuestionBankPath,
+    syncQuestionBank,
+    expected,
+    `Ranglistenkatalog-Gate benötigt ${expected}.`,
+  );
+}
 
 const mainPath = resolve(webSource, 'main.tsx');
-const main = await readFile(mainPath, 'utf8');
-if (!main.includes("from './ReleaseApp'")) {
-  failures.push('wissenpur/src/main.tsx: Die Produktions-App muss ReleaseApp verwenden.');
-}
-if (/from ['"]\.\/App['"]/.test(main)) {
-  failures.push('wissenpur/src/main.tsx: Der archivierte App-Monolith darf nicht gestartet werden.');
-}
+const main = await read(mainPath);
+assertIncludes(
+  mainPath,
+  main,
+  "from './ReleaseApp'",
+  'Die Produktions-App muss ReleaseApp verwenden.',
+);
+assertMissing(
+  mainPath,
+  main,
+  /from ['"]\.\/App['"]/,
+  'Der archivierte App-Monolith darf nicht gestartet werden.',
+);
 
 const releaseAppPath = resolve(webSource, 'ReleaseApp.tsx');
-const releaseApp = await readFile(releaseAppPath, 'utf8');
-assertIncludes(
-  releaseAppPath,
-  releaseApp,
-  'const quizGenerationRef = useRef(0);',
-  'Quizstarts und Abbrüche benötigen eine Generations-ID gegen verspätete Timer.',
-);
-assertIncludes(
-  releaseAppPath,
-  releaseApp,
-  'quizGenerationRef.current += 1;',
-  'Quizabbrüche müssen alle verzögerten Aktionen invalidieren.',
-);
-assertIncludes(
-  releaseAppPath,
-  releaseApp,
-  'ranked: activeQuiz.ranked,',
-  'Eine fehlgeschlagene Ranglistenabgabe darf nicht als Übung markiert werden.',
-);
-assertIncludes(
-  releaseAppPath,
-  releaseApp,
-  'Gewertete Prüfung fehlgeschlagen',
-  'Fehlgeschlagene Ranglistenabgaben benötigen eine eindeutige Ergebniskennzeichnung.',
-);
-assertIncludes(
-  releaseAppPath,
-  releaseApp,
-  'Nicht gewertet',
-  'Serverfehler dürfen keine erfundene Null-Punkt-Auswertung anzeigen.',
-);
-assertIncludes(
-  releaseAppPath,
-  releaseApp,
-  'disabled={isBusy}',
-  'Der Prüfungsabbruch muss während einer laufenden Serverabgabe gesperrt sein.',
-);
-assertIncludes(
-  releaseAppPath,
-  releaseApp,
-  "const autoAdvance = activeQuiz.mode === 'blitz' || Boolean(activeQuiz.globalSeconds);",
-  'Zeitbasierte Modi müssen als automatische Weiterleitung gekennzeichnet sein.',
-);
-assertIncludes(
-  releaseAppPath,
-  releaseApp,
-  'selectedAnswer !== null && !autoAdvance',
-  'Automatische Modi dürfen keinen konkurrierenden manuellen Weiter-Button anzeigen.',
-);
+const releaseApp = await read(releaseAppPath);
+for (const [expected, explanation] of [
+  ['const quizGenerationRef = useRef(0);', 'Quizstarts und Abbrüche benötigen eine Generations-ID gegen verspätete Timer.'],
+  ['quizGenerationRef.current += 1;', 'Quizabbrüche müssen alle verzögerten Aktionen invalidieren.'],
+  ['ranked: activeQuiz.ranked,', 'Eine fehlgeschlagene Ranglistenabgabe darf nicht als Übung markiert werden.'],
+  ['Gewertete Prüfung fehlgeschlagen', 'Fehlgeschlagene Ranglistenabgaben benötigen eine eindeutige Ergebniskennzeichnung.'],
+  ['Nicht gewertet', 'Serverfehler dürfen keine erfundene Null-Punkt-Auswertung anzeigen.'],
+  ['disabled={isBusy}', 'Der Prüfungsabbruch muss während einer laufenden Serverabgabe gesperrt sein.'],
+  ["const autoAdvance = activeQuiz.mode === 'blitz' || Boolean(activeQuiz.globalSeconds);", 'Zeitbasierte Modi müssen als automatische Weiterleitung gekennzeichnet sein.'],
+  ['selectedAnswer !== null && !autoAdvance', 'Automatische Modi dürfen keinen konkurrierenden manuellen Weiter-Button anzeigen.'],
+] as const) {
+  assertIncludes(releaseAppPath, releaseApp, expected, explanation);
+}
 assertMissing(
   releaseAppPath,
   releaseApp,
@@ -327,7 +316,7 @@ assertMissing(
 );
 
 const firebaseServicePath = resolve(webSource, 'services/firebaseService.ts');
-const firebaseService = await readFile(firebaseServicePath, 'utf8');
+const firebaseService = await read(firebaseServicePath);
 assertIncludes(
   firebaseServicePath,
   firebaseService,
@@ -340,17 +329,17 @@ assertIncludes(
   'getTrustedLeaderboardCallable({ limit: safeLimit })',
   'Leaderboard-Listen müssen über die Callable geladen werden.',
 );
-assertMissing(
-  firebaseServicePath,
-  firebaseService,
-  /collection\(db, ['"]trustedLeaderboard['"]\)|getDocs\(leaderboardQuery\)/,
-  'Browser-Enumeration von trustedLeaderboard ist verboten.',
-);
 assertIncludes(
   firebaseServicePath,
   firebaseService,
   'getServerEconomyState',
   'Der erste Login muss eine autoritative Economy-Hydrierung durchführen können.',
+);
+assertMissing(
+  firebaseServicePath,
+  firebaseService,
+  /collection\(db, ['"]trustedLeaderboard['"]\)|getDocs\(leaderboardQuery\)/,
+  'Browser-Direktzugriffe auf trustedLeaderboard sind verboten.',
 );
 assertMissing(
   firebaseServicePath,
@@ -366,7 +355,7 @@ assertMissing(
 );
 
 const geminiServicePath = resolve(webSource, 'services/geminiService.ts');
-const geminiService = await readFile(geminiServicePath, 'utf8');
+const geminiService = await read(geminiServicePath);
 assertMissing(
   geminiServicePath,
   geminiService,
@@ -386,32 +375,28 @@ assertIncludes(
   'Freie KI-Themen müssen auf gültige interne Kategorien abgebildet werden.',
 );
 
-const firebaseConfigPath = resolve(repoRoot, 'wissenpur/firebase-applet-config.json');
-const firebaseConfig = JSON.parse(await readFile(firebaseConfigPath, 'utf8')) as Record<string, unknown>;
+const firebaseConfigPath = resolve(webRoot, 'firebase-applet-config.json');
+const firebaseConfig = JSON.parse(await read(firebaseConfigPath)) as Record<string, unknown>;
 if ('firestoreDatabaseId' in firebaseConfig) {
   failures.push('wissenpur/firebase-applet-config.json: Eine benannte Firestore-Datenbank darf nicht fest eingebaut sein.');
 }
 
-const rulesPath = resolve(repoRoot, 'wissenpur/firestore.rules');
-const rules = await readFile(rulesPath, 'utf8');
+const rulesPath = resolve(webRoot, 'firestore.rules');
+const rules = await read(rulesPath);
 assertIncludes(
   rulesPath,
   rules,
   'match /trustedLeaderboard/{userId}',
   'Regeln für die serververifizierte Rangliste fehlen.',
 );
-assertIncludes(
-  rulesPath,
-  rules,
-  'isValidTrustedLeaderboard(userId, resource.data)',
-  'Direkte Einzelabrufe müssen auf das minimale Leaderboard-Schema begrenzt sein.',
-);
-assertIncludes(
-  rulesPath,
-  rules,
-  'allow list: if false;',
-  'Browser-Enumeration der Rangliste muss vollständig verweigert werden.',
-);
+for (const deniedOperation of ['allow get: if false;', 'allow list: if false;', 'allow write: if false;']) {
+  assertIncludes(
+    rulesPath,
+    rules,
+    deniedOperation,
+    `trustedLeaderboard muss Browserzugriff callable-only halten (${deniedOperation}).`,
+  );
+}
 assertIncludes(
   rulesPath,
   rules,
@@ -424,12 +409,6 @@ assertIncludes(
   'match /serverRateLimits/{userId}',
   'Serverseitige Rate-Limits müssen vollständig vor Clients verborgen sein.',
 );
-assertIncludes(
-  rulesPath,
-  rules,
-  'allow write: if false;',
-  'Die serververifizierte Rangliste muss sämtliche Browserwrites verweigern.',
-);
 assertMissing(
   rulesPath,
   rules,
@@ -438,10 +417,13 @@ assertMissing(
 );
 
 const webQuestionPath = resolve(webSource, 'data.ts');
-const webQuestions = await readFile(webQuestionPath, 'utf8');
-if (!webQuestions.includes("id: 'offline-")) {
-  failures.push('wissenpur/src/data.ts: Der öffentliche Übungskatalog muss offline-* IDs verwenden.');
-}
+const webQuestions = await read(webQuestionPath);
+assertIncludes(
+  webQuestionPath,
+  webQuestions,
+  "id: 'offline-",
+  'Der öffentliche Übungskatalog muss offline-* IDs verwenden.',
+);
 
 if (failures.length > 0) {
   console.error('\nWissenPur-Architekturprüfung fehlgeschlagen:\n');
@@ -451,5 +433,5 @@ if (failures.length > 0) {
 }
 
 console.log(
-  `Release-Grenzen geprüft: ${webFiles.length} Webdateien und ${functionFiles.length} Functions-Dateien.`,
+  `Release-Grenzen geprüft: ${webFiles.length} Webdateien, ${functionFiles.length} Functions-Dateien, callable-only Rangliste und gehärteter Vite-Build.`,
 );
