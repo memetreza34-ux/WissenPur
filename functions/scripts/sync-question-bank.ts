@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { QUESTIONS } from '../content/rankedQuestions.ts';
+import { CATEGORIES, QUESTIONS } from '../content/rankedQuestions.ts';
 import { selectReleaseQuestions } from '../src/questionReleasePolicy.ts';
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
@@ -16,6 +16,23 @@ const sourceDuplicateIds = QUESTIONS
 
 if (sourceDuplicateIds.length > 0) {
   throw new Error(`Duplicate question IDs: ${[...new Set(sourceDuplicateIds)].join(', ')}`);
+}
+
+const declaredCategoryIds = CATEGORIES.map((category) => category.id);
+const duplicateCategoryIds = declaredCategoryIds.filter(
+  (id, index, ids) => ids.indexOf(id) !== index,
+);
+if (duplicateCategoryIds.length > 0) {
+  throw new Error(`Duplicate ranked category IDs: ${[...new Set(duplicateCategoryIds)].join(', ')}`);
+}
+const declaredCategorySet = new Set(declaredCategoryIds);
+const undeclaredQuestionCategories = [...new Set(
+  QUESTIONS
+    .map((question) => question.category)
+    .filter((category) => !declaredCategorySet.has(category)),
+)];
+if (undeclaredQuestionCategories.length > 0) {
+  throw new Error(`Ranked questions use undeclared categories: ${undeclaredQuestionCategories.join(', ')}`);
 }
 
 const selection = selectReleaseQuestions(QUESTIONS);
@@ -74,8 +91,7 @@ for (const question of questionBank) {
   categoryCounts.set(question.category, (categoryCounts.get(question.category) || 0) + 1);
 }
 
-const sourceCategories = [...new Set(QUESTIONS.map((question) => question.category))];
-const undersuppliedCategories = sourceCategories
+const undersuppliedCategories = declaredCategoryIds
   .map((category) => ({ category, count: categoryCounts.get(category) || 0 }))
   .filter(({ count }) => count < minimumQuestionsPerCategory);
 
@@ -107,8 +123,7 @@ console.log(
   `Generated ${questionBank.length} release-safe ranked questions; excluded ${selection.excluded.length}.`,
 );
 console.log(
-  `Category coverage: ${[...categoryCounts.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([category, count]) => `${category}=${count}`)
+  `Category coverage: ${declaredCategoryIds
+    .map((category) => `${category}=${categoryCounts.get(category) || 0}`)
     .join(', ')}`,
 );
