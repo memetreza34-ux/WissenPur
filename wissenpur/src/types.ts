@@ -103,7 +103,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'perfect_10', title: 'Perfekt', description: '10 Fragen in einer Runde richtig', icon: '🎯', threshold: 10, type: 'correct' },
   { id: 'correct_100', title: 'Wissensprofi', description: '100 richtige Antworten insgesamt', icon: '✅', threshold: 100, type: 'correct' },
   { id: 'correct_500', title: 'Lexikon', description: '500 richtige Antworten insgesamt', icon: '📖', threshold: 500, type: 'correct' },
-  { id: 'all_categories', title: 'Allrounder', description: 'Spiele in allen Kategorien', icon: '🌈', threshold: 10, type: 'categories' },
+  { id: 'all_categories', title: 'Allrounder', description: 'Spiele in 10 verschiedenen Kategorien', icon: '🌈', threshold: 10, type: 'categories' },
   { id: 'rounds_50', title: 'Dauerbrenner', description: '50 Quiz-Runden gespielt', icon: '🔄', threshold: 50, type: 'rounds' }
 ];
 
