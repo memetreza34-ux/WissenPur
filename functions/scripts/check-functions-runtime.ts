@@ -49,6 +49,12 @@ if (!scripts?.test?.includes('tsx --test tests/*.test.ts')) failures.push('funct
 if (scripts?.['test:typecheck'] !== 'tsc -p tsconfig.tests.json --noEmit') {
   failures.push('functions/package.json: Test-Typecheck-Skript fehlt.');
 }
+if (scripts?.deploy !== undefined) {
+  failures.push('functions/package.json: Ein generisches deploy-Skript ohne explizites Projekt ist verboten.');
+}
+if (scripts?.['deploy:dev'] !== 'firebase deploy --only functions --project dev') {
+  failures.push('functions/package.json: Der optionale Entwickler-Deploy muss explizit an den dev-Alias gebunden sein.');
+}
 if (!devDependencies?.typescript) failures.push('functions/package.json: TypeScript fehlt als devDependency.');
 if (!devDependencies?.tsx) failures.push('functions/package.json: tsx fehlt als devDependency.');
 if (!dependencies?.['firebase-admin'] || !dependencies?.['firebase-functions']) {
@@ -102,12 +108,8 @@ if (/initializeFirestore\(/.test(database)) {
   failures.push('functions/src/database.ts: Admin Functions dürfen nicht den Web-SDK-initializeFirestore-Pfad verwenden.');
 }
 
-for (const expected of [
-  'FIRESTORE_DATABASE_ID=(default)',
-  'ENFORCE_APP_CHECK=true',
-  'FUNCTIONS_EMULATOR=true',
-]) {
-  if (!envExample.includes(expected) && expected !== 'FUNCTIONS_EMULATOR=true') {
+for (const expected of ['FIRESTORE_DATABASE_ID=(default)', 'ENFORCE_APP_CHECK=true']) {
+  if (!envExample.includes(expected)) {
     failures.push(`functions/.env.example: ${expected} muss dokumentiert sein.`);
   }
 }
@@ -149,4 +151,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('Functions-Runtime, Emulatorgrenzen, App Check, Leaderboard-Callable, Node/ESM/TypeScript und Firestore-(default)-Policy geprüft.');
+console.log('Functions-Runtime, expliziter Dev-Deploy, Emulatorgrenzen, App Check, Leaderboard-Callable, Node/ESM/TypeScript und Firestore-(default)-Policy geprüft.');
